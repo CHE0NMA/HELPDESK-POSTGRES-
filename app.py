@@ -30,7 +30,7 @@ from config import UPLOAD_FOLDER, validate_config
 from extensions import csrf
 from database import init_pool
 from database.schema import (
-    ensure_admin_exists, ensure_schedule_schema, migrate_create_chat_sessions,
+    ensure_core_tables,ensure_admin_exists, ensure_schedule_schema, migrate_create_chat_sessions,
     migrate_add_uuid_to_faq, ensure_handbook_fulltext_search, ensure_faq_embedding_column,
 )
 from services.alerts import (
@@ -109,6 +109,7 @@ def create_app():
     app.register_blueprint(pages_bp)
 
     init_pool()
+    ensure_core_tables()
     ensure_admin_exists()
     ensure_schedule_schema()
     migrate_create_chat_sessions()

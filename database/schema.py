@@ -38,6 +38,113 @@ from database import get_db
 
 logger = logging.getLogger("pac_helpdesk.database.schema")
 
+def ensure_core_tables():
+    """Create the most important tables if they don't exist yet.
+    This is a lightweight fallback for free-tier deploys where we can't
+    run full_schema.sql manually.
+    """
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        # admin_users
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS admin_users (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(50) NOT NULL UNIQUE,
+                password VARCHAR(255) NOT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # faq
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS faq (
+                id SERIAL PRIMARY KEY,
+                topic VARCHAR(100) DEFAULT 'General',
+                intent VARCHAR(100) DEFAULT '',
+                question TEXT NOT NULL,
+                answer TEXT NOT NULL,
+                image_path VARCHAR(255),
+                keywords TEXT,
+                related_questions TEXT,
+                language VARCHAR(20) DEFAULT 'en',
+                category VARCHAR(100),
+                priority_score INTEGER DEFAULT 0,
+                attachment_url VARCHAR(255),
+                reviewed_flag INTEGER DEFAULT 0,
+                last_reviewed TIMESTAMP,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_updated TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                public_uuid VARCHAR(36) UNIQUE,
+                source VARCHAR(32) NOT NULL DEFAULT 'manual',
+                embedding JSONB
+            )
+        """)
+
+        # unanswered_questions
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS unanswered_questions (
+                id SERIAL PRIMARY KEY,
+                question TEXT NOT NULL,
+                resolved_question TEXT,
+                context TEXT,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # chat_sessions
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS chat_sessions (
+                id SERIAL PRIMARY KEY,
+                session_id VARCHAR(100) NOT NULL UNIQUE,
+                public_uuid VARCHAR(36) NOT NULL UNIQUE,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_activity TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                ip_address VARCHAR(45),
+                user_agent TEXT
+            )
+        """)
+
+        # chat_history
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS chat_history (
+                id SERIAL PRIMARY KEY,
+                session_id VARCHAR(100),
+                user_message TEXT,
+                bot_response TEXT,
+                category VARCHAR(100),
+                detected_language VARCHAR(20),
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                faq_id INTEGER,
+                chat_uuid VARCHAR(36)
+            )
+        """)
+
+        # handbook_chunks
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS handbook_chunks (
+                id SERIAL PRIMARY KEY,
+                chapter VARCHAR(200),
+                section_title VARCHAR(255),
+                page_start INTEGER,
+                page_end INTEGER,
+                content TEXT NOT NULL,
+                keywords TEXT,
+                chunk_order INTEGER DEFAULT 0,
+                is_active SMALLINT DEFAULT 1,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        conn.commit()
+        logger.info("Core tables ensured")
+    except Exception as e:
+        logger.error(f"ensure_core_tables error: {e}")
+        conn.rollback()
+    finally:
+        cur.close()
+        conn.close()
+
 
 def _table_exists(cur, table_name: str) -> bool:
     cur.execute("SELECT to_regclass(%s)", (f"public.{table_name}",))
