@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <script>document.documentElement.setAttribute('data-bs-theme', localStorage.getItem('theme') || 'dark');</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>PAC Admin — Handbook Manager</title>
+  <link rel="icon" href="/static/uploads/logo.png" type="image/x-icon">
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+* { box-sizing: border-box; }
+:root {
+  --bg:#0a1628; --bg2:#0f1f3a; --brand:#1a73e8; --brand2:#4dabf7; --accent:#00e5ff; --accent2:#66d9f7;
+  --text:#e8f0f8; --text-dim:#a8c8e8; --muted:#8ba9cc; --card:rgba(15,31,58,.85); --card-header:rgba(20,40,70,.5);
+  --border:rgba(77,171,247,.15); --border2:rgba(77,171,247,.25); --sidebar:260px; --success:#51cf66;
+  --warning:#fcc419; --danger:#ff6b6b; --handbook:#22b8cf; --faq-green:#51cf66;
+  --input-bg:rgba(10,30,50,.8); --dropzone-bg:rgba(20,40,70,.25); --stat-box-bg:rgba(20,40,70,.5);
+  --badge-inactive-bg:rgba(255,255,255,.08); --toast-bg:rgba(10,28,56,.97);
+  --scrollbar-track: rgba(255,255,255,0.05); --scrollbar-thumb: rgba(255,255,255,0.15);
+}
+[data-bs-theme="light"] {
+  --bg:#eef2f7; --text:#1a2a3a; --text-dim:#4a6a8a; --muted:#6a8aaa; --card:rgba(255,255,255,.92);
+  --card-header:rgba(200,210,224,.5); --border:rgba(26,115,232,.15); --border2:rgba(26,115,232,.25);
+  --input-bg:rgba(255,255,255,.9); --dropzone-bg:rgba(220,227,237,.25);
+  --stat-box-bg:rgba(220,227,237,.5); --badge-inactive-bg:rgba(0,0,0,.06); --toast-bg:rgba(255,255,255,.97);
+  --scrollbar-track: rgba(0,0,0,0.05); --scrollbar-thumb: rgba(0,0,0,0.15);
+}
+body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); margin:0; min-height:100vh; }
+.bg-mesh { position:fixed; inset:0; pointer-events:none; z-index:0;
+  background:radial-gradient(ellipse 60% 50% at 5% 0%,rgba(26,115,232,.15) 0%,transparent 55%),
+             radial-gradient(ellipse 40% 40% at 95% 100%,rgba(0,229,255,.06) 0%,transparent 50%); }
+[data-bs-theme="light"] .bg-mesh { opacity:.25; }
+.bg-grid { position:fixed; inset:0; pointer-events:none; z-index:0;
+  background-image:linear-gradient(rgba(77,171,247,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(77,171,247,.03) 1px,transparent 1px);
+  background-size:44px 44px; }
+.sidebar { position:fixed; top:0; left:0; bottom:0; width:var(--sidebar); z-index:200;
+  background:rgba(8,16,32,.97); backdrop-filter:blur(20px); border-right:1px solid var(--border);
+  display:flex; flex-direction:column; transition:transform .28s ease, background .3s; }
+[data-bs-theme="light"] .sidebar { background:rgba(255,255,255,.95); }
+.sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:150; backdrop-filter:blur(2px); }
+.sidebar-overlay.show { display:block; }
+.sidebar-toggle { display:none; background:rgba(10,30,50,.8); border:1.5px solid var(--border); border-radius:11px;
+  padding:.4rem .6rem; color:var(--text-dim); font-size:1.15rem; cursor:pointer; align-items:center; justify-content:center; }
+.sidebar-toggle:hover { border-color:var(--accent); color:var(--text); }
+[data-bs-theme="light"] .sidebar-toggle { background:rgba(0,0,0,.05); }
+.theme-toggle-sidebar { display:flex; align-items:center; justify-content:space-between; gap:.65rem;
+  padding:.6rem .85rem; border-radius:11px; color:var(--text-dim); font-size:.85rem; cursor:pointer;
+  background:none; border:1px solid transparent; width:100%; margin-bottom:.4rem; transition:all .2s; }
+.theme-toggle-sidebar:hover { background:rgba(26,115,232,.12); border-color:rgba(77,171,247,.15); color:var(--text); }
+.theme-toggle-sidebar .theme-switch-label { display:flex; align-items:center; gap:.65rem; }
+.sidebar-brand { padding:1.5rem 1.35rem 1.25rem; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:.75rem; }
+.brand-orb { width:38px; height:38px; border-radius:50%; overflow:hidden; flex-shrink:0; box-shadow:0 0 0 2px rgba(0,229,255,.3),0 0 14px rgba(0,229,255,.2); }
+.brand-orb img { width:100%; height:100%; object-fit:cover; display:block; }
+.brand-text { font-family:'Sora',sans-serif; font-weight:800; font-size:.95rem; }
+.brand-sub { font-size:.7rem; color:var(--text-dim); }
+.sidebar-nav { flex:1; padding:1rem .75rem; overflow-y:auto; }
+.nav-section { font-size:.67rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); padding:.35rem .6rem; margin:.85rem 0 .35rem; }
+.nav-section:first-child { margin-top:0; }
+.nav-link { display:flex; align-items:center; gap:.7rem; padding:.65rem .85rem; border-radius:11px; color:var(--text-dim); text-decoration:none; font-size:.88rem; font-weight:500; margin-bottom:.2rem; border:1px solid transparent; transition:all .2s; }
+.nav-link i { width:20px; text-align:center; }
+.nav-link:hover { background:rgba(26,115,232,.18); color:var(--text); }
+.nav-link.active { background:linear-gradient(135deg,rgba(26,115,232,.35),rgba(77,171,247,.2)); border-color:rgba(77,171,247,.3); color:#fff; }
+[data-bs-theme="light"] .nav-link.active { background:linear-gradient(135deg,rgba(26,115,232,.15),rgba(77,171,247,.1)); color:var(--brand); }
+.nav-badge { margin-left:auto; padding:.2rem .55rem; border-radius:20px; font-size:.7rem; font-weight:700; }
+.badge-red { background:rgba(255,82,82,.2); color:var(--danger); border:1px solid rgba(255,82,82,.3); }
+.badge-yellow { background:rgba(255,202,40,.15); color:var(--warning); border:1px solid rgba(255,202,40,.3); }
+.sidebar-footer { padding:1rem .75rem 1.25rem; border-top:1px solid var(--border); }
+.logout-btn { display:flex; align-items:center; gap:.65rem; padding:.6rem .85rem; border-radius:11px; color:var(--text-dim); text-decoration:none; font-size:.85rem; background:none; border:1px solid transparent; width:100%; margin-bottom:.4rem; cursor:pointer; }
+.logout-btn:hover { background:rgba(255,82,82,.1); color:#ff6b6b; }
+.main { margin-left:var(--sidebar); min-height:100vh; position:relative; z-index:1; }
+.topbar { height:58px; display:flex; align-items:center; justify-content:space-between; padding:0 1.75rem;
+  background:rgba(8,16,32,.88); backdrop-filter:blur(18px); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:50; }
+[data-bs-theme="light"] .topbar { background:rgba(255,255,255,.9); }
+.topbar-title { font-family:'Sora',sans-serif; font-weight:700; font-size:1rem; display:flex; align-items:center; gap:.55rem; }
+.page-body { padding:1.75rem; }
+.btn-refresh { display:inline-flex; align-items:center; gap:.4rem; padding:.45rem .7rem; border-radius:11px;
+  background:rgba(26,115,232,.15); border:1.5px solid var(--border2); color:var(--accent2); font-weight:600; font-size:.82rem; cursor:pointer; }
+.btn-refresh:hover { background:var(--brand); color:#fff; border-color:var(--brand); }
+.card { background:var(--card); border:1px solid var(--border); border-radius:18px; margin-bottom:1.5rem; }
+.card-header { background:var(--card-header); padding:1rem 1.25rem; border-bottom:1px solid var(--border); font-family:'Sora',sans-serif; font-weight:700; display:flex; justify-content:space-between; align-items:center; gap:.5rem; flex-wrap:wrap; border-radius:18px 18px 0 0; }
+.card-body { padding:1.25rem; }
+.form-control,.form-select { background:var(--input-bg); border:1.5px solid var(--border); color:var(--text); border-radius:12px; padding:.6rem 1rem; }
+.form-control:focus,.form-select:focus { border-color:var(--accent); outline:none; box-shadow:0 0 0 3px rgba(0,229,255,.1); color:var(--text); }
+.form-label { font-size:.78rem; font-weight:600; color:var(--text-dim); margin-bottom:.35rem; display:block; }
+.btn-primary { background:linear-gradient(135deg,var(--brand),var(--brand2)); border:none; border-radius:12px; padding:.6rem 1.3rem; color:#fff; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:.4rem; }
+.btn-primary:hover { transform:translateY(-1px); box-shadow:0 4px 14px rgba(26,115,232,.4); color:#fff; }
+.btn-primary:disabled { opacity:.5; cursor:not-allowed; transform:none; }
+.btn-handbook { background:linear-gradient(135deg,#0891b2,#22b8cf); }
+.btn-faq { background:linear-gradient(135deg,#2b8a3e,#51cf66); }
+.btn-outline { border:1.5px solid var(--border2); background:transparent; border-radius:12px; padding:.55rem 1.1rem; color:var(--text-dim); cursor:pointer; display:inline-flex; align-items:center; gap:.4rem; font-size:.85rem; }
+.btn-outline:hover { background:rgba(255,255,255,.06); color:var(--text); }
+.sched-table { width:100%; border-collapse:collapse; font-size:.83rem; }
+.sched-table thead { background:rgba(20,40,70,.3); }
+[data-bs-theme="light"] .sched-table thead { background:rgba(200,210,224,.3); }
+.sched-table th { padding:.8rem .9rem; font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; color:var(--text-dim); border-bottom:1px solid var(--border); font-family:'Sora',sans-serif; font-weight:700; text-align:left; }
+.sched-table td { padding:.75rem .9rem; color:var(--text-dim); border-bottom:1px solid rgba(77,171,247,.06); vertical-align:middle; }
+.sched-table tr:hover td { background:rgba(26,115,232,.06); color:var(--text); }
+.sched-table .no-data td { text-align:center; padding:2.5rem; color:var(--muted); }
+.sched-table td.title-cell { color:var(--text); font-weight:600; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sched-table td.preview-cell { max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.badge-active { background:rgba(81,207,102,.12); color:#8ce99a; border:1px solid rgba(81,207,102,.22); padding:.22rem .6rem; border-radius:20px; font-size:.68rem; font-weight:700; }
+.badge-inactive { background:var(--badge-inactive-bg); color:var(--text-dim); border:1px solid rgba(255,255,255,.08); padding:.22rem .6rem; border-radius:20px; font-size:.68rem; font-weight:700; }
+.badge-type { background:rgba(34,184,207,.12); color:#66d9e8; border:1px solid rgba(34,184,207,.22); padding:.22rem .6rem; border-radius:20px; font-size:.68rem; }
+.act-btn { background:rgba(26,115,232,.2); border:none; border-radius:8px; color:var(--text-dim); padding:.3rem .55rem; margin:0 .12rem; cursor:pointer; }
+.act-btn:hover { background:var(--brand); color:#fff; }
+.act-btn.del:hover { background:rgba(255,82,82,.25); color:#ff8a80; }
+.stat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1rem; }
+.stat-box { background:var(--stat-box-bg); border:1px solid var(--border); border-radius:14px; padding:1rem 1.15rem; }
+.stat-num { font-family:'Sora',sans-serif; font-weight:800; font-size:1.5rem; }
+.stat-box.accent .stat-num { color:var(--accent2); }
+.stat-box.warn .stat-num { color:var(--warning); }
+.stat-label { font-size:.7rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:.04em; margin-top:.15rem; }
+.dropzone { border:2px dashed var(--border2); border-radius:16px; padding:2rem 1.5rem; text-align:center; cursor:pointer; transition:all .2s; background:var(--dropzone-bg); }
+.dropzone:hover,.dropzone.drag { border-color:var(--accent); background:rgba(0,229,255,.05); }
+.dropzone.busy { pointer-events:none; opacity:.5; border-style:solid; }
+.dropzone i { font-size:2rem; color:var(--accent2); display:block; margin-bottom:.55rem; }
+.dropzone strong { font-family:'Sora',sans-serif; font-size:.92rem; display:block; }
+.dropzone p { margin:.3rem 0 0; color:var(--text-dim); font-size:.78rem; }
+#fileInput, #jsonFileInput, #faqFileInput { display:none; }
+.filename-chip { display:none; margin-top:1rem; padding:.55rem .9rem; background:rgba(0,229,255,.08); border:1px solid rgba(0,229,255,.2); border-radius:10px; font-size:.82rem; color:var(--accent2); align-items:center; gap:.5rem; }
+.warn-box { background:rgba(255,202,40,.08); border:1px solid rgba(255,202,40,.25); border-radius:12px; padding:.85rem 1.1rem; font-size:.8rem; color:#ffdd7a; margin-bottom:1.1rem; display:flex; gap:.6rem; align-items:flex-start; }
+.warn-box i { flex-shrink:0; margin-top:.1rem; color:var(--warning); }
+.info-box { background:rgba(0,229,255,.06); border:1px solid rgba(0,229,255,.2); border-radius:12px; padding:.85rem 1.1rem; font-size:.8rem; color:var(--accent2); margin-bottom:1.1rem; display:flex; gap:.6rem; align-items:flex-start; }
+.info-box i { flex-shrink:0; margin-top:.1rem; }
+.status-msg { margin-top:1rem; padding:.7rem 1rem; border-radius:10px; font-size:.82rem; display:none; align-items:center; gap:.5rem; }
+.status-msg.ok { background:rgba(81,207,102,.1); color:#8ce99a; border:1px solid rgba(81,207,102,.25); display:flex; }
+.status-msg.err { background:rgba(255,82,82,.1); color:#ff8787; border:1px solid rgba(255,82,82,.25); display:flex; }
+.status-msg.info { background:rgba(0,229,255,.08); color:var(--accent2); border:1px solid rgba(0,229,255,.2); display:flex; }
+.search-bar { display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; margin-bottom:1rem; }
+.search-bar .form-control { max-width:280px; }
+.search-bar .form-select { max-width:200px; }
+.edit-panel { display:none; }
+.edit-panel.open { display:block; }
+.spinner { display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,.2); border-top-color:var(--accent); border-radius:50%; animation:spin .6s linear infinite; vertical-align:middle; margin-right:6px; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.toast-el { position:fixed; bottom:20px; right:20px; z-index:9999; background:var(--toast-bg); border:1px solid var(--border2); padding:.7rem 1.25rem; border-radius:12px; font-size:.84rem; display:flex; align-items:center; gap:.5rem; box-shadow:0 8px 28px rgba(0,0,0,.4); color:var(--text); animation:toastIn .25s ease; }
+@keyframes toastIn { from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)} }
+textarea.form-control { resize:vertical; min-height:60px; }
+
+.flow-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1rem; margin-bottom:1.5rem; }
+.flow-step { background:var(--stat-box-bg); border:1px solid var(--border); border-radius:14px; padding:1rem 1.15rem; }
+.flow-step .step-num { font-family:'Sora',sans-serif; font-weight:800; font-size:.75rem; color:var(--accent2); letter-spacing:.06em; text-transform:uppercase; margin-bottom:.35rem; }
+.flow-step .step-title { font-family:'Sora',sans-serif; font-weight:700; font-size:.95rem; margin-bottom:.25rem; }
+.flow-step .step-desc { font-size:.78rem; color:var(--text-dim); line-height:1.45; }
+
+.prompt-box { background:rgba(10,20,40,.6); border:1px solid var(--border); border-radius:12px; padding:1rem; font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; font-size:.72rem; line-height:1.5; color:var(--text-dim); max-height:220px; overflow-y:auto; white-space:pre-wrap; word-break:break-word; }
+[data-bs-theme="light"] .prompt-box { background:rgba(0,0,0,.04); }
+.prompt-actions { display:flex; gap:.6rem; flex-wrap:wrap; margin-top:.75rem; }
+
+.upload-progress {
+  display:none; margin-top:1.15rem; padding:1.2rem 1.25rem; border-radius:16px;
+  border:1px solid rgba(34,184,207,.3);
+  background:linear-gradient(135deg, rgba(8,145,178,.14), rgba(0,229,255,.06));
+}
+.upload-progress.show { display:block; }
+.upload-progress-header { display:flex; align-items:center; gap:.7rem; font-family:'Sora',sans-serif; font-weight:700; font-size:.95rem; margin-bottom:.9rem; }
+.spin-orb { width:30px; height:30px; border-radius:50%; flex-shrink:0; border:2.5px solid rgba(0,229,255,.22); border-top-color:var(--accent); animation:spin .65s linear infinite; }
+.progress-track { height:9px; border-radius:99px; overflow:hidden; margin-bottom:.85rem; background:rgba(255,255,255,.08); }
+.progress-fill { height:100%; width:8%; border-radius:99px; background:linear-gradient(90deg,#0891b2,#22b8cf,#00e5ff); background-size:220% 100%; animation:progressShimmer 1.5s ease infinite; transition:width .5s ease; }
+@keyframes progressShimmer { 0% { background-position:100% 0; } 100% { background-position:-100% 0; } }
+.upload-steps { display:flex; flex-direction:column; gap:.5rem; font-size:.82rem; color:var(--text-dim); }
+.upload-step { display:flex; align-items:center; gap:.55rem; }
+.upload-step.pending { opacity:.5; }
+.upload-step.active { color:var(--accent2); font-weight:600; opacity:1; }
+.upload-step.done { color:var(--success); opacity:1; }
+.upload-eta { margin-top:.8rem; font-size:.75rem; color:var(--muted); }
+
+::-webkit-scrollbar { width:6px; height:6px; }
+::-webkit-scrollbar-track { background:var(--scrollbar-track); border-radius:3px; }
+::-webkit-scrollbar-thumb { background:var(--scrollbar-thumb); border-radius:3px; }
+
+@media (max-width:900px) {
+  .sidebar { transform:translateX(-100%); }
+  .sidebar.open { transform:translateX(0); box-shadow:8px 0 32px rgba(0,0,0,.35); }
+  .main { margin-left:0; }
+  .sidebar-toggle { display:inline-flex; }
+  .page-body { padding:1.1rem; }
+  .topbar { padding:0 1rem; }
+}
+  </style>
+</head>
+<body>
+<div class="bg-mesh"></div>
+<div class="bg-grid"></div>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-orb"><img src="/static/uploads/logo.png" alt="PAC" onerror="this.parentElement.innerHTML='🎓'"></div>
+    <div><div class="brand-text">PAC Help Desk</div><div class="brand-sub">Admin Panel</div></div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">Management</div>
+    <a href="/dashboard" class="nav-link"><i class="bi bi-grid-fill"></i> FAQ Management</a>
+    <a href="/unanswered" class="nav-link"><i class="bi bi-question-circle"></i> Unanswered <span class="nav-badge badge-red" id="unansweredBadge" style="display:none"></span></a>
+    <a href="/holidays" class="nav-link"><i class="bi bi-calendar-event"></i> Holidays &amp; Events</a>
+    <a href="/handbook" class="nav-link active"><i class="bi bi-journal-bookmark-fill"></i> Student Handbook</a>
+    <a href="/reports" class="nav-link"><i class="bi bi-flag"></i> Reports <span class="nav-badge badge-yellow" id="reportsBadge" style="display:none"></span></a>
+    <div class="nav-section">Analytics</div>
+    <a href="/analytics" class="nav-link"><i class="bi bi-graph-up"></i> System Analytics</a>
+    <a href="/ratings" class="nav-link"><i class="bi bi-star-half"></i> Chat Ratings</a>
+    <a href="/alert_log" class="nav-link"><i class="bi bi-bell"></i> Alert Log</a>
+  </nav>
+  <div class="sidebar-footer">
+    <button type="button" class="theme-toggle-sidebar" id="themeToggle" onclick="toggleTheme()" title="Toggle theme">
+      <span class="theme-switch-label"><i class="bi bi-moon-fill" id="themeIcon"></i><span id="themeLabel">Dark mode</span></span>
+      <i class="bi bi-circle-half" style="opacity:.5;font-size:.85rem"></i>
+    </button>
+    <button onclick="exportData()" class="logout-btn"><i class="bi bi-download"></i> Export Backup</button>
+    <a href="/" class="logout-btn"><i class="bi bi-house"></i> Back to Help Desk</a>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:.75rem;min-width:0">
+      <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Open menu"><i class="bi bi-list"></i></button>
+      <span class="topbar-title"><i class="bi bi-journal-bookmark-fill" style="color:var(--accent)"></i> Student Handbook</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:.6rem">
+      <button class="btn-outline" onclick="exportHandbook(false)"><i class="bi bi-download"></i> Export Chunks</button>
+      <button class="btn-refresh" onclick="refreshAll()"><i class="bi bi-arrow-clockwise"></i></button>
+    </div>
+  </div>
+
+  <div class="page-body">
+
+    <!-- How it works -->
+    <div class="flow-grid">
+      <div class="flow-step">
+        <div class="step-num">Step 1 · Chunks</div>
+        <div class="step-title">Upload PDF or JSON chunks</div>
+        <div class="step-desc">Builds free-form handbook sections for long policy answers. Use when the handbook PDF changes.</div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">Step 2 · FAQ pairs</div>
+        <div class="step-title">Generate FAQ-style Q&amp;A</div>
+        <div class="step-desc">Copy the prompt below into ChatGPT / Claude / Gemini with each important section. Save the JSON output.</div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">Step 3 · Mass insert</div>
+        <div class="step-title">Paste or upload FAQ JSON</div>
+        <div class="step-desc">Inserts into the main FAQ table so vague questions use the strong FAQ path. Retire old handbook FAQs first if needed.</div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="card">
+      <div class="card-header"><i class="bi bi-bar-chart-fill" style="color:var(--accent)"></i> Overview</div>
+      <div class="card-body">
+        <div class="stat-grid">
+          <div class="stat-box accent"><div class="stat-num" id="statActive">—</div><div class="stat-label">Active Sections</div></div>
+          <div class="stat-box"><div class="stat-num" id="statTotal">—</div><div class="stat-label">Total Sections</div></div>
+          <div class="stat-box"><div class="stat-num" id="statChapters">—</div><div class="stat-label">Chapters</div></div>
+          <div class="stat-box warn"><div class="stat-num" id="statOld">—</div><div class="stat-label">Old / Inactive</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PDF Upload -->
+    <div class="card">
+      <div class="card-header"><i class="bi bi-cloud-arrow-up-fill" style="color:var(--handbook)"></i> 1. Upload Handbook PDF → Chunks</div>
+      <div class="card-body">
+        <div class="warn-box">
+          <i class="bi bi-exclamation-triangle-fill"></i>
+          <span>Uploading a new PDF retires previous active chunks. Processing can take up to a minute.</span>
+        </div>
+        <div class="dropzone" id="dropzone">
+          <i class="bi bi-file-earmark-pdf-fill"></i>
+          <strong>Click or drag a PDF</strong>
+          <p>PDF only · up to ~50MB</p>
+        </div>
+        <input type="file" id="fileInput" accept="application/pdf">
+        <div class="filename-chip" id="filenameChip"><i class="bi bi-file-earmark-pdf"></i> <span id="filenameText"></span></div>
+        <div style="margin-top:1.1rem;display:flex;gap:.75rem;flex-wrap:wrap">
+          <button class="btn-primary btn-handbook" id="uploadBtn" disabled><i class="bi bi-upload"></i> Upload &amp; Process</button>
+          <button class="btn-outline" id="cancelUploadBtn" style="display:none" onclick="resetUpload()"><i class="bi bi-x-circle"></i> Cancel</button>
+        </div>
+        <div class="upload-progress" id="uploadProgress">
+          <div class="upload-progress-header"><div class="spin-orb"></div><span id="uploadProgressTitle">Uploading…</span></div>
+          <div class="progress-track"><div class="progress-fill" id="uploadProgressFill" style="width:8%"></div></div>
+          <div class="upload-steps">
+            <div class="upload-step pending" id="stepUpload"><i class="bi bi-circle"></i> Uploading PDF</div>
+            <div class="upload-step pending" id="stepParse"><i class="bi bi-circle"></i> Extracting sections</div>
+            <div class="upload-step pending" id="stepIndex"><i class="bi bi-circle"></i> Indexing</div>
+            <div class="upload-step pending" id="stepDone"><i class="bi bi-circle"></i> Ready</div>
+          </div>
+          <div class="upload-eta"><i class="bi bi-clock"></i> Keep this tab open.</div>
+        </div>
+        <div class="status-msg" id="uploadStatus"></div>
+      </div>
+    </div>
+
+    <!-- JSON Chunks Import -->
+    <div class="card">
+      <div class="card-header"><i class="bi bi-filetype-json" style="color:var(--warning)"></i> 1b. Import Pre-chunked JSON (optional)</div>
+      <div class="card-body">
+        <div class="info-box">
+          <i class="bi bi-info-circle-fill"></i>
+          <span>Same format as <strong>Export Chunks</strong>. Use when AI quota is exhausted or you already have a clean <code>handbook_chunks_*.json</code>.</span>
+        </div>
+        <div class="dropzone" id="jsonDropzone" style="border-color:rgba(252,196,25,.35)">
+          <i class="bi bi-filetype-json" style="color:var(--warning)"></i>
+          <strong>Click or drag handbook_chunks JSON</strong>
+          <p>Replaces active chunks</p>
+        </div>
+        <input type="file" id="jsonFileInput" accept="application/json">
+        <div class="filename-chip" id="jsonFilenameChip" style="display:none"><i class="bi bi-filetype-json"></i> <span id="jsonFilenameText"></span></div>
+        <div style="margin-top:1.1rem">
+          <button class="btn-primary" style="background:linear-gradient(135deg,#e67700,#fcc419)" id="importJsonBtn" disabled>
+            <i class="bi bi-box-arrow-in-down"></i> Import JSON Chunks
+          </button>
+        </div>
+        <div class="status-msg" id="jsonImportStatus"></div>
+      </div>
+    </div>
+
+    <!-- Prompt guide for generating FAQs -->
+    <div class="card">
+      <div class="card-header">
+        <span><i class="bi bi-magic" style="color:var(--accent2)"></i> 2. Prompt to generate FAQ pairs (copy each time handbook changes)</span>
+        <button class="btn-outline" style="font-size:.78rem;padding:.35rem .85rem" onclick="copyPrompt()"><i class="bi bi-clipboard"></i> Copy prompt</button>
+      </div>
+      <div class="card-body">
+        <div class="info-box">
+          <i class="bi bi-lightbulb-fill"></i>
+          <span>
+            After chunks are loaded, open important sections (Vision, Mission, History, Degree Offenses, Dress, etc.).
+            Paste the prompt below into ChatGPT / Claude / Gemini, then paste one section’s title + content.
+            Collect the JSON outputs into one file and mass-insert in Step 3.
+          </span>
+        </div>
+        <div class="prompt-box" id="faqPromptBox">You are converting a student handbook section into high-quality FAQ entries for a school chatbot.
+
+RULES (must follow exactly):
+1. ONLY use information that appears in the section text below. Never invent rules, numbers, names, dates, or policies.
+2. Create 1–6 natural student questions that a real student would actually type (including vague / conversational phrasings).
+3. Each answer must be a complete, self-contained reply that a chatbot can return directly.
+4. Prefer short, clear answers. Quote key numbers, demerit values, RA numbers, or exact phrases when they matter.
+5. If the section is mostly noise, table-of-contents, or pure headings with almost no substance, return an empty list.
+6. Output ONLY valid JSON — no markdown, no commentary.
+
+Output format:
+{
+  "faqs": [
+    {
+      "question": "natural student question (can be vague or short)",
+      "answer": "clear self-contained answer drawn only from the section",
+      "keywords": "comma,separated,keywords",
+      "priority": 1-10
+    }
+  ]
+}
+
+Guidelines for good questions:
+- Include both precise and vague versions ("What is the mission?" and "What does PAC want students to become?")
+- Cover common student language: "light offenses", "what was the school called before", "can we wear jewelry", "how many points do we start with", etc.
+- For lists (offenses, programs, core values), make one question that asks for the whole list and a few that ask for specific items if useful.
+
+Section title: {paste section title here}
+Page(s): {paste pages here}
+
+Section text:
+{paste full section content here}</div>
+        <div class="prompt-actions">
+          <button class="btn-outline" onclick="copyPrompt()"><i class="bi bi-clipboard-check"></i> Copy prompt</button>
+          <span style="font-size:.78rem;color:var(--muted)">Replace the placeholders with each section from the table below.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mass insert FAQs -->
+    <div class="card">
+      <div class="card-header"><i class="bi bi-clipboard-plus-fill" style="color:var(--faq-green)"></i> 3. Mass insert Handbook FAQs</div>
+      <div class="card-body">
+        <div class="warn-box">
+          <i class="bi bi-info-circle-fill"></i>
+          <span>
+            Accepts a <strong>JSON file</strong> or paste (same shape as the prompt output).
+            Inserts into the main FAQ table with <code>source=handbook</code>.
+            Check “Retire previous” when replacing after a handbook update.
+          </span>
+        </div>
+
+        <div class="dropzone" id="faqDropzone" style="border-color:rgba(81,207,102,.4)">
+          <i class="bi bi-filetype-json" style="color:var(--faq-green)"></i>
+          <strong>Click or drag FAQ JSON file</strong>
+          <p>Format: { "faqs": [ { "question", "answer", "keywords?", "priority?" } ] } or a plain list</p>
+        </div>
+        <input type="file" id="faqFileInput" accept="application/json">
+        <div class="filename-chip" id="faqFilenameChip" style="display:none"><i class="bi bi-filetype-json"></i> <span id="faqFilenameText"></span></div>
+
+        <div style="margin:1.25rem 0 .5rem;font-size:.78rem;color:var(--muted);text-align:center">— or paste below —</div>
+
+        <label class="form-label">Paste FAQ JSON / Q:A blocks</label>
+        <textarea class="form-control" id="handbookFaqPaste" rows="10"
+          placeholder='{"faqs":[{"question":"...","answer":"...","priority":8}]}'></textarea>
+
+        <div style="margin-top:1rem;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:.4rem;font-size:.85rem;color:var(--text-dim);cursor:pointer">
+            <input type="checkbox" id="retirePreviousHandbookFaqs" checked>
+            Retire previous handbook FAQs first
+          </label>
+          <button class="btn-primary btn-faq" id="massInsertFaqBtn">
+            <i class="bi bi-box-arrow-in-down"></i> Mass Insert FAQs
+          </button>
+        </div>
+        <div class="status-msg" id="massInsertFaqStatus"></div>
+      </div>
+    </div>
+
+    <!-- Edit Panel -->
+    <div class="card edit-panel" id="editPanel">
+      <div class="card-header">
+        <span><i class="bi bi-pencil-square" style="color:var(--warning)"></i> Edit Section</span>
+        <button class="btn-outline" style="font-size:.78rem;padding:.35rem .85rem" onclick="closeEditPanel()"><i class="bi bi-x-circle"></i> Close</button>
+      </div>
+      <div class="card-body">
+        <input type="hidden" id="edit_id">
+        <div class="row g-3">
+          <div class="col-md-8"><label class="form-label">Section Title</label><input type="text" class="form-control" id="edit_section_title"></div>
+          <div class="col-md-4"><label class="form-label">Chapter</label><input type="text" class="form-control" id="edit_chapter"></div>
+        </div>
+        <div class="row g-3 mt-1">
+          <div class="col-12"><label class="form-label">Content</label><textarea class="form-control" id="edit_content" rows="8"></textarea></div>
+        </div>
+        <div class="row g-3 mt-1">
+          <div class="col-12"><label class="form-label">Keywords</label><input type="text" class="form-control" id="edit_keywords"></div>
+        </div>
+        <div style="margin-top:1.1rem;display:flex;gap:.75rem;flex-wrap:wrap">
+          <button class="btn-primary" onclick="saveEdit()" id="saveEditBtn"><i class="bi bi-save2-fill"></i> Save</button>
+          <button class="btn-outline" onclick="closeEditPanel()">Cancel</button>
+          <span id="editStatus" style="font-size:.78rem;color:var(--text-dim)"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sections Table -->
+    <div class="card">
+      <div class="card-header">
+        <span><i class="bi bi-list-ul" style="color:var(--accent2)"></i> Handbook Sections (for prompt copy)</span>
+        <span id="schedCount" style="font-size:.75rem;color:var(--text-dim)"></span>
+      </div>
+      <div class="card-body">
+        <div class="search-bar">
+          <input type="text" class="form-control" id="searchInput" placeholder="Search title or chapter…" oninput="renderChunks()">
+          <select class="form-select" id="statusFilter" onchange="renderChunks()">
+            <option value="active">Active only</option>
+            <option value="all">All</option>
+            <option value="inactive">Old only</option>
+          </select>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="sched-table">
+            <thead>
+              <tr><th>Status</th><th>Section</th><th>Chapter</th><th>Pages</th><th>Preview</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="chunksList">
+              <tr class="no-data"><td colspan="6"><i class="bi bi-hourglass-split"></i> Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const FAQ_PROMPT = document.getElementById('faqPromptBox')?.textContent || '';
+
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  const ov = document.getElementById('sidebarOverlay');
+  const open = sb.classList.toggle('open');
+  ov.classList.toggle('show', open);
+  document.body.style.overflow = open ? 'hidden' : '';
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('show');
+  document.body.style.overflow = '';
+}
+document.querySelectorAll('.sidebar .nav-link').forEach(link => {
+  link.addEventListener('click', () => { if (window.innerWidth <= 900) closeSidebar(); });
+});
+
+function toggleTheme() {
+  const html = document.documentElement;
+  const newTheme = html.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-bs-theme', newTheme);
+  localStorage.setItem('theme', newTheme);
+  updateThemeUI(newTheme);
+}
+function updateThemeUI(theme) {
+  const icon = document.getElementById('themeIcon');
+  const label = document.getElementById('themeLabel');
+  if (icon) icon.className = theme === 'dark' ? 'bi bi-moon-fill' : 'bi bi-sun-fill';
+  if (label) label.textContent = theme === 'dark' ? 'Dark mode' : 'Light mode';
+}
+(function(){ const t = localStorage.getItem('theme') || 'dark'; document.documentElement.setAttribute('data-bs-theme', t); updateThemeUI(t); })();
+
+async function updateBadge(url, el) {
+  try {
+    const r = await fetch(url);
+    if (r.status === 429 || !r.ok) return;
+    const d = await r.json();
+    const c = d.count || 0;
+    if (el) { el.textContent = c; el.style.display = c > 0 ? 'inline-block' : 'none'; }
+  } catch (e) {}
+}
+function refreshBadges() {
+  updateBadge('/unanswered_count', document.getElementById('unansweredBadge'));
+  updateBadge('/reports_count', document.getElementById('reportsBadge'));
+}
+refreshBadges();
+setInterval(refreshBadges, 120000);
+
+function getCsrf() { return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''; }
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function showToast(msg, type='success') {
+  const el = document.createElement('div'); el.className = 'toast-el';
+  el.style.color = type==='success' ? 'var(--success)' : type==='danger' ? 'var(--danger)' : 'var(--warning)';
+  el.innerHTML = `<i class="bi bi-${type==='success'?'check-circle-fill':type==='danger'?'x-circle-fill':'exclamation-circle-fill'}"></i> ${escHtml(msg)}`;
+  document.body.appendChild(el); setTimeout(() => el.remove(), 3200);
+}
+function exportData() { window.location.href = '/api/export/faq'; showToast('Export started...', 'info'); }
+
+function copyPrompt() {
+  const text = document.getElementById('faqPromptBox')?.textContent || '';
+  navigator.clipboard.writeText(text).then(() => showToast('Prompt copied', 'success'))
+    .catch(() => showToast('Copy failed — select text manually', 'warning'));
+}
+
+let allChunks = [];
+let selectedFile = null;
+let uploadPollTimer = null;
+let selectedJsonFile = null;
+let selectedFaqFile = null;
+let selectedFaqFileText = null;
+
+document.addEventListener('DOMContentLoaded', async () => {
+  setupDropzone();
+  setupJsonDropzone();
+  setupFaqDropzone();
+  setupMassInsertFaqs();
+  await checkAdmin();
+});
+
+async function checkAdmin() {
+  try {
+    const r = await fetch('/api/check_admin');
+    const d = await r.json();
+    if (!d.is_admin) {
+      document.querySelector('.page-body').innerHTML = `
+        <div class="card"><div class="card-body" style="text-align:center;padding:3rem">
+          <i class="bi bi-shield-lock" style="font-size:3rem;color:var(--warning);display:block;margin-bottom:1rem"></i>
+          <h4>Admin Access Required</h4>
+          <p style="color:var(--text-dim)">Please <a href="/admin" style="color:var(--accent)">login as administrator</a>.</p>
+        </div></div>`;
+      return;
+    }
+    refreshAll();
+  } catch (e) { showToast('Admin check failed', 'danger'); }
+}
+
+function refreshAll() { loadChunks(); }
+
+/* ---------- PDF ---------- */
+function setupDropzone() {
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  dropzone.addEventListener('click', () => fileInput.click());
+  dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('drag'); });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+  dropzone.addEventListener('drop', (e) => {
+    e.preventDefault(); dropzone.classList.remove('drag');
+    if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', () => { if (fileInput.files.length) handleFile(fileInput.files[0]); });
+  document.getElementById('uploadBtn').addEventListener('click', doUpload);
+}
+function handleFile(file) {
+  if (!file.name.toLowerCase().endsWith('.pdf')) { showToast('Please choose a PDF file', 'danger'); return; }
+  selectedFile = file;
+  document.getElementById('filenameText').textContent = `${file.name} (${(file.size/1024/1024).toFixed(1)} MB)`;
+  document.getElementById('filenameChip').style.display = 'flex';
+  document.getElementById('uploadBtn').disabled = false;
+  document.getElementById('cancelUploadBtn').style.display = 'inline-flex';
+  document.getElementById('uploadStatus').style.display = 'none';
+}
+function resetUpload() {
+  selectedFile = null;
+  document.getElementById('fileInput').value = '';
+  document.getElementById('filenameChip').style.display = 'none';
+  document.getElementById('uploadBtn').disabled = true;
+  document.getElementById('cancelUploadBtn').style.display = 'none';
+}
+function setUploadStatus(kind, html) {
+  const el = document.getElementById('uploadStatus');
+  el.className = `status-msg ${kind}`;
+  el.innerHTML = html;
+  el.style.display = 'flex';
+}
+function setStep(id, state) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.className = 'upload-step ' + state;
+  const icon = el.querySelector('i');
+  if (!icon) return;
+  if (state === 'done') icon.className = 'bi bi-check-circle-fill';
+  else if (state === 'active') icon.className = 'bi bi-arrow-right-circle-fill';
+  else icon.className = 'bi bi-circle';
+}
+function showUploadProgress() {
+  document.getElementById('uploadProgress').classList.add('show');
+  document.getElementById('dropzone').classList.add('busy');
+  document.getElementById('uploadProgressFill').style.width = '12%';
+  document.getElementById('uploadProgressTitle').textContent = 'Uploading handbook…';
+  setStep('stepUpload', 'active');
+  setStep('stepParse', 'pending');
+  setStep('stepIndex', 'pending');
+  setStep('stepDone', 'pending');
+  document.getElementById('uploadStatus').style.display = 'none';
+}
+function advanceUploadProgress(phase) {
+  const fill = document.getElementById('uploadProgressFill');
+  const title = document.getElementById('uploadProgressTitle');
+  if (phase === 'upload') { fill.style.width = '28%'; title.textContent = 'Uploading PDF…'; setStep('stepUpload', 'active'); }
+  else if (phase === 'parse') { fill.style.width = '55%'; title.textContent = 'Extracting sections…'; setStep('stepUpload', 'done'); setStep('stepParse', 'active'); }
+  else if (phase === 'index') { fill.style.width = '82%'; title.textContent = 'Indexing…'; setStep('stepParse', 'done'); setStep('stepIndex', 'active'); }
+  else if (phase === 'done') {
+    fill.style.width = '100%'; title.textContent = 'Handbook ready';
+    setStep('stepUpload', 'done'); setStep('stepParse', 'done'); setStep('stepIndex', 'done'); setStep('stepDone', 'done');
+  }
+}
+function hideUploadProgress(delayMs = 0) {
+  const run = () => {
+    document.getElementById('uploadProgress').classList.remove('show');
+    document.getElementById('dropzone').classList.remove('busy');
+    if (uploadPollTimer) { clearInterval(uploadPollTimer); uploadPollTimer = null; }
+  };
+  if (delayMs) setTimeout(run, delayMs); else run();
+}
+function startProcessingPoll() {
+  let ticks = 0;
+  if (uploadPollTimer) clearInterval(uploadPollTimer);
+  uploadPollTimer = setInterval(async () => {
+    ticks += 1;
+    if (ticks === 1) advanceUploadProgress('parse');
+    if (ticks === 3) advanceUploadProgress('index');
+    if (ticks >= 4) {
+      const before = allChunks.filter(c => c.is_active).length;
+      await loadChunks();
+      const after = allChunks.filter(c => c.is_active).length;
+      if (after > 0 && (after !== before || ticks >= 8)) {
+        advanceUploadProgress('done');
+        setUploadStatus('ok', '<i class="bi bi-check-circle-fill"></i> Handbook processed.');
+        showToast('Handbook ready', 'success');
+        hideUploadProgress(2000);
+      }
+    }
+    if (ticks >= 40) {
+      setUploadStatus('info', '<i class="bi bi-info-circle-fill"></i> Still processing — refresh if needed.');
+      hideUploadProgress();
+    }
+  }, 3000);
+}
+async function doUpload() {
+  if (!selectedFile) return;
+  const btn = document.getElementById('uploadBtn');
+  const cancelBtn = document.getElementById('cancelUploadBtn');
+  btn.disabled = true;
+  if (cancelBtn) cancelBtn.style.display = 'none';
+  btn.innerHTML = '<span class="spinner"></span> Working…';
+  showUploadProgress();
+  advanceUploadProgress('upload');
+  const formData = new FormData();
+  formData.append('handbook', selectedFile);
+  try {
+    const resp = await fetch('/api/admin/upload_handbook', {
+      method: 'POST', headers: { 'X-CSRFToken': getCsrf() }, body: formData,
+    });
+    const data = await resp.json();
+    if (resp.ok && data.success) {
+      advanceUploadProgress('parse');
+      setUploadStatus('info', '<i class="bi bi-hourglass-split"></i> Extracting and indexing…');
+      showToast('Upload started', 'success');
+      resetUpload();
+      btn.innerHTML = '<i class="bi bi-upload"></i> Upload &amp; Process';
+      startProcessingPoll();
+    } else {
+      hideUploadProgress();
+      setUploadStatus('err', `<i class="bi bi-x-circle-fill"></i> ${escHtml(data.error || 'Upload failed.')}`);
+      btn.disabled = !selectedFile;
+      btn.innerHTML = '<i class="bi bi-upload"></i> Upload &amp; Process';
+      if (cancelBtn && selectedFile) cancelBtn.style.display = 'inline-flex';
+    }
+  } catch (err) {
+    hideUploadProgress();
+    setUploadStatus('err', `<i class="bi bi-x-circle-fill"></i> Network error: ${escHtml(err.message)}`);
+    btn.disabled = !selectedFile;
+    btn.innerHTML = '<i class="bi bi-upload"></i> Upload &amp; Process';
+    if (cancelBtn && selectedFile) cancelBtn.style.display = 'inline-flex';
+  }
+}
+
+/* ---------- JSON chunks ---------- */
+function setupJsonDropzone() {
+  const dropzone = document.getElementById('jsonDropzone');
+  const fileInput = document.getElementById('jsonFileInput');
+  if (!dropzone || !fileInput) return;
+  dropzone.addEventListener('click', () => fileInput.click());
+  dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+  dropzone.addEventListener('drop', e => {
+    e.preventDefault(); dropzone.classList.remove('drag');
+    if (e.dataTransfer.files.length) handleJsonFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', () => { if (fileInput.files.length) handleJsonFile(fileInput.files[0]); });
+  document.getElementById('importJsonBtn').addEventListener('click', doImportJson);
+}
+function handleJsonFile(file) {
+  if (!file.name.toLowerCase().endsWith('.json')) { showToast('Choose a JSON file', 'danger'); return; }
+  selectedJsonFile = file;
+  document.getElementById('jsonFilenameText').textContent = file.name;
+  document.getElementById('jsonFilenameChip').style.display = 'flex';
+  document.getElementById('importJsonBtn').disabled = false;
+  document.getElementById('jsonImportStatus').style.display = 'none';
+}
+async function doImportJson() {
+  if (!selectedJsonFile) return;
+  const btn = document.getElementById('importJsonBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Importing…';
+  const formData = new FormData();
+  formData.append('chunks_file', selectedJsonFile);
+  try {
+    const resp = await fetch('/api/admin/import_handbook_chunks', {
+      method: 'POST', headers: { 'X-CSRFToken': getCsrf() }, body: formData,
+    });
+    const data = await resp.json();
+    if (resp.ok && data.success) {
+      document.getElementById('jsonImportStatus').className = 'status-msg ok';
+      document.getElementById('jsonImportStatus').innerHTML = `<i class="bi bi-check-circle-fill"></i> ${escHtml(data.message)}`;
+      document.getElementById('jsonImportStatus').style.display = 'flex';
+      showToast(`Imported ${data.imported} sections`, 'success');
+      selectedJsonFile = null;
+      document.getElementById('jsonFilenameChip').style.display = 'none';
+      document.getElementById('jsonFileInput').value = '';
+      loadChunks();
+    } else {
+      document.getElementById('jsonImportStatus').className = 'status-msg err';
+      document.getElementById('jsonImportStatus').innerHTML = `<i class="bi bi-x-circle-fill"></i> ${escHtml(data.error || 'Import failed')}`;
+      document.getElementById('jsonImportStatus').style.display = 'flex';
+      showToast(data.error || 'Import failed', 'danger');
+    }
+  } catch (err) { showToast('Network error: ' + err.message, 'danger'); }
+  finally {
+    btn.disabled = !selectedJsonFile;
+    btn.innerHTML = '<i class="bi bi-box-arrow-in-down"></i> Import JSON Chunks';
+  }
+}
+
+/* ---------- FAQ mass insert (file + paste) ---------- */
+function setupFaqDropzone() {
+  const dropzone = document.getElementById('faqDropzone');
+  const fileInput = document.getElementById('faqFileInput');
+  if (!dropzone || !fileInput) return;
+  dropzone.addEventListener('click', () => fileInput.click());
+  dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+  dropzone.addEventListener('drop', e => {
+    e.preventDefault(); dropzone.classList.remove('drag');
+    if (e.dataTransfer.files.length) handleFaqFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', () => { if (fileInput.files.length) handleFaqFile(fileInput.files[0]); });
+}
+function handleFaqFile(file) {
+  if (!file.name.toLowerCase().endsWith('.json')) { showToast('Choose a JSON file', 'danger'); return; }
+  selectedFaqFile = file;
+  document.getElementById('faqFilenameText').textContent = file.name;
+  document.getElementById('faqFilenameChip').style.display = 'flex';
+  const reader = new FileReader();
+  reader.onload = () => { selectedFaqFileText = reader.result; };
+  reader.readAsText(file);
+}
+function setupMassInsertFaqs() {
+  const btn = document.getElementById('massInsertFaqBtn');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    const pasted = document.getElementById('handbookFaqPaste').value.trim();
+    const text = selectedFaqFileText || pasted;
+    if (!text) { showToast('Upload a FAQ JSON file or paste pairs first', 'warning'); return; }
+    const retire = document.getElementById('retirePreviousHandbookFaqs')?.checked !== false;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Inserting…';
+    try {
+      const resp = await fetch('/api/admin/mass_insert_handbook_faqs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+        body: JSON.stringify({ text, retire_previous: retire }),
+      });
+      const data = await resp.json();
+      const el = document.getElementById('massInsertFaqStatus');
+      if (resp.ok && data.success) {
+        el.className = 'status-msg ok';
+        el.innerHTML = `<i class="bi bi-check-circle-fill"></i> Inserted ${data.inserted} handbook FAQs`;
+        el.style.display = 'flex';
+        showToast(`Inserted ${data.inserted} FAQs`, 'success');
+        document.getElementById('handbookFaqPaste').value = '';
+        selectedFaqFile = null;
+        selectedFaqFileText = null;
+        document.getElementById('faqFilenameChip').style.display = 'none';
+        document.getElementById('faqFileInput').value = '';
+      } else {
+        el.className = 'status-msg err';
+        el.innerHTML = `<i class="bi bi-x-circle-fill"></i> ${escHtml(data.error || 'Insert failed')}`;
+        el.style.display = 'flex';
+        showToast(data.error || 'Insert failed', 'danger');
+      }
+    } catch (err) { showToast('Network error: ' + err.message, 'danger'); }
+    finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-box-arrow-in-down"></i> Mass Insert FAQs';
+    }
+  });
+}
+
+/* ---------- Chunks table ---------- */
+async function loadChunks() {
+  const tbody = document.getElementById('chunksList');
+  try {
+    const r = await fetch('/api/admin/handbook_chunks');
+    if (r.status === 401 || r.status === 403) {
+      tbody.innerHTML = `<tr class="no-data"><td colspan="6">Session expired. <a href="/admin" style="color:var(--accent)">Login</a>.</td></tr>`;
+      return;
+    }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    allChunks = d.chunks || [];
+    updateStats();
+    renderChunks();
+  } catch (e) {
+    tbody.innerHTML = `<tr class="no-data"><td colspan="6">Failed to load (${escHtml(e.message)}).</td></tr>`;
+  }
+}
+function updateStats() {
+  const active = allChunks.filter(c => c.is_active).length;
+  const total = allChunks.length;
+  const old = total - active;
+  const chapters = new Set(allChunks.filter(c => c.is_active).map(c => c.chapter).filter(Boolean));
+  document.getElementById('statActive').textContent = active;
+  document.getElementById('statTotal').textContent = total;
+  document.getElementById('statOld').textContent = old;
+  document.getElementById('statChapters').textContent = chapters.size;
+  document.getElementById('schedCount').textContent = `${total} section${total === 1 ? '' : 's'}`;
+}
+function renderChunks() {
+  const tbody = document.getElementById('chunksList');
+  const q = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+  const statusFilter = document.getElementById('statusFilter').value;
+  let filtered = allChunks;
+  if (statusFilter === 'active') filtered = filtered.filter(c => c.is_active);
+  if (statusFilter === 'inactive') filtered = filtered.filter(c => !c.is_active);
+  if (q) filtered = filtered.filter(c =>
+    (c.section_title || '').toLowerCase().includes(q) || (c.chapter || '').toLowerCase().includes(q));
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr class="no-data"><td colspan="6">No sections match. Upload a handbook above.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = filtered.map(c => {
+    const pageLabel = c.page_start === c.page_end ? `p.${c.page_start ?? '—'}` : `pp.${c.page_start ?? '?'}-${c.page_end ?? '?'}`;
+    const statusBadge = c.is_active ? '<span class="badge-active">ACTIVE</span>' : '<span class="badge-inactive">OLD</span>';
+    return `<tr data-id="${c.id}">
+      <td>${statusBadge}</td>
+      <td class="title-cell" title="${escHtml(c.section_title || '')}">${escHtml(c.section_title || '(untitled)')}</td>
+      <td><span class="badge-type">${escHtml(c.chapter || '—')}</span></td>
+      <td style="white-space:nowrap">${pageLabel}</td>
+      <td class="preview-cell" title="${escHtml(c.preview || '')}">${escHtml(c.preview || '')}</td>
+      <td>
+        <button class="act-btn" onclick="openEdit(${c.id})" title="Edit"><i class="bi bi-pencil"></i></button>
+        <button class="act-btn" onclick="copySectionForPrompt(${c.id})" title="Copy for prompt"><i class="bi bi-clipboard"></i></button>
+        <button class="act-btn del" onclick="deleteChunk(${c.id})" title="Delete"><i class="bi bi-trash"></i></button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+function copySectionForPrompt(id) {
+  const c = allChunks.find(x => x.id === id);
+  if (!c) return;
+  const block = `Section title: ${c.section_title || ''}\nPage(s): ${c.page_start || '?'}-${c.page_end || '?'}\n\nSection text:\n${c.content || c.preview || ''}`;
+  navigator.clipboard.writeText(block).then(() => showToast('Section copied — paste under the prompt', 'success'))
+    .catch(() => showToast('Copy failed', 'warning'));
+}
+function openEdit(id) {
+  const c = allChunks.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById('edit_id').value = c.id;
+  document.getElementById('edit_section_title').value = c.section_title || '';
+  document.getElementById('edit_chapter').value = c.chapter || '';
+  document.getElementById('edit_keywords').value = c.keywords || '';
+  document.getElementById('edit_content').value = c.content || c.preview || '';
+  document.getElementById('editStatus').textContent = c.content ? '' : 'Preview only — full text may be missing.';
+  document.getElementById('editPanel').classList.add('open');
+  window.scrollTo({ top: document.getElementById('editPanel').getBoundingClientRect().top + window.scrollY - 80, behavior: 'smooth' });
+}
+function closeEditPanel() {
+  document.getElementById('editPanel').classList.remove('open');
+  document.getElementById('editStatus').textContent = '';
+}
+async function saveEdit() {
+  const id = document.getElementById('edit_id').value;
+  if (!id) return;
+  const btn = document.getElementById('saveEditBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Saving…';
+  const payload = {
+    section_title: document.getElementById('edit_section_title').value.trim(),
+    chapter: document.getElementById('edit_chapter').value.trim(),
+    content: document.getElementById('edit_content').value,
+    keywords: document.getElementById('edit_keywords').value.trim(),
+  };
+  try {
+    const r = await fetch(`/api/admin/handbook_chunks/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      body: JSON.stringify(payload),
+    });
+    const d = await r.json();
+    if (r.ok && d.success) { showToast('Section updated', 'success'); closeEditPanel(); loadChunks(); }
+    else showToast(d.error || 'Save failed', 'danger');
+  } catch (e) { showToast('Network error: ' + e.message, 'danger'); }
+  finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-save2-fill"></i> Save'; }
+}
+function exportHandbook(includeInactive = false) {
+  const url = includeInactive ? '/api/admin/export_handbook?include_inactive=1' : '/api/admin/export_handbook';
+  window.location.href = url;
+  showToast('Exporting handbook chunks…', 'info');
+}
+async function deleteChunk(id) {
+  if (!confirm('Delete this section?')) return;
+  try {
+    const r = await fetch(`/api/admin/handbook_chunks/${id}`, {
+      method: 'DELETE', headers: { 'X-CSRFToken': getCsrf() },
+    });
+    const d = await r.json();
+    if (r.ok && d.success) { showToast('Section deleted', 'success'); loadChunks(); }
+    else showToast(d.error || 'Delete failed', 'danger');
+  } catch (e) { showToast('Network error: ' + e.message, 'danger'); }
+}
+</script>
+</body>
+</html>

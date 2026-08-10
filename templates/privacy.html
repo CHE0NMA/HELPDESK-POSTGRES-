@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy Policy — PAC Help Desk</title>
+<link rel="icon" href="/static/uploads/logo.png" type="image/x-icon">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+<style>
+  :root {
+    --blue-deep:  #060f1e;
+    --blue-brand: #1565c0;
+    --blue-bright:#1e88e5;
+    --blue-glow:  #64b5f6;
+    --accent:     #00e5ff;
+    --text:       #e8f4fd;
+    --text-dim:   #7aa3c0;
+    --card-bg:    rgba(10,28,56,.7);
+    --card-border:rgba(66,165,245,.14);
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:'DM Sans',sans-serif; background:var(--blue-deep); color:var(--text);
+    min-height:100vh;
+  }
+  .bg-layer{
+    position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:
+      radial-gradient(ellipse 70% 50% at 15% 5%, rgba(21,101,192,.28) 0%, transparent 55%),
+      radial-gradient(ellipse 55% 45% at 85% 85%, rgba(0,229,255,.09) 0%, transparent 50%),
+      linear-gradient(180deg,#060f1e 0%,#091728 100%);
+  }
+  header{
+    position:sticky;top:0;z-index:200;height:62px;
+    display:flex;align-items:center;justify-content:space-between;padding:0 2rem;
+    background:rgba(6,15,30,.9);backdrop-filter:blur(18px);
+    border-bottom:1px solid rgba(66,165,245,.1);
+  }
+  .logo-wrap{display:flex;align-items:center;gap:.75rem;text-decoration:none;
+    font-family:'Sora',sans-serif;font-weight:700;font-size:1.05rem;color:var(--text)}
+  .logo-orb{width:36px;height:36px;border-radius:50%;overflow:hidden;box-shadow:0 0 18px rgba(0,229,255,.32)}
+  .logo-orb img{width:100%;height:100%;object-fit:cover}
+  .btn-hdr{
+    padding:.42rem 1.1rem;border-radius:30px;font-family:'Sora',sans-serif;font-weight:600;font-size:.8rem;
+    text-decoration:none;display:inline-flex;align-items:center;gap:.4rem;
+    border:1.5px solid rgba(66,165,245,.35);color:var(--blue-glow);transition:all .2s;
+  }
+  .btn-hdr:hover{background:var(--blue-brand);color:#fff;border-color:var(--blue-brand)}
+
+  main{position:relative;z-index:1;max-width:760px;margin:0 auto;padding:3.5rem 1.5rem 5rem}
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:.5rem;margin-bottom:1.1rem;
+    background:rgba(0,229,255,.07);border:1px solid rgba(0,229,255,.2);color:var(--accent);
+    border-radius:30px;padding:.3rem .9rem;font-size:.72rem;font-weight:700;letter-spacing:.06em;
+  }
+  h1{font-family:'Sora',sans-serif;font-weight:800;font-size:clamp(1.8rem,5vw,2.6rem);margin-bottom:.6rem}
+  .updated{color:var(--text-dim);font-size:.85rem;margin-bottom:2.5rem}
+
+  section.block{
+    background:var(--card-bg);border:1px solid var(--card-border);border-radius:16px;
+    padding:1.5rem 1.75rem;margin-bottom:1.1rem;backdrop-filter:blur(10px);
+  }
+  section.block h2{
+    font-family:'Sora',sans-serif;font-weight:700;font-size:1.02rem;margin-bottom:.65rem;
+    display:flex;align-items:center;gap:.55rem;color:var(--text);
+  }
+  section.block h2 i{color:var(--blue-glow);font-size:1rem}
+  section.block p, section.block li{font-size:.88rem;line-height:1.75;color:var(--text-dim)}
+  section.block p + p{margin-top:.6rem}
+  section.block ul{margin:.4rem 0 0 1.15rem}
+  section.block li{margin-bottom:.35rem}
+  section.block strong{color:var(--text);font-weight:600}
+  section.block a{color:var(--blue-glow)}
+
+  footer{
+    position:relative;z-index:1;text-align:center;padding:1.75rem;
+    border-top:1px solid rgba(66,165,245,.08);color:var(--text-dim);font-size:.8rem;
+  }
+  footer a{color:var(--text-dim);text-decoration:none;margin:0 .5rem}
+  footer a:hover{color:var(--blue-glow)}
+
+  @media(max-width:600px){ header{padding:0 1rem} main{padding:2.5rem 1.1rem 4rem} section.block{padding:1.25rem 1.3rem} }
+</style>
+</head>
+<body>
+<div class="bg-layer"></div>
+<header>
+  <a href="/" class="logo-wrap">
+    <div class="logo-orb"><img src="/static/uploads/logo.png" alt="School Logo"></div>
+    <span>PAC Help Desk</span>
+  </a>
+  <a href="/chat" class="btn-hdr"><i class="bi bi-chat-dots-fill"></i><span>Open Chat</span></a>
+</header>
+
+<main>
+  <div class="eyebrow"><i class="bi bi-shield-lock-fill"></i> Legal</div>
+  <h1>Privacy Policy</h1>
+  <p class="updated">Last updated: July 2026 · Philippine Advent College (PAC) Help Desk</p>
+
+  <section class="block">
+    <h2><i class="bi bi-info-circle-fill"></i>Overview</h2>
+    <p>This Privacy Policy explains how the PAC Help Desk chatbot ("PAC Bot") collects, uses, and protects
+       information when you use this website or chat service. PAC Bot is provided by Philippine Advent College
+       to help students and visitors find answers to school-related questions — including enrollment, fees,
+       registrar processes, scholarships, and the Student Handbook.</p>
+  </section>
+
+  <section class="block">
+    <h2><i class="bi bi-database-fill"></i>Information We Collect</h2>
+    <p>To operate the chat service and improve its answers, we may collect:</p>
+    <ul>
+      <li><strong>Chat messages</strong> — the questions you type and the responses PAC Bot gives, stored
+          against a temporary session ID.</li>
+      <li><strong>Session &amp; device data</strong> — a randomly generated session identifier, IP address,
+          and basic browser information, used for rate‑limiting and abuse prevention.</li>
+      <li><strong>Feedback</strong> — thumbs up/down ratings, star ratings, and optional comments you submit
+          about a response.</li>
+      <li><strong>Usage statistics</strong> — aggregate counts such as number of visitors and popular
+          questions, used to improve the FAQ and Handbook content.</li>
+    </ul>
+    <p>We do <strong>not</strong> require you to create an account or provide your name, student number, or
+       email address to use the chat.</p>
+  </section>
+
+  <section class="block">
+    <h2><i class="bi bi-cpu-fill"></i>How Responses Are Generated</h2>
+    <p>PAC Bot uses a combination of a curated FAQ database, the official PAC Student Handbook, and a
+       third‑party AI language model to understand your question and draft an answer. Your message text may be
+       sent to that AI provider solely to generate a response — it is not used by the provider to identify you
+       personally, and PAC does not send your name or contact details along with it.</p>
+  </section>
+
+  <section class="block">
+    <h2><i class="bi bi-clock-history"></i>Data Retention</h2>
+    <p>Chat history is kept for your current session so PAC Bot can understand follow‑up questions, and may be
+       retained in our database for quality review and to improve future answers. Rate‑limit and session
+       counters stored in your browser (localStorage) are cleared automatically or when you start a
+       <strong>New Chat</strong>.</p>
+  </section>
+
+  <section class="block">
+    <h2><i class="bi bi-people-fill"></i>Who Can See Your Messages</h2>
+    <p>Chat logs, satisfaction ratings, and reported ("thumbs down") answers are visible only to authorized PAC
+       Help Desk administrators, who use them to correct inaccurate answers and expand the FAQ/Handbook
+       coverage. We do not sell, rent, or share your chat data with advertisers or unrelated third parties.</p>
+  </section>
+
+  <section class="block">
+    <h2><i class="bi bi-cookie"></i>Cookies &amp; Local Storage</h2>
+    <p>We use your browser's local storage (not tracking cookies) to remember your session ID and message
+       count, so the chat works smoothly across page reloads. This data stays on your device and is not used
+       for advertising.</p>
+  </section>
+
+  <section class="block">
+    <h2><i class="bi bi-shield-check"></i>Your Choices</h2>
+    <ul>
+      <li>Start a <strong>New Chat</strong> at any time to clear your current conversation context.</li>
+      <li>Skip the feedback/rating prompts — they are always optional.</li>
+      <li>Contact the PAC Registrar's Office or IT Office if you'd like previously submitted feedback removed.</li>
+    </ul>
+  </section>
+
+  <section class="block">
+    <h2><i class="bi bi-envelope-fill"></i>Contact Us</h2>
+    <p>Questions about this policy or how your data is handled? Reach out to the PAC administration office
+       during regular business hours, or raise it through the chat itself using the 👎 feedback option so it
+       reaches our review queue.</p>
+  </section>
+</main>
+
+<footer>
+  © 2026 PAC Help Desk · <a href="/">Home</a> · <a href="/terms">Terms of Use</a>
+</footer>
+</body>
+</html>

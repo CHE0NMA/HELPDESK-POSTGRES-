@@ -1,0 +1,2842 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <script>
+  document.documentElement.setAttribute('data-bs-theme', localStorage.getItem('theme') || 'dark');
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<title>PAC Admin — Holiday & Event Manager</title>
+<link rel="icon" href="/static/uploads/logo.png" type="image/x-icon">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+<style>
+* { box-sizing: border-box; }
+
+/* ===== THEME VARIABLES ===== */
+:root {
+  --bg: #0a1628;
+  --bg2: #0f1f3a;
+  --bg3: #162a4a;
+  --brand: #1a73e8;
+  --brand2: #4dabf7;
+  --accent: #00e5ff;
+  --accent2: #66d9f7;
+  --text: #e8f0f8;
+  --text-dim: #a8c8e8;
+  --muted: #8ba9cc;
+  --card: rgba(15, 31, 58, 0.85);
+  --card-header: rgba(20, 40, 70, 0.5);
+  --border: rgba(77, 171, 247, 0.15);
+  --border2: rgba(77, 171, 247, 0.25);
+  --sidebar: 260px;
+  --sidebar-bg: rgba(8, 16, 32, 0.97);
+  --topbar-bg: rgba(8, 16, 32, 0.88);
+  --success: #51cf66;
+  --warning: #fcc419;
+  --danger: #ff6b6b;
+  --college: #845ef7;
+  --highschool: #22b8cf;
+  --elementary: #f59f00;
+  --registrar: #51cf66;
+  --business: #f06595;
+  --all: #1a73e8;
+  --global: #ff6d00;
+  --exception: #aa00ff;
+  --emergency: #ff1744;
+  --scrollbar-track: rgba(255,255,255,0.05);
+  --scrollbar-thumb: rgba(255,255,255,0.15);
+  --logic-bg: rgba(0,229,255,0.04);
+  --logic-border: rgba(0,229,255,0.12);
+  --mq-btn-bg: rgba(26,115,232,0.2);
+  --day-cell-bg: rgba(20, 40, 70, 0.6);
+  --quick-btn-bg: rgba(20, 40, 70, 0.7);
+  --status-option-bg: transparent;
+  --status-option-selected-bg: rgba(0,229,255,0.08);
+  --dept-tab-bg: rgba(20, 40, 70, 0.5);
+  --dept-tab-active-bg: var(--all);
+  --form-tab-bg: rgba(26,115,232,0.25);
+  --input-bg: rgba(10, 30, 50, 0.8);
+  --input-focus-bg: rgba(10, 30, 50, 0.95);
+  --select-option-bg: #0a1c38;
+  --toast-bg: rgba(10,28,56,0.97);
+  --conflict-bg: rgba(255,202,40,0.07);
+  --conflict-border: rgba(255,202,40,0.25);
+  --exception-info-bg: rgba(170,0,255,0.05);
+  --exception-info-border: rgba(170,0,255,0.15);
+  --bg-mesh-opacity: 1;
+  --modal-bg: rgba(15, 31, 58, 0.95);
+}
+
+[data-bs-theme="light"] {
+  --bg: #eef2f7;
+  --bg2: #dce3ed;
+  --bg3: #c8d2e0;
+  --text: #1a2a3a;
+  --text-dim: #4a6a8a;
+  --muted: #6a8aaa;
+  --card: rgba(255, 255, 255, 0.92);
+  --card-header: rgba(200, 210, 224, 0.5);
+  --border: rgba(26, 115, 232, 0.15);
+  --border2: rgba(26, 115, 232, 0.25);
+  --sidebar-bg: rgba(255, 255, 255, 0.95);
+  --topbar-bg: rgba(255, 255, 255, 0.9);
+  --scrollbar-track: rgba(0,0,0,0.05);
+  --scrollbar-thumb: rgba(0,0,0,0.15);
+  --logic-bg: rgba(26,115,232,0.04);
+  --logic-border: rgba(26,115,232,0.12);
+  --mq-btn-bg: rgba(26,115,232,0.15);
+  --day-cell-bg: rgba(200, 210, 224, 0.6);
+  --quick-btn-bg: rgba(200, 210, 224, 0.7);
+  --status-option-bg: rgba(255,255,255,0.5);
+  --status-option-selected-bg: rgba(26,115,232,0.08);
+  --dept-tab-bg: rgba(200, 210, 224, 0.5);
+  --dept-tab-active-bg: var(--all);
+  --form-tab-bg: rgba(26,115,232,0.15);
+  --input-bg: rgba(255, 255, 255, 0.9);
+  --input-focus-bg: rgba(255, 255, 255, 0.98);
+  --select-option-bg: #ffffff;
+  --toast-bg: rgba(255, 255, 255, 0.97);
+  --conflict-bg: rgba(255,202,40,0.07);
+  --conflict-border: rgba(255,202,40,0.25);
+  --exception-info-bg: rgba(170,0,255,0.05);
+  --exception-info-border: rgba(170,0,255,0.15);
+  --bg-mesh-opacity: 0.2;
+  --modal-bg: rgba(255, 255, 255, 0.95);
+}
+
+body {
+  font-family:'DM Sans',sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  margin:0;
+  min-height:100vh;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+::-webkit-scrollbar { width:6px; height:6px; }
+::-webkit-scrollbar-track { background:var(--scrollbar-track); border-radius:3px; }
+::-webkit-scrollbar-thumb { background:var(--scrollbar-thumb); border-radius:3px; }
+
+.bg-mesh {
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  z-index:0;
+  background:radial-gradient(ellipse 60% 50% at 5% 0%,rgba(26,115,232,.15) 0%,transparent 55%),
+             radial-gradient(ellipse 40% 40% at 95% 100%,rgba(0,229,255,.06) 0%,transparent 50%);
+  opacity: var(--bg-mesh-opacity);
+  transition: opacity 0.3s ease;
+}
+
+.bg-grid {
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  z-index:0;
+  background-image:linear-gradient(rgba(77,171,247,.03) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(77,171,247,.03) 1px,transparent 1px);
+  background-size:44px 44px;
+}
+[data-bs-theme="light"] .bg-grid {
+  background-image:linear-gradient(rgba(26,115,232,.05) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(26,115,232,.05) 1px,transparent 1px);
+}
+
+/* ===== SIDEBAR ===== */
+.sidebar {
+  position:fixed;
+  top:0;
+  left:0;
+  bottom:0;
+  width:var(--sidebar);
+  z-index:200;
+  background:var(--sidebar-bg);
+  backdrop-filter:blur(20px);
+  border-right:1px solid var(--border);
+  display:flex;
+  flex-direction:column;
+  transition: transform 0.28s ease, background 0.3s ease, border-color 0.3s ease;
+}
+.sidebar-overlay {
+  display:none;
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.45);
+  z-index:150;
+  backdrop-filter:blur(2px);
+}
+.sidebar-overlay.show { display:block; }
+.sidebar-toggle {
+  display:none;
+  background:rgba(10,30,50,.8);
+  border:1.5px solid var(--border);
+  border-radius:11px;
+  padding:.4rem .6rem;
+  color:var(--text-dim);
+  font-size:1.15rem;
+  cursor:pointer;
+  transition:all .2s;
+  align-items:center;
+  justify-content:center;
+}
+.sidebar-toggle:hover { border-color:var(--accent); color:var(--text); }
+[data-bs-theme="light"] .sidebar-toggle { background:rgba(0,0,0,.05); }
+
+.sidebar-brand {
+  padding:1.5rem 1.35rem 1.25rem;
+  border-bottom:1px solid var(--border);
+  display:flex;
+  align-items:center;
+  gap:.75rem;
+  transition: border-color 0.3s ease;
+}
+
+.brand-orb {
+  width:38px;
+  height:38px;
+  border-radius:50%;
+  flex-shrink:0;
+  overflow:hidden;
+  box-shadow:0 0 0 2px rgba(0,229,255,.3),0 0 14px rgba(0,229,255,.2);
+}
+.brand-orb img { width:100%; height:100%; object-fit:cover; display:block; }
+
+.brand-text {
+  font-family:'Sora',sans-serif;
+  font-weight:800;
+  font-size:.95rem;
+  color:var(--text);
+}
+.brand-sub {
+  font-size:.7rem;
+  color:var(--text-dim);
+  margin-top:.05rem;
+}
+
+.sidebar-nav {
+  flex:1;
+  padding:1rem .75rem;
+  overflow-y:auto;
+}
+
+.nav-section {
+  font-size:.67rem;
+  font-weight:700;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  color:var(--muted);
+  padding:.35rem .6rem;
+  margin-bottom:.35rem;
+  margin-top:.85rem;
+}
+.nav-section:first-child { margin-top:0; }
+
+.nav-link {
+  display:flex;
+  align-items:center;
+  gap:.7rem;
+  padding:.65rem .85rem;
+  border-radius:11px;
+  color:var(--text-dim);
+  text-decoration:none;
+  font-size:.88rem;
+  font-weight:500;
+  transition:all .2s;
+  margin-bottom:.2rem;
+  border:1px solid transparent;
+}
+.nav-link i { font-size:1rem; width:20px; text-align:center; flex-shrink:0; }
+.nav-link:hover {
+  background:rgba(26,115,232,.18);
+  border-color:rgba(77,171,247,.15);
+  color:var(--text);
+}
+.nav-link.active {
+  background:linear-gradient(135deg,rgba(26,115,232,.35),rgba(77,171,247,.2));
+  border-color:rgba(77,171,247,.3);
+  color:#fff;
+}
+[data-bs-theme="light"] .nav-link.active {
+  background:linear-gradient(135deg,rgba(26,115,232,.15),rgba(77,171,247,.1));
+  border-color:rgba(26,115,232,.3);
+  color:var(--brand);
+}
+
+.nav-link .nav-badge {
+  margin-left:auto;
+  padding:.2rem .55rem;
+  border-radius:20px;
+  font-size:.7rem;
+  font-weight:700;
+  min-width:22px;
+  text-align:center;
+}
+.badge-red { background:rgba(255,82,82,.2); color:var(--danger); border:1px solid rgba(255,82,82,.3); }
+.badge-yellow { background:rgba(255,202,40,.15); color:var(--warning); border:1px solid rgba(255,202,40,.3); }
+
+.sidebar-footer {
+  padding:1rem .75rem 1.25rem;
+  border-top:1px solid var(--border);
+  transition: border-color 0.3s ease;
+}
+
+.logout-btn {
+  display:flex;
+  align-items:center;
+  gap:.65rem;
+  padding:.6rem .85rem;
+  border-radius:11px;
+  color:var(--text-dim);
+  text-decoration:none;
+  font-size:.85rem;
+  transition:all .2s;
+  cursor:pointer;
+  background:none;
+  border:1px solid transparent;
+  width:100%;
+  margin-bottom:.4rem !important;
+}
+
+.logout-btn:hover {
+  background:rgba(255,82,82,.1);
+  border-color:rgba(255,82,82,.2);
+  color:#ff6b6b;
+}
+
+.theme-toggle-sidebar {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:.65rem;
+  padding:.6rem .85rem;
+  border-radius:11px;
+  color:var(--text-dim);
+  font-size:.85rem;
+  transition:all .2s;
+  cursor:pointer;
+  background:none;
+  border:1px solid transparent;
+  width:100%;
+  margin-bottom:.4rem;
+}
+.theme-toggle-sidebar:hover {
+  background:rgba(26,115,232,.12);
+  border-color:rgba(77,171,247,.15);
+  color:var(--text);
+}
+.theme-toggle-sidebar .theme-switch-label {
+  display:flex;
+  align-items:center;
+  gap:.65rem;
+}
+
+/* ===== MAIN CONTENT ===== */
+.main {
+  margin-left:var(--sidebar);
+  min-height:100vh;
+  position:relative;
+  z-index:1;
+}
+
+/* ===== TOPBAR ===== */
+.topbar {
+  height:58px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 1.75rem;
+  background:var(--topbar-bg);
+  backdrop-filter:blur(18px);
+  border-bottom:1px solid var(--border);
+  position:sticky;
+  top:0;
+  z-index:50;
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+.topbar-title {
+  font-family:'Sora',sans-serif;
+  font-weight:700;
+  font-size:1rem;
+  display:flex;
+  align-items:center;
+  gap:.6rem;
+  color:var(--text);
+}
+
+.topbar-actions {
+  display:flex;
+  align-items:center;
+  gap:.6rem;
+}
+
+/* Theme Toggle */
+.theme-toggle {
+  background:rgba(10,30,50,.8);
+  border:1.5px solid var(--border);
+  border-radius:11px;
+  padding:.45rem .65rem;
+  color:var(--text-dim);
+  font-size:.9rem;
+  cursor:pointer;
+  transition:all .2s;
+  display:flex;
+  align-items:center;
+  gap:.4rem;
+}
+.theme-toggle:hover {
+  border-color:var(--accent);
+  color:var(--text);
+}
+[data-bs-theme="light"] .theme-toggle {
+  background:rgba(0,0,0,.05);
+}
+
+.btn-refresh {
+  display:inline-flex;
+  align-items:center;
+  gap:.45rem;
+  padding:.52rem 1.1rem;
+  border-radius:11px;
+  background:rgba(26,115,232,.15);
+  border:1.5px solid var(--border2);
+  color:var(--accent2);
+  font-family:'Sora',sans-serif;
+  font-weight:600;
+  font-size:.83rem;
+  cursor:pointer;
+  transition:all .2s;
+}
+.btn-refresh:hover { background:var(--brand); border-color:var(--brand); color:#fff; }
+
+.page-body {
+  padding:1.75rem;
+}
+
+/* ===== FORM ELEMENTS ===== */
+.form-control, .form-select {
+  background: var(--input-bg);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+  border-radius: 12px;
+  padding: .65rem 1rem;
+  transition: all .2s;
+}
+.form-control:focus, .form-select:focus {
+  background: var(--input-focus-bg);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0,229,255,.1);
+  color: var(--text);
+  outline: none;
+}
+.form-control::placeholder { color: var(--muted); opacity: 1; }
+.form-label { font-size:.78rem; font-weight:600; color:var(--text-dim); margin-bottom:.4rem; display:block; letter-spacing:.02em; }
+.form-select option { background: var(--select-option-bg); color: var(--text); }
+[data-bs-theme="light"] .form-select option { color: #1a2a3a; }
+textarea.form-control { resize:vertical; min-height:60px; }
+
+/* ===== CARDS ===== */
+.card {
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:18px;
+  backdrop-filter:blur(12px);
+  margin-bottom:1.5rem;
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+.card-header {
+  background:var(--card-header);
+  border-bottom:1px solid var(--border);
+  padding:1rem 1.25rem;
+  font-family:'Sora',sans-serif;
+  font-weight:700;
+  border-radius:18px 18px 0 0;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:.5rem;
+  color:var(--text);
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+.card-body { padding:1.25rem; }
+
+/* ===== BUTTONS ===== */
+.btn-primary {
+  background:linear-gradient(135deg,var(--brand),var(--brand2));
+  border:none;
+  border-radius:12px;
+  padding:.65rem 1.5rem;
+  font-weight:600;
+  color:#fff;
+  cursor:pointer;
+  transition:all .2s;
+  font-family:'Sora',sans-serif;
+  display:inline-flex;
+  align-items:center;
+  gap:.4rem;
+}
+.btn-primary:hover { transform:translateY(-1px); box-shadow:0 4px 14px rgba(26,115,232,.4); color:#fff; }
+.btn-primary:disabled { opacity:.5; cursor:not-allowed; transform:none; }
+
+.btn-global { background:linear-gradient(135deg,#ff6d00,#ff9800); }
+.btn-global:hover { box-shadow:0 4px 14px rgba(255,109,0,.4); }
+
+.btn-exception { background:linear-gradient(135deg,#6a00f4,#aa00ff); }
+.btn-exception:hover { box-shadow:0 4px 14px rgba(170,0,255,.4); }
+
+.btn-emergency { background:linear-gradient(135deg,#d50000,#ff1744); }
+.btn-emergency:hover { box-shadow:0 4px 14px rgba(255,23,68,.4); }
+
+.btn-outline {
+  border:1.5px solid var(--border2);
+  background:transparent;
+  border-radius:12px;
+  padding:.6rem 1.25rem;
+  color:var(--text-dim);
+  cursor:pointer;
+  transition:all .2s;
+  display:inline-flex;
+  align-items:center;
+  gap:.4rem;
+  font-size:.85rem;
+}
+.btn-outline:hover { background:rgba(255,255,255,.06); color:var(--text); border-color:var(--accent2); }
+
+/* ===== MODE SWITCHER ===== */
+.mode-switcher {
+  display:flex;
+  gap:.5rem;
+  margin-bottom:1.5rem;
+  background:rgba(10,28,56,.6);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:.4rem;
+  width:fit-content;
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+[data-bs-theme="light"] .mode-switcher {
+  background:rgba(200,210,224,.6);
+}
+.mode-btn {
+  padding:.55rem 1.25rem;
+  border-radius:12px;
+  border:none;
+  cursor:pointer;
+  font-size:.83rem;
+  font-weight:700;
+  font-family:'Sora',sans-serif;
+  transition:all .2s;
+  color:var(--text-dim);
+  background:transparent;
+}
+.mode-btn.active-global { background:linear-gradient(135deg,#ff6d00,#ff9800); color:#fff; }
+.mode-btn.active-exception { background:linear-gradient(135deg,#6a00f4,#aa00ff); color:#fff; }
+.mode-btn.active-emergency { background:linear-gradient(135deg,#d50000,#ff1744); color:#fff; }
+.mode-btn:not(.active-global):not(.active-exception):not(.active-emergency):hover { background:rgba(255,255,255,.06); color:var(--text); }
+
+/* ===== STATUS OPTIONS ===== */
+.status-grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
+  gap:.6rem;
+  margin-top:.5rem;
+}
+.status-option {
+  border:1.5px solid var(--border);
+  border-radius:12px;
+  padding:.65rem 1rem;
+  cursor:pointer;
+  transition:all .2s;
+  text-align:center;
+  background:var(--status-option-bg);
+}
+.status-option:hover { border-color:var(--accent2); }
+.status-option.selected { border-color:var(--accent); background:var(--status-option-selected-bg); }
+.status-option i { font-size:1.3rem; display:block; margin-bottom:.3rem; }
+.status-option span { font-size:.74rem; font-weight:600; font-family:'Sora',sans-serif; display:block; color:var(--text); }
+.status-closed i     { color:#ff6b6b; }
+.status-no-class i   { color:var(--warning); }
+.status-open i       { color:var(--success); }
+.status-special-hrs i { color:var(--accent2); }
+
+/* ===== GRADE LEVEL CHIPS ===== */
+.grade-pill {
+  display:inline-block;
+  padding:.15rem .55rem;
+  border-radius:20px;
+  font-size:.65rem;
+  font-weight:700;
+  font-family:'Sora',sans-serif;
+}
+.grade-all     { background:rgba(26,115,232,.2); color:#66b3ff; }
+.grade-k-6     { background:rgba(245,159,0,.2);  color:#ffd43b; }
+.grade-7-10    { background:rgba(34,184,207,.2); color:#66d9e8; }
+.grade-11-12   { background:rgba(132,94,247,.2); color:#b197fc; }
+.grade-college { background:rgba(81,207,102,.2); color:#8ce99a; }
+
+/* ===== QUICK BUTTONS ===== */
+.quick-grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(155px,1fr));
+  gap:.75rem;
+}
+.quick-btn {
+  background:var(--quick-btn-bg);
+  border:1.5px solid var(--border);
+  border-radius:14px;
+  padding:.85rem 1rem;
+  color:var(--text-dim);
+  cursor:pointer;
+  transition:all .25s;
+  text-align:center;
+}
+.quick-btn:hover { transform:translateY(-2px); color:#fff; }
+.quick-btn i { font-size:1.4rem; display:block; margin-bottom:.4rem; }
+.quick-btn span { font-size:.75rem; font-weight:600; font-family:'Sora',sans-serif; display:block; }
+.quick-btn.red:hover    { background:rgba(255,82,82,.2);   border-color:var(--danger);   color:var(--danger); }
+.quick-btn.yellow:hover { background:rgba(255,202,40,.15); border-color:var(--warning);  color:var(--warning); }
+.quick-btn.green:hover  { background:rgba(0,230,118,.15);  border-color:var(--success);  color:var(--success); }
+.quick-btn.blue:hover   { background:rgba(26,115,232,.3);  border-color:var(--brand2);   color:var(--accent); }
+.quick-btn.orange:hover { background:rgba(255,109,0,.2);   border-color:#ff9800;         color:#ff9800; }
+.quick-btn.purple:hover { background:rgba(170,0,255,.2);   border-color:var(--exception);color:#ce93d8; }
+.quick-btn.emergency:hover { background:rgba(255,23,68,.2); border-color:#ff1744;        color:#ff1744; }
+
+/* ===== DEPT PILLS ===== */
+.dept-pill {
+  display:inline-block;
+  padding:.18rem .6rem;
+  border-radius:20px;
+  font-size:.68rem;
+  font-weight:700;
+  font-family:'Sora',sans-serif;
+}
+.dept-all        { background:rgba(26,115,232,.2);  color:#66b3ff; }
+.dept-college    { background:rgba(132,94,247,.2);  color:#b197fc; }
+.dept-highschool { background:rgba(34,184,207,.2);  color:#66d9e8; }
+.dept-elementary { background:rgba(245,159,0,.2);   color:#ffd43b; }
+.dept-registrar  { background:rgba(81,207,102,.2);  color:#8ce99a; }
+.dept-business   { background:rgba(240,101,149,.2); color:#faa2c1; }
+
+/* ===== TABLE (soft) ===== */
+.sched-table {
+  width:100%;
+  border-collapse:collapse;
+  font-size:.83rem;
+}
+.sched-table thead {
+  background:rgba(20,40,70,.3);
+}
+[data-bs-theme="light"] .sched-table thead {
+  background:rgba(200,210,224,.3);
+}
+.sched-table th {
+  padding:.8rem .9rem;
+  font-size:.68rem;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+  color:var(--text-dim);
+  border-bottom:1px solid var(--border);
+  font-family:'Sora',sans-serif;
+  white-space:nowrap;
+  font-weight:700;
+}
+.sched-table td {
+  padding:.75rem .9rem;
+  color:var(--text-dim);
+  border-bottom:1px solid rgba(77,171,247,.06);
+  vertical-align:middle;
+}
+.sched-table tbody tr { transition:background .15s ease; }
+.sched-table tbody tr:last-child td { border-bottom:none; }
+.sched-table tr:hover td {
+  background:rgba(26,115,232,.06);
+  color:var(--text);
+}
+.sched-table .no-data td {
+  text-align:center;
+  padding:2.5rem;
+  color:var(--muted);
+}
+
+.badge-closed  { background:rgba(255,82,82,.12);  color:#ff8a80; border:1px solid rgba(255,82,82,.22); padding:.22rem .6rem; border-radius:20px; font-size:.68rem; font-weight:700; }
+.badge-open    { background:rgba(81,207,102,.12);  color:#8ce99a; border:1px solid rgba(81,207,102,.22); padding:.22rem .6rem; border-radius:20px; font-size:.68rem; font-weight:700; }
+.badge-nclass  { background:rgba(255,202,40,.12); color:#ffd43b; border:1px solid rgba(255,202,40,.22); padding:.22rem .6rem; border-radius:20px; font-size:.68rem; font-weight:700; }
+.badge-type    { background:rgba(77,171,247,.1);  color:var(--accent2); border:1px solid rgba(77,171,247,.18); padding:.22rem .6rem; border-radius:20px; font-size:.68rem; }
+.badge-emergency { background:rgba(255,23,68,.12); color:#ff8a80; border:1px solid rgba(255,23,68,.22); padding:.22rem .6rem; border-radius:20px; font-size:.68rem; font-weight:700; }
+
+.act-btn {
+  background:rgba(26,115,232,.25);
+  border:none;
+  border-radius:8px;
+  color:var(--text-dim);
+  padding:.3rem .55rem;
+  margin:0 .15rem;
+  cursor:pointer;
+  transition:all .15s;
+  font-size:.82rem;
+}
+.act-btn:hover     { background:var(--brand); color:#fff; }
+.act-btn.del:hover { background:var(--danger); color:#fff; }
+
+.scope-global { background:rgba(255,109,0,.15); color:#ff9100; border:1px solid rgba(255,109,0,.3); }
+.scope-exception { background:rgba(170,0,255,.15); color:#ce93d8; border:1px solid rgba(170,0,255,.3); }
+.scope-emergency { background:rgba(255,23,68,.15); color:#ff1744; border:1px solid rgba(255,23,68,.3); }
+.scope-pill { display:inline-flex; align-items:center; gap:.3rem; padding:.2rem .6rem; border-radius:20px;
+  font-size:.68rem; font-weight:700; font-family:'Sora',sans-serif; }
+
+.dept-tabs {
+  display:flex;
+  gap:.5rem;
+  flex-wrap:wrap;
+  margin-bottom:1.5rem;
+}
+.dept-tab {
+  padding:.45rem 1.1rem;
+  border-radius:25px;
+  border:1.5px solid var(--border);
+  background:var(--dept-tab-bg);
+  color:var(--text-dim);
+  font-size:.8rem;
+  font-weight:600;
+  font-family:'Sora',sans-serif;
+  cursor:pointer;
+  transition:all .2s;
+  display:flex;
+  align-items:center;
+  gap:.4rem;
+}
+.dept-tab:hover { transform:translateY(-1px); }
+.dept-tab.active { color:#fff; box-shadow:0 4px 14px rgba(0,0,0,.3); }
+.dept-tab[data-dept="all"].active     { background:var(--all);        border-color:var(--all); }
+.dept-tab[data-dept="college"].active { background:var(--college);    border-color:var(--college); }
+.dept-tab[data-dept="highschool"].active { background:var(--highschool); border-color:var(--highschool); }
+.dept-tab[data-dept="elementary"].active { background:var(--elementary); border-color:var(--elementary); }
+.dept-tab[data-dept="registrar"].active  { background:var(--registrar);  border-color:var(--registrar); }
+.dept-tab[data-dept="business"].active   { background:var(--business);   border-color:var(--business); }
+
+.dept-check-item {
+  display:flex;
+  align-items:center;
+  gap:.4rem;
+  padding:.38rem .75rem;
+  border-radius:20px;
+  border:1.5px solid var(--border);
+  cursor:pointer;
+  transition:all .2s;
+  font-size:.78rem;
+  font-weight:600;
+  user-select:none;
+  color:var(--text-dim);
+}
+.dept-check-item input { display:none; }
+.dept-check-item:hover { border-color:var(--accent2); }
+.dept-check-item.checked { color:#fff; }
+.dept-check-item[data-d="all"].checked        { background:rgba(26,115,232,.4);  border-color:var(--all); }
+.dept-check-item[data-d="college"].checked    { background:rgba(132,94,247,.4);  border-color:var(--college); }
+.dept-check-item[data-d="highschool"].checked { background:rgba(34,184,207,.4);  border-color:var(--highschool); }
+.dept-check-item[data-d="elementary"].checked { background:rgba(245,159,0,.4);   border-color:var(--elementary); }
+.dept-check-item[data-d="registrar"].checked  { background:rgba(81,207,102,.4);  border-color:var(--registrar); }
+.dept-check-item[data-d="business"].checked   { background:rgba(240,101,149,.4); border-color:var(--business); }
+
+.dept-checks { display:flex; flex-wrap:wrap; gap:.5rem; margin-top:.35rem; }
+
+.logic-explain {
+  background:var(--logic-bg);
+  border:1px solid var(--logic-border);
+  border-radius:14px;
+  padding:1rem 1.25rem;
+  margin-bottom:1.25rem;
+  font-size:.8rem;
+  color:var(--text-dim);
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+.logic-explain strong { color:var(--accent2); }
+.logic-row { display:flex; align-items:flex-start; gap:.6rem; margin-bottom:.5rem; }
+.logic-row:last-child { margin-bottom:0; }
+.logic-icon { font-size:1rem; flex-shrink:0; margin-top:.05rem; }
+
+.conflict-alert {
+  background:var(--conflict-bg);
+  border:1px solid var(--conflict-border);
+  border-radius:12px;
+  padding:.75rem 1rem;
+  margin-top:.75rem;
+  font-size:.8rem;
+  display:none;
+  color:var(--text-dim);
+}
+.conflict-alert.show { display:block; }
+.conflict-alert strong { color:var(--warning); }
+
+.collapsible-header {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  cursor:pointer;
+  padding:.5rem 0;
+  user-select:none;
+}
+.collapse-icon { color:var(--text-dim); transition:transform .2s; }
+.collapsible-header.open .collapse-icon { transform:rotate(90deg); }
+.collapsible-body {
+  overflow:hidden;
+  transition:max-height .3s ease,opacity .3s;
+  max-height:0;
+  opacity:0;
+}
+.collapsible-body.open { max-height:2000px; opacity:1; }
+
+.form-tabs {
+  display:flex;
+  gap:.35rem;
+  margin-bottom:1rem;
+  border-bottom:1px solid var(--border);
+  padding-bottom:.75rem;
+}
+.form-tab {
+  padding:.38rem .9rem;
+  border-radius:8px;
+  font-size:.78rem;
+  font-weight:600;
+  cursor:pointer;
+  color:var(--text-dim);
+  border:1px solid transparent;
+  transition:all .18s;
+}
+.form-tab.active {
+  background:var(--form-tab-bg);
+  border-color:rgba(77,171,247,.25);
+  color:var(--accent2);
+}
+.form-tab:hover:not(.active) { color:var(--text); }
+.tab-pane { display:none; }
+.tab-pane.active { display:block; }
+
+.spinner {
+  display:inline-block;
+  width:16px;
+  height:16px;
+  border:2px solid rgba(255,255,255,.2);
+  border-top-color:var(--accent);
+  border-radius:50%;
+  animation:spin .6s linear infinite;
+  vertical-align:middle;
+  margin-right:6px;
+}
+@keyframes spin { to { transform:rotate(360deg); } }
+
+.section-divider {
+  display:flex;
+  align-items:center;
+  gap:.75rem;
+  margin:1.25rem 0 1rem;
+}
+.section-divider-line {
+  flex:1;
+  height:1px;
+  background:var(--border);
+}
+.section-divider-label {
+  font-size:.72rem;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--muted);
+  white-space:nowrap;
+}
+
+.mq-row {
+  display:flex;
+  align-items:center;
+  gap:.75rem;
+  padding:.7rem 1rem;
+  border-bottom:1px solid rgba(77,171,247,.05);
+  font-size:.82rem;
+}
+.mq-row:last-child { border-bottom:none; }
+.mq-count {
+  background:rgba(255,82,82,.15);
+  color:#ff6b6b;
+  border-radius:20px;
+  padding:.2rem .6rem;
+  font-size:.7rem;
+  font-weight:700;
+  white-space:nowrap;
+}
+.mq-date  { color:var(--accent2); font-size:.75rem; white-space:nowrap; }
+.mq-q     { flex:1; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.mq-btn   { background:var(--mq-btn-bg); border:1px solid var(--border); border-radius:8px; color:var(--accent2); padding:.25rem .65rem; font-size:.72rem; cursor:pointer; transition:all .15s; white-space:nowrap; }
+.mq-btn:hover { background:var(--brand); border-color:var(--brand); color:#fff; }
+
+.date-preview-grid {
+  display:grid;
+  grid-template-columns:repeat(7,1fr);
+  gap:.3rem;
+}
+.day-cell {
+  background:var(--day-cell-bg);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:.4rem .3rem;
+  text-align:center;
+  font-size:.7rem;
+  cursor:default;
+  transition:all .2s;
+}
+.day-cell .day-name { color:var(--text-dim); font-size:.68rem; font-weight:600; }
+.day-cell .day-num  { font-weight:700; color:var(--text-dim); font-size:.82rem; margin-top:.1rem; }
+.day-cell.has-event { border-color:rgba(0,229,255,.3);   background:rgba(0,229,255,.08); }
+.day-cell.has-event .day-num { color:var(--accent); }
+.day-cell.is-closed { border-color:rgba(255,82,82,.3);   background:rgba(255,82,82,.08); }
+.day-cell.is-closed .day-num { color:#ff6b6b; }
+.day-cell.is-global { border-color:rgba(255,109,0,.4);   background:rgba(255,109,0,.1);  }
+.day-cell.is-global .day-num { color:#ff9100; }
+.day-cell.has-exception { border-color:rgba(170,0,255,.4); background:rgba(170,0,255,.08); }
+.day-cell.has-exception .day-num { color:#ce93d8; }
+.day-cell.has-emergency { border-color:rgba(255,23,68,.4); background:rgba(255,23,68,.08); }
+.day-cell.has-emergency .day-num { color:#ff1744; }
+.day-cell.today { border-color:rgba(81,207,102,.4); background:rgba(81,207,102,.06); }
+.day-cell.today .day-num { color:var(--success); }
+.day-cell.weekend .day-name { color:#ff9b9b; }
+.day-cell .day-dots { display:flex; gap:.2rem; justify-content:center; margin-top:.25rem; flex-wrap:wrap; }
+.day-dot { width:5px; height:5px; border-radius:50%; flex-shrink:0; }
+
+.toast-el {
+  position:fixed;
+  bottom:20px;
+  right:20px;
+  z-index:9999;
+  background:var(--toast-bg);
+  border:1px solid var(--border2);
+  backdrop-filter:blur(16px);
+  padding:.7rem 1.25rem;
+  border-radius:12px;
+  font-size:.84rem;
+  display:flex;
+  align-items:center;
+  gap:.5rem;
+  animation:toastIn .25s ease;
+  box-shadow:0 8px 28px rgba(0,0,0,.4);
+  color:var(--text);
+  transition: background 0.3s ease, color 0.3s ease;
+}
+[data-bs-theme="light"] .toast-el {
+  box-shadow:0 8px 28px rgba(0,0,0,.15);
+}
+@keyframes toastIn {
+  from{opacity:0;transform:translateY(10px)}
+  to{opacity:1;transform:translateY(0)}
+}
+
+/* ===== MODALS (matching Dashboard) ===== */
+.modal-content {
+  background:var(--modal-bg);
+  border:1px solid var(--border2);
+  backdrop-filter:blur(20px);
+  color:var(--text);
+  border-radius:18px;
+}
+.modal-header {
+  border-bottom:1px solid var(--border);
+  padding:1rem 1.25rem;
+}
+.modal-footer {
+  border-top:1px solid var(--border);
+  padding:1rem 1.25rem;
+}
+.modal-title {
+  font-family:'Sora',sans-serif;
+  font-weight:700;
+  color:var(--text);
+}
+.modal .form-control, .modal .form-select {
+  background:var(--input-bg);
+  border:1.5px solid var(--border);
+  color:var(--text);
+  border-radius:11px;
+  padding:.55rem .9rem;
+}
+.modal .form-control:focus, .modal .form-select:focus {
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px rgba(0,229,255,.1);
+  background:var(--input-focus-bg);
+  color:var(--text);
+}
+.modal .form-label {
+  font-size:.75rem;
+  font-weight:600;
+  color:var(--text-dim);
+  margin-bottom:.3rem;
+}
+.btn-cancel {
+  background:rgba(255,255,255,.06);
+  border:1.5px solid var(--border);
+  border-radius:11px;
+  padding:.5rem 1.2rem;
+  color:var(--text-dim);
+  cursor:pointer;
+  font-size:.8rem;
+  transition:all .2s;
+}
+.btn-cancel:hover {
+  background:rgba(255,255,255,.1);
+  color:var(--text);
+}
+.btn-save {
+  background:linear-gradient(135deg,var(--brand),var(--brand2));
+  border:none;
+  border-radius:11px;
+  padding:.5rem 1.5rem;
+  color:#fff;
+  font-weight:600;
+  font-size:.8rem;
+  cursor:pointer;
+  transition:all .2s;
+}
+.btn-save:hover {
+  transform:translateY(-1px);
+  box-shadow:0 4px 14px rgba(26,115,232,.4);
+}
+.btn-del-confirm {
+  background:rgba(255,82,82,.15);
+  border:1.5px solid rgba(255,82,82,.35);
+  border-radius:11px;
+  padding:.5rem 1.5rem;
+  color:#ff8a80;
+  font-weight:600;
+  font-size:.8rem;
+  cursor:pointer;
+  transition:all .2s;
+  display:inline-flex;
+  align-items:center;
+  gap:.4rem;
+}
+.btn-del-confirm:hover {
+  background:rgba(255,82,82,.25);
+  color:#fff;
+  border-color:rgba(255,82,82,.5);
+}
+.modal-delete .modal-header {
+  background:transparent;
+  border-bottom:1px solid var(--border);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:1rem;
+}
+.modal-delete .modal-title {
+  display:flex;
+  align-items:center;
+  gap:.5rem;
+  font-size:.95rem;
+  color:var(--text);
+}
+.modal-delete .modal-title i { color:#ff8a80; }
+.modal-delete .btn-close {
+  filter:none;
+  opacity:.65;
+  margin:0;
+  padding:.4rem;
+  background:transparent;
+  border-radius:8px;
+}
+[data-bs-theme="dark"] .modal-delete .btn-close { filter:invert(1) grayscale(100%) brightness(200%); }
+.modal-delete .btn-close:hover { opacity:1; background:rgba(255,255,255,.08); }
+.modal-delete .modal-body {
+  color:var(--text-dim);
+  padding:1.35rem 1.25rem;
+  font-size:.9rem;
+  line-height:1.5;
+}
+
+@media(max-width:900px){
+  .sidebar { transform:translateX(-100%); }
+  .sidebar.open { transform:translateX(0); box-shadow:8px 0 32px rgba(0,0,0,.35); }
+  .main { margin-left:0; }
+  .sidebar-toggle { display:inline-flex; }
+  .page-body { padding:1.1rem; }
+  .topbar { padding:0 1rem; }
+  .dept-tabs { gap:.35rem; }
+  .dept-tab { padding:.4rem .75rem; font-size:.75rem; }
+  .quick-grid { grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); }
+  .card-body { overflow-x:auto; }
+}
+@media(max-width:600px){
+  .mode-switcher { flex-direction:column; width:100%; }
+  .mode-btn { width:100%; text-align:center; }
+  .date-preview-grid { gap:.2rem; }
+  .day-cell { padding:.3rem .15rem; font-size:.65rem; }
+}
+</style>
+</head>
+<body>
+<div class="bg-mesh"></div>
+<div class="bg-grid"></div>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-orb"><img src="/static/uploads/logo.png" alt="PAC" onerror="this.parentElement.innerHTML='🎓'"></div>
+    <div><div class="brand-text">PAC Help Desk</div><div class="brand-sub">Admin Panel</div></div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">Management</div>
+    <a href="/dashboard" class="nav-link"><i class="bi bi-grid-fill"></i> FAQ Management</a>
+    <a href="/unanswered" class="nav-link">
+      <i class="bi bi-question-circle"></i> Unanswered
+      <span class="nav-badge badge-red" id="unansweredBadge" style="display:none"></span>
+    </a>
+    <a href="/holidays" class="nav-link active"><i class="bi bi-calendar-event"></i> Holidays &amp; Events</a>
+    <a href="/handbook" class="nav-link"><i class="bi bi-journal-bookmark-fill"></i> Student Handbook</a>
+    <a href="/reports" class="nav-link">
+      <i class="bi bi-flag"></i> Reports
+      <span class="nav-badge badge-yellow" id="reportsBadge" style="display:none"></span>
+    </a>
+    <div class="nav-section">Analytics</div>
+    <a href="/analytics" class="nav-link"><i class="bi bi-graph-up"></i> System Analytics</a>
+    <a href="/ratings" class="nav-link"><i class="bi bi-star-half"></i> Chat Ratings</a>
+    <a href="/alert_log" class="nav-link"><i class="bi bi-bell"></i> Alert Log</a>
+  </nav>
+  <div class="sidebar-footer">
+    <button type="button" class="theme-toggle-sidebar" id="themeToggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">
+      <span class="theme-switch-label">
+        <i class="bi bi-moon-fill" id="themeIcon"></i>
+        <span id="themeLabel">Dark mode</span>
+      </span>
+      <i class="bi bi-circle-half" style="opacity:.5;font-size:.85rem"></i>
+    </button>
+    <button onclick="exportData()" class="logout-btn"><i class="bi bi-download"></i> Export Backup</button>
+    <a href="/" class="logout-btn"><i class="bi bi-house"></i> Back to Help Desk</a>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:.75rem;min-width:0">
+      <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()" aria-label="Open menu">
+        <i class="bi bi-list"></i>
+      </button>
+      <div class="topbar-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+        <i class="bi bi-calendar-event" style="color:var(--accent)"></i> Holidays &amp; Events
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn-refresh" onclick="refreshAll()" title="Refresh" style="padding:.45rem .7rem">
+        <i class="bi bi-arrow-clockwise"></i>
+      </button>
+      <button class="btn-primary" style="padding:.5rem 1rem;font-size:.82rem" onclick="openAddModal()">
+        <i class="bi bi-plus-lg"></i> <span class="d-none d-sm-inline">Add Entry</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="page-body">
+    <!-- Logic explain -->
+    <div class="logic-explain">
+      <div style="font-family:'Sora',sans-serif;font-weight:700;font-size:.8rem;color:var(--accent2);margin-bottom:.65rem;">
+        <i class="bi bi-info-circle"></i> How Holidays, Exceptions &amp; Emergency Closures Work
+      </div>
+      <div class="logic-row"><span class="logic-icon">🌐</span><span><strong>Global Holidays</strong> apply to <em>all</em> departments unless overridden. Bot answers "Is there class?" using this as the baseline.</span></div>
+      <div class="logic-row"><span class="logic-icon">🔀</span><span><strong>Department Exceptions</strong> override globals for a specific department.</span></div>
+      <div class="logic-row"><span class="logic-icon">🚨</span><span><strong>Emergency Closures</strong> (heavy rain, typhoon, etc.) override <em>everything</em> and are shown with severity levels.</span></div>
+      <div class="logic-row"><span class="logic-icon">⚡</span><span><strong>Rule of Specificity:</strong> Emergency > Exception > Global > Default Schedule.</span></div>
+    </div>
+
+    <!-- Department tabs -->
+    <div class="dept-tabs" id="deptTabs">
+      <div class="dept-tab active" data-dept="all" onclick="filterDept('all')"><i class="bi bi-globe2"></i> All</div>
+      <div class="dept-tab" data-dept="college" onclick="filterDept('college')"><i class="bi bi-building"></i> College</div>
+      <div class="dept-tab" data-dept="highschool" onclick="filterDept('highschool')"><i class="bi bi-mortarboard"></i> High School</div>
+      <div class="dept-tab" data-dept="elementary" onclick="filterDept('elementary')"><i class="bi bi-person-heart"></i> Elementary</div>
+      <div class="dept-tab" data-dept="registrar" onclick="filterDept('registrar')"><i class="bi bi-file-earmark-text"></i> Registrar</div>
+      <div class="dept-tab" data-dept="business" onclick="filterDept('business')"><i class="bi bi-cash-coin"></i> Business</div>
+    </div>
+
+    <!-- Week Calendar -->
+    <div class="card">
+      <div class="card-header">
+        <span><i class="bi bi-calendar3" style="color:var(--accent)"></i> Week Overview</span>
+        <div style="display:flex;gap:.5rem;align-items:center">
+          <div style="display:flex;align-items:center;gap:.5rem;font-size:.72rem;color:var(--text-dim)">
+            <span style="display:inline-flex;align-items:center;gap:.3rem"><span style="width:10px;height:10px;border-radius:2px;background:rgba(255,109,0,.3);border:1px solid #ff9800;display:inline-block"></span> Global</span>
+            <span style="display:inline-flex;align-items:center;gap:.3rem"><span style="width:10px;height:10px;border-radius:2px;background:rgba(170,0,255,.2);border:1px solid #aa00ff;display:inline-block"></span> Exception</span>
+            <span style="display:inline-flex;align-items:center;gap:.3rem"><span style="width:10px;height:10px;border-radius:2px;background:rgba(255,23,68,.2);border:1px solid #ff1744;display:inline-block"></span> Emergency</span>
+            <span style="display:inline-flex;align-items:center;gap:.3rem"><span style="width:10px;height:10px;border-radius:2px;background:rgba(255,82,82,.15);border:1px solid #ff5252;display:inline-block"></span> Closed</span>
+          </div>
+          <button class="btn-refresh" onclick="prevWeek()"><i class="bi bi-chevron-left"></i></button>
+          <span id="weekLabel" style="font-size:.82rem;color:var(--text-dim);white-space:nowrap"></span>
+          <button class="btn-refresh" onclick="nextWeek()"><i class="bi bi-chevron-right"></i></button>
+          <button class="btn-refresh" onclick="goToToday()" style="font-size:.75rem">Today</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="date-preview-grid" id="weekCalendar"></div>
+        <div id="weekEvents" style="margin-top:.85rem;font-size:.82rem;color:var(--text-dim);min-height:24px"></div>
+      </div>
+    </div>
+
+    <!-- Quick Add -->
+    <div class="card">
+      <div class="card-header"><i class="bi bi-lightning-charge-fill" style="color:var(--warning)"></i> Quick Add</div>
+      <div class="card-body">
+        <div class="quick-grid">
+          <div class="quick-btn red" onclick="quickAdd('close_today')"><i class="bi bi-x-circle-fill"></i><span>Close Today (All)</span></div>
+          <div class="quick-btn yellow" onclick="quickAdd('close_tomorrow')"><i class="bi bi-calendar-x-fill"></i><span>Close Tomorrow (All)</span></div>
+          <div class="quick-btn orange" onclick="quickAdd('global_holiday')"><i class="bi bi-star-fill"></i><span>Global Holiday</span></div>
+          <div class="quick-btn purple" onclick="quickAdd('dept_exception')"><i class="bi bi-shield-exclamation"></i><span>Dept. Exception</span></div>
+          <div class="quick-btn emergency" onclick="quickAdd('emergency_closure')"><i class="bi bi-exclamation-triangle-fill"></i><span>Emergency Closure</span></div>
+          <div class="quick-btn green" onclick="quickAdd('event')"><i class="bi bi-megaphone-fill"></i><span>Add Event</span></div>
+          <div class="quick-btn blue" onclick="quickAdd('special_hours')"><i class="bi bi-clock-fill"></i><span>Special Hours</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Schedules List -->
+    <div class="card">
+      <div class="card-header">
+        <span><i class="bi bi-list-ul" style="color:var(--accent2)"></i> Upcoming Entries</span>
+        <div style="display:flex;gap:.5rem;align-items:center">
+          <span id="schedCount" style="font-size:.75rem;color:var(--text-dim)"></span>
+          <div class="form-tabs" style="border:none;padding:0;margin:0">
+            <div class="form-tab active" id="listTabAll" onclick="setListTab('all',this)">All</div>
+            <div class="form-tab" id="listTabGlobal" onclick="setListTab('global',this)">🌐 Global</div>
+            <div class="form-tab" id="listTabException" onclick="setListTab('exception',this)">🔀 Exceptions</div>
+            <div class="form-tab" id="listTabEmergency" onclick="setListTab('emergency',this)">🚨 Emergency</div>
+          </div>
+        </div>
+      </div>
+      <div class="card-body" style="padding:0;overflow-x:auto">
+        <table class="sched-table">
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Scope</th>
+              <th>Dept</th>
+              <th>Grades</th>
+              <th>Type</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Status</th>
+              <th>Repeat</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="schedulesList">
+            <tr class="no-data"><td colspan="10"><i class="bi bi-hourglass-split"></i> Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Emergency Closures List -->
+    <div class="card">
+      <div class="card-header" style="border-bottom-color:rgba(255,23,68,0.3)">
+        <span><i class="bi bi-exclamation-triangle-fill" style="color:#ff1744"></i> Active Emergency Closures</span>
+        <span id="emergencyCount" style="font-size:.75rem;color:var(--text-dim)"></span>
+      </div>
+      <div class="card-body" style="padding:.5rem 0" id="emergencyClosuresBody">
+        <div style="text-align:center;padding:2rem;color:var(--text-dim);font-size:.85rem"><i class="bi bi-hourglass-split"></i> Loading…</div>
+      </div>
+    </div>
+
+    <!-- Missing Queries -->
+    <div class="card">
+      <div class="card-header"><i class="bi bi-search-heart" style="color:var(--warning)"></i> Student Questions About Unlisted Dates</div>
+      <div class="card-body" style="padding:.5rem 0" id="missingQueriesBody">
+        <div style="text-align:center;padding:2rem;color:var(--text-dim);font-size:.85rem"><i class="bi bi-hourglass-split"></i> Loading…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== SCHEDULE MODAL ===================== -->
+<div class="modal fade" id="scheduleModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <form id="scheduleForm" onsubmit="submitForm(event)">
+        <div class="modal-header">
+          <h5 class="modal-title" id="formTitle"><i class="bi bi-plus-circle" style="color:var(--accent)"></i> Add Schedule Entry</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="schedule_id">
+          <input type="hidden" id="entry_mode" value="global">
+          <input type="hidden" id="is_closed_hidden" value="1">
+
+          <!-- Mode Switcher -->
+          <div style="margin-bottom:1.25rem">
+            <label class="form-label">Entry Type</label>
+            <div class="mode-switcher">
+              <button type="button" class="mode-btn active-global" id="modeGlobalBtn" onclick="setMode('global')">
+                <i class="bi bi-globe2"></i> Global Holiday / Event
+              </button>
+              <button type="button" class="mode-btn" id="modeExceptionBtn" onclick="setMode('exception')">
+                <i class="bi bi-shield-exclamation"></i> Department Exception
+              </button>
+              <button type="button" class="mode-btn" id="modeEmergencyBtn" onclick="setMode('emergency')">
+                <i class="bi bi-exclamation-triangle-fill"></i> Emergency Closure
+              </button>
+            </div>
+            <div style="font-size:.75rem;color:var(--text-dim);margin-top:.35rem" id="modeHint">
+              🌐 Global: applies to ALL departments by default. Add exceptions separately for specific departments.
+            </div>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-md-5">
+              <label class="form-label">Title *</label>
+              <input type="text" class="form-control" id="title" required placeholder="e.g., Independence Day, Foundation Week">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Type *</label>
+              <select class="form-select" id="content_type">
+                <option value="holiday">🎉 Holiday (Institution Closed)</option>
+                <option value="event">📣 Event / Activity</option>
+                <option value="office_hours">🕐 Special Office Hours</option>
+                <option value="deadline">⏰ Deadline / Cutoff</option>
+                <option value="exam_schedule">📝 Exam Schedule</option>
+                <option value="closure">🚫 Emergency Closure</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Repeat</label>
+              <select class="form-select" id="repeat_type" onchange="onRepeatChange()">
+                <option value="none">No Repeat</option>
+                <option value="yearly">🔁 Yearly</option>
+                <option value="monthly">📅 Monthly</option>
+                <option value="weekly">📆 Weekly</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row g-3 mt-1">
+            <div class="col-md-4">
+              <label class="form-label">Start Date *</label>
+              <input type="date" class="form-control" id="start_date" required onchange="updateDateHints();checkConflicts()">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">End Date <small style="color:var(--text-dim)">(blank = single day)</small></label>
+              <input type="date" class="form-control" id="end_date" onchange="updateDateHints();checkConflicts()">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Date Hint</label>
+              <div id="dateHint" style="font-size:.78rem;color:var(--accent2);padding:.65rem 1rem;background:rgba(0,229,255,.06);border-radius:12px;border:1px solid rgba(0,229,255,.1);min-height:42px">Pick a date above</div>
+            </div>
+          </div>
+
+          <div class="row g-3 mt-1" id="repeatUntilWrap" style="display:none">
+            <div class="col-md-4">
+              <label class="form-label">Repeat Until Year</label>
+              <input type="number" class="form-control" id="repeat_until_year" placeholder="e.g., 2030" min="2024" max="2050" onchange="updateDateHints();checkConflicts()">
+            </div>
+          </div>
+
+          <div class="conflict-alert" id="conflictAlert">
+            <strong><i class="bi bi-exclamation-triangle"></i> Conflicts Detected:</strong>
+            <div id="conflictList" style="margin-top:.4rem"></div>
+          </div>
+
+          <!-- Global Section -->
+          <div id="globalSection">
+            <div class="section-divider">
+              <div class="section-divider-line"></div>
+              <div class="section-divider-label"><i class="bi bi-globe2"></i> Global Settings</div>
+              <div class="section-divider-line"></div>
+            </div>
+
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">Status for ALL Departments</label>
+                <div class="status-grid" id="globalStatusGrid">
+                  <div class="status-option status-closed selected" data-status="closed" onclick="selectStatus('global','closed',this)">
+                    <i class="bi bi-x-octagon-fill"></i><span>Fully Closed</span>
+                  </div>
+                  <div class="status-option status-no-class" data-status="no_class" onclick="selectStatus('global','no_class',this)">
+                    <i class="bi bi-book-slash"></i><span>No Classes, Office Open</span>
+                  </div>
+                  <div class="status-option status-open" data-status="open" onclick="selectStatus('global','open',this)">
+                    <i class="bi bi-check-circle-fill"></i><span>Open / Normal</span>
+                  </div>
+                  <div class="status-option status-special-hrs" data-status="special_hours" onclick="selectStatus('global','special_hours',this)">
+                    <i class="bi bi-clock-history"></i><span>Special Hours</span>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6" id="globalHoursWrap" style="display:none">
+                <label class="form-label">Special Hours (Global)</label>
+                <div style="display:flex;gap:.5rem;align-items:center">
+                  <input type="time" class="form-control" id="special_hours_start">
+                  <span style="color:var(--text-dim)">–</span>
+                  <input type="time" class="form-control" id="special_hours_end">
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-top:1rem">
+              <label class="form-label">Applies To (leave all checked = truly all departments)</label>
+              <div class="dept-checks" id="deptChecks">
+                <label class="dept-check-item checked" data-d="all">
+                  <input type="checkbox" name="departments" value="all" checked>
+                  <i class="bi bi-globe2"></i> All Departments
+                </label>
+                <label class="dept-check-item" data-d="college">
+                  <input type="checkbox" name="departments" value="college">
+                  <i class="bi bi-building"></i> College
+                </label>
+                <label class="dept-check-item" data-d="highschool">
+                  <input type="checkbox" name="departments" value="highschool">
+                  <i class="bi bi-mortarboard"></i> High School
+                </label>
+                <label class="dept-check-item" data-d="elementary">
+                  <input type="checkbox" name="departments" value="elementary">
+                  <i class="bi bi-person-heart"></i> Elementary
+                </label>
+                <label class="dept-check-item" data-d="registrar">
+                  <input type="checkbox" name="departments" value="registrar">
+                  <i class="bi bi-file-earmark-text"></i> Registrar
+                </label>
+                <label class="dept-check-item" data-d="business">
+                  <input type="checkbox" name="departments" value="business">
+                  <i class="bi bi-cash-coin"></i> Business Office
+                </label>
+              </div>
+            </div>
+
+            <!-- Grade Levels -->
+            <div style="margin-top:1rem">
+              <label class="form-label">Affected Grade Levels</label>
+              <div class="dept-checks" id="gradeChecks">
+                <label class="dept-check-item checked" data-d="all">
+                  <input type="checkbox" name="grade_levels" value="all" checked>
+                  <i class="bi bi-people-fill"></i> All Grades
+                </label>
+                <label class="dept-check-item" data-d="k-6">
+                  <input type="checkbox" name="grade_levels" value="k-6">
+                  <i class="bi bi-person-fill"></i> K-6 (Elementary)
+                </label>
+                <label class="dept-check-item" data-d="7-10">
+                  <input type="checkbox" name="grade_levels" value="7-10">
+                  <i class="bi bi-person-fill"></i> 7-10 (Junior High)
+                </label>
+                <label class="dept-check-item" data-d="11-12">
+                  <input type="checkbox" name="grade_levels" value="11-12">
+                  <i class="bi bi-person-fill"></i> 11-12 (Senior High)
+                </label>
+                <label class="dept-check-item" data-d="college">
+                  <input type="checkbox" name="grade_levels" value="college">
+                  <i class="bi bi-person-fill"></i> College
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Exception Section -->
+          <div id="exceptionSection" style="display:none">
+            <div class="section-divider">
+              <div class="section-divider-line"></div>
+              <div class="section-divider-label"><i class="bi bi-shield-exclamation"></i> Exception Settings</div>
+              <div class="section-divider-line"></div>
+            </div>
+
+            <div style="background:var(--exception-info-bg);border:1px solid var(--exception-info-border);border-radius:12px;padding:1rem;font-size:.8rem;color:var(--text-dim);margin-bottom:1rem">
+              <i class="bi bi-info-circle" style="color:#ce93d8"></i>
+              This exception will <strong style="color:#ce93d8">override the global rule</strong> for the selected department only.
+            </div>
+
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">Which Department Gets This Exception? *</label>
+                <select class="form-select" id="exception_dept">
+                  <option value="">— Select Department —</option>
+                  <option value="college">🏛 College</option>
+                  <option value="highschool">🎓 High School</option>
+                  <option value="elementary">👦 Elementary</option>
+                  <option value="registrar">📄 Registrar</option>
+                  <option value="business">💳 Business Office</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Override Status for This Department</label>
+                <select class="form-select" id="exception_status">
+                  <option value="open">✅ Open / Classes Continue</option>
+                  <option value="closed">❌ Closed</option>
+                  <option value="no_class">📚 No Classes (Office Open)</option>
+                  <option value="special_hours">🕐 Special Hours</option>
+                  <option value="classes_only">📝 Classes Only (No Office)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="row g-3 mt-1" id="excHoursWrap" style="display:none">
+              <div class="col-md-6">
+                <label class="form-label">Exception Special Hours</label>
+                <div style="display:flex;gap:.5rem;align-items:center">
+                  <input type="time" class="form-control" id="exc_hours_start">
+                  <span style="color:var(--text-dim)">–</span>
+                  <input type="time" class="form-control" id="exc_hours_end">
+                </div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Exception Note (optional)</label>
+                <input type="text" class="form-control" id="exc_note" placeholder="e.g., Extended hours for enrollment week">
+              </div>
+            </div>
+
+            <div style="margin-top:.75rem">
+              <label class="form-label">Related Global Holiday (optional — links this exception to a global entry)</label>
+              <select class="form-select" id="parent_schedule_id">
+                <option value="">— None / Standalone Exception —</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Emergency Section -->
+          <div id="emergencySection" style="display:none">
+            <div class="section-divider">
+              <div class="section-divider-line"></div>
+              <div class="section-divider-label"><i class="bi bi-exclamation-triangle-fill"></i> Emergency Closure Settings</div>
+              <div class="section-divider-line"></div>
+            </div>
+
+            <div style="background:rgba(255,23,68,0.05);border:1px solid rgba(255,23,68,0.2);border-radius:12px;padding:1rem;font-size:.8rem;color:var(--text-dim);margin-bottom:1rem">
+              <i class="bi bi-info-circle" style="color:#ff1744"></i>
+              Emergency closures (heavy rain, typhoon, etc.) <strong style="color:#ff1744">override ALL other rules</strong> for the affected departments and grades.
+            </div>
+
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">Emergency Reason *</label>
+                <select class="form-select" id="emergency_reason">
+                  <option value="heavy_rain">🌧️ Heavy Rain</option>
+                  <option value="typhoon">🌀 Typhoon</option>
+                  <option value="flood">🌊 Flood</option>
+                  <option value="earthquake">🏔️ Earthquake</option>
+                  <option value="power_outage">⚡ Power Outage</option>
+                  <option value="other">📢 Other</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Severity *</label>
+                <select class="form-select" id="emergency_severity">
+                  <option value="low">ℹ️ Low</option>
+                  <option value="medium" selected>⚠️ Medium</option>
+                  <option value="high">🚨 High</option>
+                  <option value="critical">🔴 Critical</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="row g-3 mt-1">
+              <div class="col-md-6">
+                <label class="form-label">Affected Departments</label>
+                <div class="dept-checks" id="emergencyDeptChecks">
+                  <label class="dept-check-item checked" data-d="all">
+                    <input type="checkbox" name="emergency_depts" value="all" checked>
+                    <i class="bi bi-globe2"></i> All
+                  </label>
+                  <label class="dept-check-item" data-d="college">
+                    <input type="checkbox" name="emergency_depts" value="college">
+                    <i class="bi bi-building"></i> College
+                  </label>
+                  <label class="dept-check-item" data-d="highschool">
+                    <input type="checkbox" name="emergency_depts" value="highschool">
+                    <i class="bi bi-mortarboard"></i> High School
+                  </label>
+                  <label class="dept-check-item" data-d="elementary">
+                    <input type="checkbox" name="emergency_depts" value="elementary">
+                    <i class="bi bi-person-heart"></i> Elementary
+                  </label>
+                  <label class="dept-check-item" data-d="registrar">
+                    <input type="checkbox" name="emergency_depts" value="registrar">
+                    <i class="bi bi-file-earmark-text"></i> Registrar
+                  </label>
+                  <label class="dept-check-item" data-d="business">
+                    <input type="checkbox" name="emergency_depts" value="business">
+                    <i class="bi bi-cash-coin"></i> Business Office
+                  </label>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Affected Grades</label>
+                <div class="dept-checks" id="emergencyGradeChecks">
+                  <label class="dept-check-item checked" data-d="all">
+                    <input type="checkbox" name="emergency_grades" value="all" checked>
+                    <i class="bi bi-people-fill"></i> All
+                  </label>
+                  <label class="dept-check-item" data-d="k-6">
+                    <input type="checkbox" name="emergency_grades" value="k-6">
+                    <i class="bi bi-person-fill"></i> K-6
+                  </label>
+                  <label class="dept-check-item" data-d="7-10">
+                    <input type="checkbox" name="emergency_grades" value="7-10">
+                    <i class="bi bi-person-fill"></i> 7-10
+                  </label>
+                  <label class="dept-check-item" data-d="11-12">
+                    <input type="checkbox" name="emergency_grades" value="11-12">
+                    <i class="bi bi-person-fill"></i> 11-12
+                  </label>
+                  <label class="dept-check-item" data-d="college">
+                    <input type="checkbox" name="emergency_grades" value="college">
+                    <i class="bi bi-person-fill"></i> College
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Messages -->
+          <div style="margin-top:1.25rem">
+            <div class="collapsible-header" onclick="toggleCollapse('msgCollapse',this)">
+              <span style="font-size:.82rem;font-weight:600;color:var(--text-dim)"><i class="bi bi-translate"></i> Messages for Chatbot (English / Tagalog / Bisaya)</span>
+              <i class="bi bi-chevron-right collapse-icon"></i>
+            </div>
+            <div class="collapsible-body" id="msgCollapse">
+              <div style="font-size:.78rem;color:var(--text-dim);margin-bottom:.75rem;margin-top:.5rem">
+                These messages are returned to students when they ask about this date. Leave blank to auto-generate from title and status.
+              </div>
+              <div class="form-tabs">
+                <div class="form-tab active" onclick="switchLangTab('en',this)">🇺🇸 English</div>
+                <div class="form-tab" onclick="switchLangTab('tl',this)">🇵🇭 Tagalog</div>
+                <div class="form-tab" onclick="switchLangTab('ceb',this)">🇵🇭 Bisaya</div>
+              </div>
+              <div id="langEn" class="tab-pane active">
+                <textarea class="form-control" id="message_english" rows="2" placeholder="e.g., The office will be closed in observance of Independence Day."></textarea>
+              </div>
+              <div id="langTl" class="tab-pane">
+                <textarea class="form-control" id="message_tagalog" rows="2" placeholder="e.g., Sarado ang opisina dahil sa Independence Day."></textarea>
+              </div>
+              <div id="langCeb" class="tab-pane">
+                <textarea class="form-control" id="message_bisaya" rows="2" placeholder="e.g., Sirado ang opisina tungod sa Independence Day."></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-cancel" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn-save" id="saveBtn"><i class="bi bi-save2-fill"></i> Save Entry</button>
+          <span id="formStatus" style="font-size:.78rem;color:var(--text-dim);margin-left:.5rem"></span>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE CONFIRM MODAL -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content modal-delete">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-exclamation-triangle-fill"></i> Confirm Delete</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        Are you sure you want to delete this entry? This action cannot be undone.
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-cancel" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn-del-confirm" id="confirmDeleteBtn"><i class="bi bi-trash"></i> Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ============================================================
+// SIDEBAR (mobile)
+// ============================================================
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  const ov = document.getElementById('sidebarOverlay');
+  const open = sb.classList.toggle('open');
+  ov.classList.toggle('show', open);
+  document.body.style.overflow = open ? 'hidden' : '';
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('show');
+  document.body.style.overflow = '';
+}
+// Close sidebar when a nav link is clicked (mobile)
+document.querySelectorAll('.sidebar .nav-link').forEach(link => {
+  link.addEventListener('click', () => {
+    if (window.innerWidth <= 900) closeSidebar();
+  });
+});
+
+// ============================================================
+// THEME TOGGLE
+// ============================================================
+function toggleTheme() {
+  const html = document.documentElement;
+  const currentTheme = html.getAttribute('data-bs-theme');
+  const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-bs-theme', newTheme);
+  localStorage.setItem('theme', newTheme);
+  updateThemeUI(newTheme);
+}
+
+function updateThemeUI(theme) {
+  const icon = document.getElementById('themeIcon');
+  const label = document.getElementById('themeLabel');
+  if (theme === 'dark') {
+    icon.className = 'bi bi-moon-fill';
+    label.textContent = 'Dark mode';
+  } else {
+    icon.className = 'bi bi-sun-fill';
+    label.textContent = 'Light mode';
+  }
+}
+
+function loadTheme() {
+  const savedTheme = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-bs-theme', savedTheme);
+  updateThemeUI(savedTheme);
+}
+loadTheme();
+
+// ============================================================
+// BADGE UPDATES (same style as Dashboard)
+// ============================================================
+async function updateBadge(url, el) {
+  try {
+    const r = await fetch(url);
+    if (!r.ok) { if (el) el.style.display = 'none'; return; }
+    const d = await r.json();
+    const c = d.count || 0;
+    if (el) { el.textContent = c; el.style.display = c > 0 ? 'inline-block' : 'none'; }
+  } catch(e) { if (el) el.style.display = 'none'; }
+}
+
+function refreshBadges() {
+  updateBadge('/unanswered_count', document.getElementById('unansweredBadge'));
+  updateBadge('/reports_count', document.getElementById('reportsBadge'));
+}
+
+// ============================================================
+// MAIN
+// ============================================================
+let allSchedules = [];
+let allEmergencies = [];
+let activeDept   = 'all';
+let listTab      = 'all';
+let weekOffset   = 0;
+let isSubmitting = false;
+let currentMode  = 'global';
+let globalStatus = 'closed';
+let deleteTargetId = null;
+let deleteTargetType = 'schedule'; // 'schedule' | 'emergency'
+
+document.addEventListener('DOMContentLoaded', async () => {
+  setTodayAsDefault();
+  initDeptChecks();
+  initGradeChecks();
+  initEmergencyChecks();
+  refreshBadges();
+  setInterval(refreshBadges, 30000);
+  document.getElementById('exception_status').addEventListener('change', onExcStatusChange);
+  await checkAdmin();
+});
+
+async function checkAdmin() {
+  try {
+    const r = await fetch('/api/check_admin');
+    const d = await r.json();
+    if (!d.is_admin) {
+      document.querySelector('.page-body').innerHTML = `
+        <div class="card"><div class="card-body" style="text-align:center;padding:3rem">
+          <i class="bi bi-shield-lock" style="font-size:3rem;color:var(--warning);display:block;margin-bottom:1rem"></i>
+          <h4>Admin Access Required</h4><p style="color:var(--text-dim)">Please <a href="/admin" style="color:var(--accent)">login as administrator</a>.</p>
+          <a href="/admin" class="btn-primary" style="margin-top:1rem;display:inline-block;text-decoration:none">Go to Login</a>
+        </div></div>`;
+      return;
+    }
+    refreshAll();
+    setInterval(refreshAll, 90000);
+  } catch(e) { showToast('Admin check failed','danger'); }
+}
+
+function refreshAll() { loadSchedules(); loadEmergencyClosures(); loadMissingQueries(); renderWeekCalendar(); }
+
+// ============================================================
+// MODAL HELPERS
+// ============================================================
+function openAddModal() {
+  clearForm();
+  setMode('global');
+  document.getElementById('formTitle').innerHTML = '<i class="bi bi-plus-circle" style="color:var(--accent)"></i> Add Schedule Entry';
+  const modal = new bootstrap.Modal(document.getElementById('scheduleModal'));
+  modal.show();
+}
+
+function openEditModal() {
+  const modal = new bootstrap.Modal(document.getElementById('scheduleModal'));
+  modal.show();
+}
+
+function closeScheduleModal() {
+  const modalEl = document.getElementById('scheduleModal');
+  const instance = bootstrap.Modal.getInstance(modalEl);
+  if (instance) instance.hide();
+}
+
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('entry_mode').value = mode;
+  const gBtn = document.getElementById('modeGlobalBtn');
+  const eBtn = document.getElementById('modeExceptionBtn');
+  const emBtn = document.getElementById('modeEmergencyBtn');
+  const gSec = document.getElementById('globalSection');
+  const eSec = document.getElementById('exceptionSection');
+  const emSec = document.getElementById('emergencySection');
+  const hint = document.getElementById('modeHint');
+  const saveBtn = document.getElementById('saveBtn');
+
+  gBtn.className = 'mode-btn';
+  eBtn.className = 'mode-btn';
+  emBtn.className = 'mode-btn';
+  gSec.style.display = 'none';
+  eSec.style.display = 'none';
+  emSec.style.display = 'none';
+
+  if (mode === 'global') {
+    gBtn.className = 'mode-btn active-global';
+    gSec.style.display = '';
+    hint.textContent = '🌐 Global: applies to ALL departments by default. Add exceptions separately for specific departments.';
+    saveBtn.className = 'btn-save btn-global';
+    document.getElementById('formTitle').innerHTML = '<i class="bi bi-globe2" style="color:#ff9800"></i> Add Global Holiday / Event';
+  } else if (mode === 'exception') {
+    eBtn.className = 'mode-btn active-exception';
+    eSec.style.display = '';
+    hint.textContent = '🔀 Exception: overrides the global rule for ONE specific department on this date.';
+    saveBtn.className = 'btn-save btn-exception';
+    document.getElementById('formTitle').innerHTML = '<i class="bi bi-shield-exclamation" style="color:#aa00ff"></i> Add Department Exception';
+    populateParentDropdown();
+  } else if (mode === 'emergency') {
+    emBtn.className = 'mode-btn active-emergency';
+    emSec.style.display = '';
+    hint.textContent = '🚨 Emergency: overrides ALL rules for affected departments and grades.';
+    saveBtn.className = 'btn-save btn-emergency';
+    document.getElementById('formTitle').innerHTML = '<i class="bi bi-exclamation-triangle-fill" style="color:#ff1744"></i> Add Emergency Closure';
+  }
+}
+
+function populateParentDropdown() {
+  const sel = document.getElementById('parent_schedule_id');
+  const globals = allSchedules.filter(s => !s.is_exception && s.departments && s.departments.includes('all'));
+  sel.innerHTML = '<option value="">— None / Standalone Exception —</option>';
+  globals.forEach(s => {
+    const o = document.createElement('option');
+    o.value = s.id;
+    o.textContent = `${s.start_date} — ${s.title}`;
+    sel.appendChild(o);
+  });
+}
+
+function selectStatus(context, status, el) {
+  const grid = el.closest('.status-grid');
+  grid.querySelectorAll('.status-option').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  if (context === 'global') {
+    globalStatus = status;
+    const hw = document.getElementById('globalHoursWrap');
+    hw.style.display = status === 'special_hours' ? '' : 'none';
+    document.getElementById('is_closed_hidden').value = (status === 'closed') ? '1' : '0';
+  }
+}
+
+function onExcStatusChange() {
+  const v = document.getElementById('exception_status').value;
+  document.getElementById('excHoursWrap').style.display = v === 'special_hours' ? '' : 'none';
+}
+
+// ============================================================
+// WEEK CALENDAR
+// ============================================================
+function getWeekStart(off=0) {
+  const now=new Date(); const day=now.getDay();
+  const diff=now.getDate()-day+(day===0?-6:1);
+  const mon=new Date(now.setDate(diff));
+  mon.setDate(mon.getDate()+off*7);
+  return new Date(mon.getFullYear(),mon.getMonth(),mon.getDate());
+}
+function prevWeek(){weekOffset--;renderWeekCalendar();}
+function nextWeek(){weekOffset++;renderWeekCalendar();}
+function goToToday(){weekOffset=0;renderWeekCalendar();}
+
+// ============================================================
+// RECURRING HOLIDAY LOGIC
+// ============================================================
+/**
+ * Expand a schedule into concrete occurrence date ranges that overlap [rangeStart, rangeEnd].
+ * Returns array of { occStart, occEnd } (YYYY-MM-DD strings).
+ * Supports: none | yearly | monthly | weekly
+ * Multi-day spans (start→end) are preserved on each occurrence.
+ */
+function getOccurrences(schedule, rangeStart, rangeEnd) {
+  const rt = (schedule.repeat_type || 'none').toLowerCase();
+  const start = schedule.start_date;
+  if (!start) return [];
+
+  const baseStart = parseDateLocal(start);
+  const baseEnd = parseDateLocal(schedule.end_date || start);
+  const durationDays = Math.max(0, Math.round((baseEnd - baseStart) / 86400000));
+
+  const rStart = parseDateLocal(rangeStart);
+  const rEnd = parseDateLocal(rangeEnd);
+  if (!baseStart || !rStart || !rEnd) return [];
+
+  // Non-recurring: just check original span
+  if (rt === 'none' || !rt) {
+    if (baseEnd >= rStart && baseStart <= rEnd) {
+      return [{ occStart: start, occEnd: schedule.end_date || start }];
+    }
+    return [];
+  }
+
+  const untilYear = schedule.repeat_until_year
+    ? parseInt(schedule.repeat_until_year, 10)
+    : (new Date().getFullYear() + 10);
+
+  const results = [];
+  const seen = new Set();
+
+  if (rt === 'yearly') {
+    const startYear = baseStart.getFullYear();
+    const endYear = Math.min(untilYear, rEnd.getFullYear());
+    for (let y = startYear; y <= endYear; y++) {
+      const occ = new Date(y, baseStart.getMonth(), baseStart.getDate());
+      // Handle Feb 29 on non-leap years → last day of Feb
+      if (baseStart.getMonth() === 1 && baseStart.getDate() === 29 && occ.getMonth() !== 1) {
+        occ.setFullYear(y, 1, 28);
+      }
+      const occEnd = new Date(occ);
+      occEnd.setDate(occEnd.getDate() + durationDays);
+      if (occEnd >= rStart && occ <= rEnd) {
+        const key = toDateStr(occ);
+        if (!seen.has(key)) {
+          seen.add(key);
+          results.push({ occStart: key, occEnd: toDateStr(occEnd) });
+        }
+      }
+    }
+  } else if (rt === 'monthly') {
+    // Walk month by month from base start (or a bit before range) up to untilYear
+    let cursor = new Date(baseStart.getFullYear(), baseStart.getMonth(), 1);
+    const limit = new Date(untilYear, 11, 31);
+    const dayOfMonth = baseStart.getDate();
+
+    while (cursor <= limit && cursor <= rEnd) {
+      // Clamp day to last day of month
+      const lastDay = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
+      const day = Math.min(dayOfMonth, lastDay);
+      const occ = new Date(cursor.getFullYear(), cursor.getMonth(), day);
+
+      // Only include occurrences on/after original start
+      if (occ >= baseStart) {
+        const occEnd = new Date(occ);
+        occEnd.setDate(occEnd.getDate() + durationDays);
+        if (occEnd >= rStart && occ <= rEnd) {
+          const key = toDateStr(occ);
+          if (!seen.has(key)) {
+            seen.add(key);
+            results.push({ occStart: key, occEnd: toDateStr(occEnd) });
+          }
+        }
+      }
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+  } else if (rt === 'weekly') {
+    // Same weekday every week
+    const targetDow = baseStart.getDay(); // 0=Sun … 6=Sat
+    // Start from the week of baseStart or rangeStart, whichever is later
+    let cursor = new Date(Math.max(baseStart.getTime(), rStart.getTime() - durationDays * 86400000));
+    // Align to target weekday
+    const diff = (targetDow - cursor.getDay() + 7) % 7;
+    cursor.setDate(cursor.getDate() + diff);
+    cursor.setHours(0, 0, 0, 0);
+
+    const limit = new Date(untilYear, 11, 31);
+    let safety = 0;
+    while (cursor <= limit && cursor <= rEnd && safety < 600) {
+      safety++;
+      if (cursor >= baseStart) {
+        const occEnd = new Date(cursor);
+        occEnd.setDate(occEnd.getDate() + durationDays);
+        if (occEnd >= rStart && cursor <= rEnd) {
+          const key = toDateStr(cursor);
+          if (!seen.has(key)) {
+            seen.add(key);
+            results.push({ occStart: key, occEnd: toDateStr(occEnd) });
+          }
+        }
+      }
+      cursor.setDate(cursor.getDate() + 7);
+    }
+  }
+
+  return results;
+}
+
+/** Does this schedule have any occurrence that touches the given date (YYYY-MM-DD)? */
+function scheduleOccursOn(schedule, dateStr) {
+  const occs = getOccurrences(schedule, dateStr, dateStr);
+  return occs.some(o => dateInRange(dateStr, o.occStart, o.occEnd));
+}
+
+/** Human-readable recurrence label */
+function repeatLabel(s) {
+  const rt = (s.repeat_type || 'none').toLowerCase();
+  if (rt === 'none' || !rt) return 'Once';
+  const until = s.repeat_until_year ? ` until ${s.repeat_until_year}` : '';
+  if (rt === 'yearly') return `🔁 Yearly${until}`;
+  if (rt === 'monthly') return `🔁 Monthly${until}`;
+  if (rt === 'weekly') return `🔁 Weekly${until}`;
+  return rt;
+}
+
+function parseDateLocal(str) {
+  if (!str) return null;
+  const [y, m, d] = str.split('-').map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d);
+}
+
+function dateInRange(ds, s, e) {
+  if (!s) return false;
+  return ds >= s && ds <= (e || s);
+}
+
+function renderWeekCalendar() {
+  const ws = getWeekStart(weekOffset);
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const today = toDateStr(new Date());
+  const we = new Date(ws); we.setDate(we.getDate() + 6);
+  const weekStartStr = toDateStr(ws);
+  const weekEndStr = toDateStr(we);
+
+  document.getElementById('weekLabel').textContent =
+    ws.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' }) + ' – ' +
+    we.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  const grid = document.getElementById('weekCalendar');
+  grid.innerHTML = '';
+  const eventsThisWeek = [];
+
+  // Pre-expand all schedules that might touch this week (performance: only once per week)
+  const expandedGlobals = [];
+  const expandedExceptions = [];
+
+  allSchedules.forEach(s => {
+    const matchesDept = activeDept === 'all' ||
+      (s.is_exception
+        ? (s.exception_dept === activeDept || !s.exception_dept)
+        : (s.departments && (s.departments.includes(activeDept) || s.departments.includes('all'))));
+    if (!matchesDept) return;
+
+    const occs = getOccurrences(s, weekStartStr, weekEndStr);
+    occs.forEach(o => {
+      const item = { ...s, _occStart: o.occStart, _occEnd: o.occEnd };
+      if (s.is_exception) expandedExceptions.push(item);
+      else expandedGlobals.push(item);
+    });
+  });
+
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(ws); d.setDate(d.getDate() + i);
+    const ds = toDateStr(d);
+    const isToday = ds === today;
+    const isWknd = i >= 5;
+
+    const globals = expandedGlobals.filter(s => dateInRange(ds, s._occStart, s._occEnd));
+    const exceptions = expandedExceptions.filter(s => dateInRange(ds, s._occStart, s._occEnd));
+    const emergencies = allEmergencies.filter(e =>
+      dateInRange(ds, e.start_date, e.end_date || e.start_date) &&
+      (activeDept === 'all' || (e.affected_departments && (e.affected_departments.includes(activeDept) || e.affected_departments.includes('all'))))
+    );
+
+    if (globals.length || exceptions.length || emergencies.length) {
+      eventsThisWeek.push(...[...globals, ...exceptions, ...emergencies].map(m => ({ ...m, date: ds })));
+    }
+
+    const isClosed = isWknd || globals.some(g => g.is_closed);
+    const hasGlobal = globals.length > 0;
+    const hasException = exceptions.length > 0;
+    const hasEmergency = emergencies.length > 0;
+    const hasEvent = globals.some(g => !g.is_closed) || exceptions.some(e => !e.is_closed);
+
+    const cell = document.createElement('div');
+    cell.className = 'day-cell'
+      + (isToday ? ' today' : '')
+      + (hasGlobal && !isToday ? ' is-global' : '')
+      + (hasException && !isToday ? ' has-exception' : '')
+      + (hasEmergency && !isToday ? ' has-emergency' : '')
+      + (!hasGlobal && !hasException && !hasEmergency && isClosed && !isToday ? ' is-closed' : '')
+      + (hasEvent ? ' has-event' : '')
+      + (isWknd ? ' weekend' : '');
+    cell.innerHTML = `<div class="day-name">${days[i]}</div><div class="day-num">${d.getDate()}</div>`;
+
+    if (globals.length || exceptions.length || emergencies.length) {
+      const dotsDiv = document.createElement('div');
+      dotsDiv.className = 'day-dots';
+      emergencies.forEach(() => {
+        const dot = document.createElement('span');
+        dot.className = 'day-dot';
+        dot.style.background = '#ff1744';
+        dotsDiv.appendChild(dot);
+      });
+      globals.forEach(g => {
+        const dot = document.createElement('span');
+        dot.className = 'day-dot';
+        dot.style.background = g.is_closed ? '#ff6b6b' : '#ff9100';
+        dotsDiv.appendChild(dot);
+      });
+      exceptions.forEach(() => {
+        const dot = document.createElement('span');
+        dot.className = 'day-dot';
+        dot.style.background = '#ce93d8';
+        dotsDiv.appendChild(dot);
+      });
+      cell.appendChild(dotsDiv);
+    }
+
+    const allMatched = [...globals, ...exceptions, ...emergencies];
+    if (allMatched.length) {
+      cell.title = allMatched.map(m => {
+        const rec = (m.repeat_type && m.repeat_type !== 'none') ? ` (${m.repeat_type})` : '';
+        return m.title + rec;
+      }).join('\n');
+      cell.style.cursor = 'pointer';
+      cell.onclick = () => scrollToSchedule(allMatched[0].id);
+    }
+    grid.appendChild(cell);
+  }
+
+  // Unique events for the summary chips under the calendar
+  const seen = new Set();
+  const uniq = eventsThisWeek.filter(e => {
+    const key = e.id + '|' + (e.date || '');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  const el = document.getElementById('weekEvents');
+  if (!uniq.length) {
+    el.innerHTML = '<span style="color:var(--text-dim);font-size:.78rem">No special events this week.</span>';
+    return;
+  }
+  el.innerHTML = uniq.map(e => {
+    const isEmerg = e.reason !== undefined;
+    const isExc = e.is_exception;
+    let col, icon, label;
+    if (isEmerg) {
+      col = '255,23,68'; icon = 'exclamation-triangle-fill'; label = '🚨';
+    } else if (isExc) {
+      col = '170,0,255'; icon = 'shield-exclamation'; label = `[${e.exception_dept || '?'}]`;
+    } else {
+      col = e.is_closed ? '255,82,82' : '255,109,0';
+      icon = e.is_closed ? 'x-circle' : 'calendar-check';
+      label = '';
+    }
+    const color = isEmerg ? '#ff1744' : isExc ? '#ce93d8' : e.is_closed ? '#ff6b6b' : '#ff9100';
+    const recBadge = (e.repeat_type && e.repeat_type !== 'none')
+      ? `<span style="opacity:.7;font-size:.65rem;margin-left:.25rem">🔁</span>` : '';
+    const showDate = e._occStart || e.date || e.start_date;
+    return `<span style="display:inline-flex;align-items:center;gap:.35rem;margin:.2rem .35rem .2rem 0;padding:.22rem .65rem;background:rgba(${col},.1);border:1px solid rgba(${col},.2);border-radius:20px;font-size:.73rem;color:${color}">
+      <i class="bi bi-${icon}"></i>${escHtml(e.title)} ${label}${recBadge}
+      <span style="opacity:.85;font-size:.68rem">(${showDate})</span></span>`;
+  }).join('');
+}
+
+function scrollToSchedule(id) {
+  const rows = document.querySelectorAll('#schedulesList tr[data-id]');
+  for (const r of rows) {
+    if (r.dataset.id == id) {
+      r.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      r.style.background = 'rgba(0,229,255,.12)';
+      setTimeout(() => r.style.background = '', 1500);
+      break;
+    }
+  }
+}
+
+// ============================================================
+// DATA LOADING
+// ============================================================
+async function loadSchedules() {
+  try {
+    const r=await fetch('/api/dynamic_schedules');
+    if(r.status===401){setTableMsg('schedulesList',10,'Session expired. <a href="/admin">Login</a>.');return;}
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    allSchedules=(d.schedules||[]).map(s=>({...s,
+      departments: parseDepts(s.departments||s.description),
+      grade_levels: parseGradeLevels(s.grade_levels||s.description),
+      is_exception: s.is_exception || (s.description&&s.description.includes('"exception"')) || false,
+      exception_dept: s.exception_dept||null,
+      exception_status: s.exception_status||null,
+    }));
+    renderSchedules();
+    renderWeekCalendar();
+    document.getElementById('schedCount').textContent=allSchedules.length+' entries';
+  } catch(e){ setTableMsg('schedulesList',10,'Failed to load. Refresh to retry.'); }
+}
+
+function parseDepts(raw){
+  if(!raw)return['all'];
+  if(Array.isArray(raw))return raw;
+  try{const p=JSON.parse(raw);if(Array.isArray(p))return p;}catch(_){}
+  const v=raw.trim().toLowerCase();
+  if(['all','college','highschool','elementary','registrar','business'].includes(v))return[v];
+  return['all'];
+}
+
+function parseGradeLevels(raw){
+  if(!raw)return['all'];
+  if(Array.isArray(raw))return raw;
+  try{const p=JSON.parse(raw);if(Array.isArray(p))return p;}catch(_){}
+  const v=raw.trim().toLowerCase();
+  if(['all','k-6','7-10','11-12','college'].includes(v))return[v];
+  return['all'];
+}
+
+async function loadEmergencyClosures() {
+  try {
+    const r=await fetch('/api/emergency_closures');
+    if(!r.ok){document.getElementById('emergencyClosuresBody').innerHTML='<div style="padding:1.5rem;text-align:center;color:var(--text-dim);font-size:.82rem">Failed to load.</div>';return;}
+    const d=await r.json();
+    allEmergencies=d.closures||[];
+    const el=document.getElementById('emergencyClosuresBody');
+    document.getElementById('emergencyCount').textContent=allEmergencies.length+' active';
+    if(!allEmergencies.length){el.innerHTML='<div style="padding:1.5rem;text-align:center;color:var(--text-dim);font-size:.82rem"><i class="bi bi-check-circle"></i> No active emergency closures.</div>';return;}
+    el.innerHTML=allEmergencies.map(e=>{
+      const severityColors = {low:'#4caf50', medium:'#ff9800', high:'#ff5722', critical:'#d50000'};
+      const severityEmojis = {low:'ℹ️', medium:'⚠️', high:'🚨', critical:'🔴'};
+      return `<div class="mq-row" style="border-left:3px solid ${severityColors[e.severity]||'#ff9800'}">
+        <span class="mq-count" style="background:${severityColors[e.severity]||'#ff9800'}20;color:${severityColors[e.severity]||'#ff9800'}">${severityEmojis[e.severity]||'⚠️'} ${e.severity?.toUpperCase()||'MEDIUM'}</span>
+        <span style="color:var(--text);font-weight:600">${escHtml(e.title)}</span>
+        <span style="color:var(--text-dim);font-size:.75rem">${e.start_date}${e.end_date?' → '+e.end_date:''}</span>
+        <span style="color:var(--accent2);font-size:.72rem">${e.reason?.replace(/_/g,' ')||'other'}</span>
+        <span style="font-size:.68rem;color:var(--text-dim)">${deptPills(e.affected_departments||['all'])}</span>
+        <button class="mq-btn" style="background:rgba(255,23,68,.2);color:#ff1744;border-color:rgba(255,23,68,.3)" onclick="confirmDeleteEmergency(${e.id})"><i class="bi bi-trash"></i></button>
+      </div>`;
+    }).join('');
+  } catch(e){document.getElementById('emergencyClosuresBody').innerHTML='<div style="padding:1.5rem;text-align:center;color:var(--text-dim);font-size:.82rem">Error loading emergencies.</div>';}
+}
+
+async function loadMissingQueries() {
+  try {
+    const r=await fetch('/api/missing_date_queries');
+    if(!r.ok){document.getElementById('missingQueriesBody').innerHTML='<div style="padding:1.5rem;text-align:center;color:var(--text-dim);font-size:.82rem">Login as admin to see missing queries.</div>';return;}
+    const d=await r.json();
+    const el=document.getElementById('missingQueriesBody');
+    if(!d.queries||!d.queries.length){el.innerHTML='<div style="padding:1.5rem;text-align:center;color:var(--text-dim);font-size:.82rem"><i class="bi bi-check-circle"></i> No unresolved student date queries.</div>';return;}
+    el.innerHTML=d.queries.map(q=>`<div class="mq-row">
+      <span class="mq-count">${q.asked_count}×</span>
+      <span class="mq-date">${q.detected_date||'?'}</span>
+      <span class="mq-q" title="${escHtml(q.question)}">${escHtml(q.question.substring(0,90))}${q.question.length>90?'…':''}</span>
+      <button class="mq-btn" onclick="createFromQuery('${escHtml(q.question).replace(/'/g,"\\'")}','${q.detected_date||''}')"><i class="bi bi-calendar-plus"></i> Add</button>
+    </div>`).join('');
+  } catch(e){document.getElementById('missingQueriesBody').innerHTML='<div style="padding:1.5rem;text-align:center;color:var(--text-dim);font-size:.82rem">Error loading queries.</div>';}
+}
+
+function setListTab(tab, el) {
+  listTab=tab;
+  document.querySelectorAll('#listTabAll, #listTabGlobal, #listTabException, #listTabEmergency').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  renderSchedules();
+}
+
+function renderSchedules() {
+  const tbody=document.getElementById('schedulesList');
+  let filtered=allSchedules;
+
+  if(listTab==='global')    filtered=filtered.filter(s=>!s.is_exception);
+  if(listTab==='exception') filtered=filtered.filter(s=>s.is_exception);
+  if(listTab==='emergency') filtered=filtered.filter(s=>s.content_type==='closure');
+  if(activeDept!=='all')    filtered=filtered.filter(s=>s.is_exception?s.exception_dept===activeDept:(s.departments.includes(activeDept)||s.departments.includes('all')));
+
+  if(!filtered.length){tbody.innerHTML='<tr class="no-data"><td colspan="10">No entries for selected filter.</td></tr>';return;}
+
+  tbody.innerHTML=filtered.map(s=>{
+    const isExc=s.is_exception;
+    const isEmerg=s.content_type==='closure';
+    let scopePill;
+    if(isEmerg) scopePill = `<span class="scope-pill scope-emergency"><i class="bi bi-exclamation-triangle-fill"></i> Emergency</span>`;
+    else if(isExc) scopePill = `<span class="scope-pill scope-exception"><i class="bi bi-shield-exclamation"></i> Exception</span>`;
+    else scopePill = `<span class="scope-pill scope-global"><i class="bi bi-globe2"></i> Global</span>`;
+
+    const deptCell=isExc ? deptPills([s.exception_dept||'?']) : deptPills(s.departments);
+    const gradeCell=gradePills(s.grade_levels||['all']);
+    const statusBadge=isEmerg?'<span class="badge-emergency">🚨 EMERGENCY</span>'
+      :s.exception_status==='no_class'?'<span class="badge-nclass">NO CLASS</span>'
+      :s.is_closed?'<span class="badge-closed">CLOSED</span>':'<span class="badge-open">OPEN</span>';
+    return `<tr data-id="${s.id}">
+      <td style="color:var(--text);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(s.title)}">${escHtml(s.title)}</td>
+      <td>${scopePill}</td>
+      <td>${deptCell}</td>
+      <td>${gradeCell}</td>
+      <td><span class="badge-type">${s.content_type}</span></td>
+      <td>${s.start_date}</td>
+      <td>${s.end_date||'—'}</td>
+      <td>${statusBadge}</td>
+      <td style="font-size:.75rem">${repeatLabel(s)}</td>
+      <td>
+        <button class="act-btn" onclick="editSchedule(${s.id})" title="Edit"><i class="bi bi-pencil"></i></button>
+        <button class="act-btn del" onclick="confirmDeleteSchedule(${s.id})" title="Delete"><i class="bi bi-trash"></i></button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function deptPills(depts){return(depts||['all']).map(d=>`<span class="dept-pill dept-${d}">${deptLabel(d)}</span>`).join(' ');}
+function deptLabel(d){return{all:'All',college:'College',highschool:'HS',elementary:'Elem',registrar:'Reg',business:'Biz'}[d]||d;}
+
+function gradePills(grades){return(grades||['all']).map(g=>`<span class="grade-pill grade-${g}">${gradeLabel(g)}</span>`).join(' ');}
+function gradeLabel(g){return{all:'All','k-6':'K-6','7-10':'7-10','11-12':'11-12',college:'College'}[g]||g;}
+
+function filterDept(dept){activeDept=dept;document.querySelectorAll('.dept-tab').forEach(t=>t.classList.toggle('active',t.dataset.dept===dept));renderSchedules();renderWeekCalendar();}
+
+async function checkConflicts() {
+  const start = document.getElementById('start_date').value;
+  if (!start) return;
+  const end = document.getElementById('end_date').value || start;
+  const editingId = document.getElementById('schedule_id').value;
+  const newRepeat = document.getElementById('repeat_type').value || 'none';
+  const newUntil = document.getElementById('repeat_until_year').value
+    ? parseInt(document.getElementById('repeat_until_year').value, 10)
+    : null;
+
+  // Build a temporary schedule representing the form values so we can expand it
+  const draft = {
+    start_date: start,
+    end_date: end,
+    repeat_type: newRepeat,
+    repeat_until_year: newUntil,
+  };
+
+  // Look ahead a reasonable window for conflicts (2 years or until year)
+  const horizonEnd = newUntil
+    ? `${newUntil}-12-31`
+    : toDateStr(new Date(new Date().getFullYear() + 2, 11, 31));
+
+  const draftOccs = getOccurrences(draft, start, horizonEnd);
+  const conflicts = [];
+
+  allSchedules.forEach(s => {
+    if (editingId && String(s.id) === String(editingId)) return; // skip self when editing
+
+    // Expand the existing schedule over the same horizon
+    const existingOccs = getOccurrences(s, start, horizonEnd);
+
+    // Check any overlap between draft occurrences and existing ones
+    for (const dOcc of draftOccs) {
+      for (const eOcc of existingOccs) {
+        // Ranges overlap if dStart <= eEnd && eStart <= dEnd
+        if (dOcc.occStart <= eOcc.occEnd && eOcc.occStart <= dOcc.occEnd) {
+          conflicts.push({
+            schedule: s,
+            conflictDate: dOcc.occStart,
+            existingOcc: eOcc.occStart,
+          });
+          return; // one hit per schedule is enough
+        }
+      }
+    }
+  });
+
+  const alert = document.getElementById('conflictAlert');
+  const list = document.getElementById('conflictList');
+  if (!conflicts.length) {
+    alert.classList.remove('show');
+    return;
+  }
+  list.innerHTML = conflicts.map(c => {
+    const rec = (c.schedule.repeat_type && c.schedule.repeat_type !== 'none')
+      ? ` 🔁 ${c.schedule.repeat_type}` : '';
+    const scope = c.schedule.is_exception
+      ? `exception for ${c.schedule.exception_dept}`
+      : 'global';
+    return `• <strong>${escHtml(c.schedule.title)}</strong> (${scope}${rec}) — overlaps on ${c.conflictDate}`;
+  }).join('<br>');
+  alert.classList.add('show');
+}
+
+// ============================================================
+// QUICK ADD / CREATE / EDIT
+// ============================================================
+function quickAdd(action) {
+  clearForm();
+  const today=toDateStr(new Date());
+  const tomorrow=toDateStr(new Date(Date.now()+86400000));
+  const cfgs = {
+    close_today:    {title:'Emergency Closure',type:'closure',date:today,   mode:'global',status:'closed',msg:'The institution is closed today due to unforeseen circumstances.',depts:['all'],grades:['all']},
+    close_tomorrow: {title:'Office Closure',   type:'closure',date:tomorrow,mode:'global',status:'closed',msg:'The institution will be closed tomorrow.',depts:['all'],grades:['all']},
+    global_holiday: {title:'New Holiday',      type:'holiday',date:today,   mode:'global',status:'closed',msg:'The institution is closed in observance of this holiday.',depts:['all'],grades:['all']},
+    dept_exception: {title:'Department Override',type:'event',date:today,   mode:'exception',status:'open',depts:['all'],grades:['all']},
+    emergency_closure:{title:'Emergency Closure',type:'closure',date:today,mode:'emergency',status:'closed',msg:'Emergency closure due to severe weather conditions.',depts:['all'],grades:['all']},
+    event:          {title:'New Event',        type:'event',  date:today,   mode:'global',status:'open',  msg:'Please join us for this special event.',depts:['all'],grades:['all']},
+    special_hours:  {title:'Special Hours',    type:'office_hours',date:today,mode:'global',status:'special_hours',msg:'The office will observe special hours today.',depts:['registrar','business'],grades:['all']},
+  };
+  const cfg=cfgs[action]; if(!cfg) return;
+  setMode(cfg.mode);
+  document.getElementById('title').value=cfg.title;
+  document.getElementById('content_type').value=cfg.type;
+  document.getElementById('start_date').value=cfg.date;
+  if(cfg.msg) document.getElementById('message_english').value=cfg.msg;
+  if(cfg.mode==='global'){
+    setDepts(cfg.depts);
+    setGrades(cfg.grades);
+    document.querySelectorAll('#globalStatusGrid .status-option').forEach(o=>{
+      o.classList.toggle('selected',o.dataset.status===cfg.status);
+    });
+    globalStatus=cfg.status;
+    if(cfg.status==='special_hours'){document.getElementById('globalHoursWrap').style.display='';document.getElementById('special_hours_start').value='09:00';document.getElementById('special_hours_end').value='15:00';}
+  } else if(cfg.mode==='exception') {
+    if(action==='dept_exception') document.getElementById('exception_dept').value='registrar';
+  } else if(cfg.mode==='emergency') {
+    document.getElementById('emergency_reason').value='heavy_rain';
+    document.getElementById('emergency_severity').value='medium';
+  }
+  updateDateHints();
+  openEditModal();
+}
+
+function createFromQuery(question,date){
+  clearForm();
+  if(date) document.getElementById('start_date').value=date;
+  document.getElementById('title').value=question.substring(0,100);
+  updateDateHints();
+  openEditModal();
+}
+
+function editSchedule(id) {
+  const s=allSchedules.find(x=>x.id===id); if(!s) return;
+  clearForm();
+  const isEmerg = s.content_type==='closure';
+  setMode(isEmerg?'emergency':s.is_exception?'exception':'global');
+  document.getElementById('schedule_id').value=s.id;
+  document.getElementById('title').value=s.title;
+  document.getElementById('content_type').value=s.content_type;
+  document.getElementById('start_date').value=s.start_date;
+  document.getElementById('end_date').value=s.end_date||'';
+  document.getElementById('repeat_type').value=s.repeat_type||'none';
+  document.getElementById('repeat_until_year').value=s.repeat_until_year||'';
+  document.getElementById('message_english').value=s.message_english||'';
+  document.getElementById('message_tagalog').value=s.message_tagalog||'';
+  document.getElementById('message_bisaya').value=s.message_bisaya||'';
+
+  if(s.is_exception){
+    document.getElementById('exception_dept').value=s.exception_dept||'';
+    document.getElementById('exception_status').value=s.exception_status||'open';
+    onExcStatusChange();
+    if(s.exception_hours_start) document.getElementById('exc_hours_start').value=s.exception_hours_start;
+    if(s.exception_hours_end)   document.getElementById('exc_hours_end').value=s.exception_hours_end;
+    if(s.parent_schedule_id)    populateParentDropdown(), document.getElementById('parent_schedule_id').value=s.parent_schedule_id;
+  } else if(isEmerg) {
+    if(s.reason) document.getElementById('emergency_reason').value=s.reason;
+    if(s.severity) document.getElementById('emergency_severity').value=s.severity;
+    setEmergencyDepts(s.affected_departments||['all']);
+    setEmergencyGrades(s.affected_grades||['all']);
+  } else {
+    setDepts(s.departments||['all']);
+    setGrades(s.grade_levels||['all']);
+    const sStatus=s.exception_status||( s.is_closed?'closed':'open' );
+    document.querySelectorAll('#globalStatusGrid .status-option').forEach(o=>o.classList.toggle('selected',o.dataset.status===sStatus));
+    globalStatus=sStatus;
+    if(sStatus==='special_hours'){
+      document.getElementById('globalHoursWrap').style.display='';
+      document.getElementById('special_hours_start').value=s.special_hours_start||'';
+      document.getElementById('special_hours_end').value=s.special_hours_end||'';
+    }
+  }
+  onRepeatChange();
+  updateDateHints();
+  document.getElementById('formTitle').innerHTML='<i class="bi bi-pencil-square" style="color:var(--warning)"></i> Edit Entry';
+  openEditModal();
+}
+
+// ============================================================
+// DELETE (with confirm modal)
+// ============================================================
+function confirmDeleteSchedule(id) {
+  deleteTargetId = id;
+  deleteTargetType = 'schedule';
+  new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+
+function confirmDeleteEmergency(id) {
+  deleteTargetId = id;
+  deleteTargetType = 'emergency';
+  new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+
+document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
+  if (!deleteTargetId) return;
+  try {
+    let url;
+    if (deleteTargetType === 'emergency') {
+      url = `/api/emergency_closures/${deleteTargetId}`;
+    } else {
+      url = `/api/dynamic_schedules/${deleteTargetId}`;
+    }
+    const r = await fetch(url, { method: 'DELETE' });
+    bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
+    if (r.ok) {
+      showToast(deleteTargetType === 'emergency' ? 'Emergency deleted' : 'Deleted', 'success');
+      refreshAll();
+    } else {
+      const e = await r.json().catch(() => ({}));
+      showToast(e.error || 'Delete failed', 'danger');
+    }
+  } catch (e) {
+    showToast('Network error', 'danger');
+  }
+  deleteTargetId = null;
+});
+
+// ============================================================
+// SUBMIT FORM
+// ============================================================
+async function submitForm(ev) {
+  ev.preventDefault();
+  if(isSubmitting) return;
+  const btn=document.getElementById('saveBtn');
+  const status=document.getElementById('formStatus');
+
+  try {
+    isSubmitting=true;
+    btn.innerHTML='<span class="spinner"></span> Saving…';
+    btn.disabled=true;
+    status.textContent='';
+
+    const id=document.getElementById('schedule_id').value;
+    const mode=currentMode;
+    const isExc=mode==='exception';
+    const isEmerg=mode==='emergency';
+
+    if(isExc && !document.getElementById('exception_dept').value){
+      showToast('Select a department for the exception','danger');
+      return;
+    }
+
+    const depts = [];
+    document.querySelectorAll('#deptChecks .dept-check-item input:checked').forEach(cb => {
+      depts.push(cb.value);
+    });
+
+    const grades = [];
+    document.querySelectorAll('#gradeChecks .dept-check-item input:checked').forEach(cb => {
+      grades.push(cb.value);
+    });
+
+    const excDept=document.getElementById('exception_dept').value;
+    const excStatus=document.getElementById('exception_status').value;
+
+    const isClosed = isExc
+      ? (excStatus==='closed')
+      : (globalStatus==='closed');
+
+    const data = {
+      title: document.getElementById('title').value.trim(),
+      content_type: document.getElementById('content_type').value,
+      start_date: document.getElementById('start_date').value,
+      end_date: document.getElementById('end_date').value || null,
+      repeat_type: document.getElementById('repeat_type').value,
+      repeat_until_year: document.getElementById('repeat_until_year').value ? parseInt(document.getElementById('repeat_until_year').value) : null,
+      is_closed: isClosed,
+      message_english: document.getElementById('message_english').value.trim() || null,
+      message_tagalog: document.getElementById('message_tagalog').value.trim() || null,
+      message_bisaya: document.getElementById('message_bisaya').value.trim() || null,
+      departments: JSON.stringify(depts.length ? depts : ['all']),
+      grade_levels: JSON.stringify(grades.length ? grades : ['all'])
+    };
+
+    if (globalStatus === 'special_hours' && !isExc && !isEmerg) {
+      data.special_hours_start = document.getElementById('special_hours_start').value || null;
+      data.special_hours_end = document.getElementById('special_hours_end').value || null;
+    }
+
+    if (isExc) {
+      data.is_exception = true;
+      data.exception_dept = excDept;
+      data.exception_status = excStatus;
+      data.exception_hours_start = document.getElementById('exc_hours_start').value || null;
+      data.exception_hours_end = document.getElementById('exc_hours_end').value || null;
+      data.exception_note = document.getElementById('exc_note').value || null;
+      data.parent_schedule_id = document.getElementById('parent_schedule_id').value || null;
+    }
+
+    if (isEmerg) {
+      const emergDepts = [];
+      document.querySelectorAll('#emergencyDeptChecks .dept-check-item input:checked').forEach(cb => {
+        emergDepts.push(cb.value);
+      });
+      const emergGrades = [];
+      document.querySelectorAll('#emergencyGradeChecks .dept-check-item input:checked').forEach(cb => {
+        emergGrades.push(cb.value);
+      });
+
+      const emergData = {
+        title: data.title,
+        reason: document.getElementById('emergency_reason').value,
+        severity: document.getElementById('emergency_severity').value,
+        start_date: data.start_date,
+        end_date: data.end_date,
+        affected_departments: emergDepts.length ? emergDepts : ['all'],
+        affected_grades: emergGrades.length ? emergGrades : ['all'],
+        message_english: data.message_english,
+        message_tagalog: data.message_tagalog,
+        message_bisaya: data.message_bisaya
+      };
+
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      const r=await fetch('/api/emergency_closures', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken || '',
+        },
+        body: JSON.stringify(emergData)
+      });
+      if(r.ok){
+        showToast('Emergency closure saved!','success');
+        clearForm();
+        closeScheduleModal();
+        refreshAll();
+      } else {
+        const resp=await r.json();
+        showToast(resp.error || 'Save failed','danger');
+      }
+      return;
+    }
+
+    if(!data.title){showToast('Title is required','danger');return;}
+    if(!data.start_date){showToast('Start date is required','danger');return;}
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+    const url=id ? `/api/dynamic_schedules/${id}` : '/api/dynamic_schedules';
+    const method=id ? 'PUT' : 'POST';
+
+    const r=await fetch(url, {
+      method: method,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken || '',
+      },
+      body: JSON.stringify(data)
+    });
+
+    const contentType = r.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      const resp=await r.json();
+      if(r.ok){
+        showToast(id ? 'Entry updated!' : 'Entry saved!','success');
+        clearForm();
+        closeScheduleModal();
+        refreshAll();
+        populateParentDropdown();
+      } else {
+        showToast(resp.error || 'Save failed','danger');
+      }
+    } else {
+      const text = await r.text();
+      console.error('Server returned HTML:', text.substring(0, 200));
+      if (text.includes('CSRF token')) {
+        showToast('CSRF token missing - please refresh the page and try again','danger');
+      } else {
+        showToast('Server error - check console for details','danger');
+      }
+    }
+  } catch(e){
+    showToast('Network error: '+e.message,'danger');
+    console.error('Submit error:', e);
+  } finally{
+    isSubmitting=false;
+    btn.innerHTML='<i class="bi bi-save2-fill"></i> Save Entry';
+    btn.disabled=false;
+  }
+}
+
+function clearForm() {
+  document.getElementById('schedule_id').value='';
+  document.getElementById('title').value='';
+  document.getElementById('content_type').value='holiday';
+  document.getElementById('end_date').value='';
+  document.getElementById('repeat_type').value='none';
+  document.getElementById('repeat_until_year').value='';
+  document.getElementById('special_hours_start').value='';
+  document.getElementById('special_hours_end').value='';
+  document.getElementById('message_english').value='';
+  document.getElementById('message_tagalog').value='';
+  document.getElementById('message_bisaya').value='';
+  document.getElementById('exception_dept').value='';
+  document.getElementById('exception_status').value='open';
+  document.getElementById('exc_hours_start').value='';
+  document.getElementById('exc_hours_end').value='';
+  document.getElementById('exc_note').value='';
+  document.getElementById('emergency_reason').value='heavy_rain';
+  document.getElementById('emergency_severity').value='medium';
+  document.getElementById('repeatUntilWrap').style.display='none';
+  document.getElementById('globalHoursWrap').style.display='none';
+  document.getElementById('excHoursWrap').style.display='none';
+  document.getElementById('conflictAlert').classList.remove('show');
+  document.getElementById('formStatus').textContent='';
+  document.querySelectorAll('#globalStatusGrid .status-option').forEach((o,i)=>o.classList.toggle('selected',i===0));
+  globalStatus='closed';
+  setDepts(['all']);
+  setGrades(['all']);
+  setEmergencyDepts(['all']);
+  setEmergencyGrades(['all']);
+  setMode('global');
+  setTodayAsDefault();
+}
+
+function setTodayAsDefault(){ document.getElementById('start_date').value=toDateStr(new Date()); updateDateHints(); }
+
+function onRepeatChange() {
+  const rt = document.getElementById('repeat_type').value;
+  document.getElementById('repeatUntilWrap').style.display = rt !== 'none' ? '' : 'none';
+  // Auto-fill a sensible until-year if empty
+  if (rt !== 'none' && !document.getElementById('repeat_until_year').value) {
+    document.getElementById('repeat_until_year').value = new Date().getFullYear() + 5;
+  }
+  // Re-check conflicts when recurrence changes
+  checkConflicts();
+}
+
+function updateDateHints() {
+  const s = document.getElementById('start_date').value;
+  const e = document.getElementById('end_date').value;
+  const rt = document.getElementById('repeat_type').value;
+  const until = document.getElementById('repeat_until_year').value;
+  const el = document.getElementById('dateHint');
+  if (!s) { el.textContent = 'Pick a date above'; return; }
+
+  const sd = parseDateLocal(s);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const diff = Math.round((sd - today) / 86400000);
+  let label = '';
+  if (diff === 0) label = '📅 Today';
+  else if (diff === 1) label = '📅 Tomorrow';
+  else if (diff === -1) label = '📅 Yesterday';
+  else if (diff > 1 && diff <= 7) label = `📅 In ${diff} days (${sd.toLocaleDateString('en-PH', { weekday: 'long' })})`;
+  else if (diff < 0) label = `📅 ${Math.abs(diff)} days ago`;
+  else label = '📅 ' + sd.toLocaleDateString('en-PH', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
+
+  if (e && e !== s) {
+    const ed = parseDateLocal(e);
+    const dur = Math.round((ed - sd) / 86400000) + 1;
+    label += ` → ${dur}-day span`;
+  }
+
+  if (rt && rt !== 'none') {
+    const untilTxt = until ? ` until ${until}` : '';
+    if (rt === 'yearly') label += ` · 🔁 every year on ${sd.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}${untilTxt}`;
+    else if (rt === 'monthly') label += ` · 🔁 every month on day ${sd.getDate()}${untilTxt}`;
+    else if (rt === 'weekly') label += ` · 🔁 every ${sd.toLocaleDateString('en-PH', { weekday: 'long' })}${untilTxt}`;
+  }
+
+  el.textContent = label;
+}
+
+// ============================================================
+// CHECKBOX HELPERS
+// ============================================================
+function initDeptChecks() {
+  document.querySelectorAll('#deptChecks .dept-check-item').forEach(item=>{
+    item.addEventListener('click',()=>{
+      const cb=item.querySelector('input');
+      cb.checked=!cb.checked;
+      item.classList.toggle('checked',cb.checked);
+      if(item.dataset.d==='all'&&cb.checked){
+        document.querySelectorAll('#deptChecks .dept-check-item:not([data-d="all"])').forEach(oi=>{oi.querySelector('input').checked=false;oi.classList.remove('checked');});
+      } else if(item.dataset.d!=='all'&&cb.checked){
+        const allCb=document.querySelector('#deptChecks .dept-check-item[data-d="all"]');
+        if(allCb){allCb.querySelector('input').checked=false;allCb.classList.remove('checked');}
+      }
+      const any=[...document.querySelectorAll('#deptChecks .dept-check-item input')].some(c=>c.checked);
+      if(!any){document.querySelector('#deptChecks .dept-check-item[data-d="all"] input').checked=true;document.querySelector('#deptChecks .dept-check-item[data-d="all"]').classList.add('checked');}
+    });
+  });
+}
+
+function initGradeChecks() {
+  document.querySelectorAll('#gradeChecks .dept-check-item').forEach(item=>{
+    item.addEventListener('click',()=>{
+      const cb=item.querySelector('input');
+      cb.checked=!cb.checked;
+      item.classList.toggle('checked',cb.checked);
+      if(item.dataset.d==='all'&&cb.checked){
+        document.querySelectorAll('#gradeChecks .dept-check-item:not([data-d="all"])').forEach(oi=>{oi.querySelector('input').checked=false;oi.classList.remove('checked');});
+      } else if(item.dataset.d!=='all'&&cb.checked){
+        const allCb=document.querySelector('#gradeChecks .dept-check-item[data-d="all"]');
+        if(allCb){allCb.querySelector('input').checked=false;allCb.classList.remove('checked');}
+      }
+      const any=[...document.querySelectorAll('#gradeChecks .dept-check-item input')].some(c=>c.checked);
+      if(!any){document.querySelector('#gradeChecks .dept-check-item[data-d="all"] input').checked=true;document.querySelector('#gradeChecks .dept-check-item[data-d="all"]').classList.add('checked');}
+    });
+  });
+}
+
+function initEmergencyChecks() {
+  document.querySelectorAll('#emergencyDeptChecks .dept-check-item').forEach(item=>{
+    item.addEventListener('click',()=>{
+      const cb=item.querySelector('input');
+      cb.checked=!cb.checked;
+      item.classList.toggle('checked',cb.checked);
+      if(item.dataset.d==='all'&&cb.checked){
+        document.querySelectorAll('#emergencyDeptChecks .dept-check-item:not([data-d="all"])').forEach(oi=>{oi.querySelector('input').checked=false;oi.classList.remove('checked');});
+      } else if(item.dataset.d!=='all'&&cb.checked){
+        const allCb=document.querySelector('#emergencyDeptChecks .dept-check-item[data-d="all"]');
+        if(allCb){allCb.querySelector('input').checked=false;allCb.classList.remove('checked');}
+      }
+    });
+  });
+  document.querySelectorAll('#emergencyGradeChecks .dept-check-item').forEach(item=>{
+    item.addEventListener('click',()=>{
+      const cb=item.querySelector('input');
+      cb.checked=!cb.checked;
+      item.classList.toggle('checked',cb.checked);
+      if(item.dataset.d==='all'&&cb.checked){
+        document.querySelectorAll('#emergencyGradeChecks .dept-check-item:not([data-d="all"])').forEach(oi=>{oi.querySelector('input').checked=false;oi.classList.remove('checked');});
+      } else if(item.dataset.d!=='all'&&cb.checked){
+        const allCb=document.querySelector('#emergencyGradeChecks .dept-check-item[data-d="all"]');
+        if(allCb){allCb.querySelector('input').checked=false;allCb.classList.remove('checked');}
+      }
+    });
+  });
+}
+
+function setDepts(depts){document.querySelectorAll('#deptChecks .dept-check-item').forEach(item=>{const cb=item.querySelector('input');const isIn=depts.includes(item.dataset.d);cb.checked=isIn;item.classList.toggle('checked',isIn);});}
+function setGrades(grades){document.querySelectorAll('#gradeChecks .dept-check-item').forEach(item=>{const cb=item.querySelector('input');const isIn=grades.includes(item.dataset.d);cb.checked=isIn;item.classList.toggle('checked',isIn);});}
+function setEmergencyDepts(depts){document.querySelectorAll('#emergencyDeptChecks .dept-check-item').forEach(item=>{const cb=item.querySelector('input');const isIn=depts.includes(item.dataset.d);cb.checked=isIn;item.classList.toggle('checked',isIn);});}
+function setEmergencyGrades(grades){document.querySelectorAll('#emergencyGradeChecks .dept-check-item').forEach(item=>{const cb=item.querySelector('input');const isIn=grades.includes(item.dataset.d);cb.checked=isIn;item.classList.toggle('checked',isIn);});}
+
+function toggleCollapse(id,hdr){const body=document.getElementById(id);body.classList.toggle('open');hdr.classList.toggle('open');}
+function switchLangTab(lang,tabEl){
+  document.querySelectorAll('#msgCollapse .form-tab').forEach(t=>t.classList.remove('active'));
+  tabEl.classList.add('active');
+  document.querySelectorAll('#msgCollapse .tab-pane').forEach(p=>p.classList.remove('active'));
+  document.getElementById({en:'langEn',tl:'langTl',ceb:'langCeb'}[lang]).classList.add('active');
+}
+
+function toDateStr(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function escHtml(s){ if(!s)return''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function setTableMsg(id,cols,msg){ document.getElementById(id).innerHTML=`<tr class="no-data"><td colspan="${cols}">${msg}</td></tr>`; }
+
+function showToast(msg,type='success'){
+  const el=document.createElement('div'); el.className='toast-el';
+  el.style.color=type==='success'?'var(--success)':type==='danger'?'var(--danger)':'var(--warning)';
+  el.innerHTML=`<i class="bi bi-${type==='success'?'check-circle-fill':type==='danger'?'x-circle-fill':'exclamation-circle-fill'}"></i> ${escHtml(msg)}`;
+  document.body.appendChild(el); setTimeout(()=>el.remove(),3200);
+}
+function exportData(){ window.location.href='/api/export/faq'; showToast('Export started...','info'); }
+</script>
+</body>
+</html>

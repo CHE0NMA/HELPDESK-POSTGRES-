@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terms of Use — PAC Help Desk</title>
+<link rel="icon" href="/static/uploads/logo.png" type="image/x-icon">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+<style>
+  :root {
+    --blue-deep:  #060f1e;
+    --blue-brand: #1565c0;
+    --blue-bright:#1e88e5;
+    --blue-glow:  #64b5f6;
+    --accent:     #00e5ff;
+    --text:       #e8f4fd;
+    --text-dim:   #7aa3c0;
+    --card-bg:    rgba(10,28,56,.7);
+    --card-border:rgba(66,165,245,.14);
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:'DM Sans',sans-serif; background:var(--blue-deep); color:var(--text);
+    min-height:100vh;
+  }
+  .bg-layer{
+    position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:
+      radial-gradient(ellipse 70% 50% at 15% 5%, rgba(21,101,192,.28) 0%, transparent 55%),
+      radial-gradient(ellipse 55% 45% at 85% 85%, rgba(0,229,255,.09) 0%, transparent 50%),
+      linear-gradient(180deg,#060f1e 0%,#091728 100%);
+  }
+  header{
+    position:sticky;top:0;z-index:200;height:62px;
+    display:flex;align-items:center;justify-content:space-between;padding:0 2rem;
+    background:rgba(6,15,30,.9);backdrop-filter:blur(18px);
+    border-bottom:1px solid rgba(66,165,245,.1);
+  }
+  .logo-wrap{display:flex;align-items:center;gap:.75rem;text-decoration:none;
+    font-family:'Sora',sans-serif;font-weight:700;font-size:1.05rem;color:var(--text)}
+  .logo-orb{width:36px;height:36px;border-radius:50%;overflow:hidden;box-shadow:0 0 18px rgba(0,229,255,.32)}
+  .logo-orb img{width:100%;height:100%;object-fit:cover}
+  .btn-hdr{
+    padding:.42rem 1.1rem;border-radius:30px;font-family:'Sora',sans-serif;font-weight:600;font-size:.8rem;
+    text-decoration:none;display:inline-flex;align-items:center;gap:.4rem;
+    border:1.5px solid rgba(66,165,245,.35);color:var(--blue-glow);transition:all .2s;
+  }
+  .btn-hdr:hover{background:var(--blue-brand);color:#fff;border-color:var(--blue-brand)}
+
+  main{position:relative;z-index:1;max-width:760px;margin:0 auto;padding:3.5rem 1.5rem 5rem}
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:.5rem;margin-bottom:1.1rem;
+    background:rgba(0,229,255,.07);border:1px solid rgba(0,229,255,.2);color:var(--accent);
+    border-radius:30px;padding:.3rem .9rem;font-size:.72rem;font-weight:700;letter-spacing:.06em;
+  }
+  h1{font-family:'Sora',sans-serif;font-weight:800;font-size:clamp(1.8rem,5vw,2.6rem);margin-bottom:.6rem}
+  .updated{color:var(--text-dim);font-size:.85rem;margin-bottom:2.5rem}
+
+  section.block{
+    background:var(--card-bg);border:1px solid var(--card-border);border-radius:16px;
+    padding:1.5rem 1.75rem;margin-bottom:1.1rem;backdrop-filter:blur(10px);
+  }
+  section.block h2{
+    font-family:'Sora',sans-serif;font-weight:700;font-size:1.02rem;margin-bottom:.65rem;
+    display:flex;align-items:center;gap:.55rem;color:var(--text);
+  }
+  section.block h2 i{color:var(--blue-glow);font-size:1rem}
+  section.block p, section.block li{font-size:.88rem;line-height:1.75;color:var(--text-dim)}
+  section.block p + p{margin-top:.6rem}
+  section.block ul{margin:.4rem 0 0 1.15rem}
+  section.block li{margin-bottom:.35rem}
+  section.block strong{color:var(--text);font-weight:600}
+  section.block a{color:var(--blue-glow)}
+
+  .callout{
+    display:flex;gap:.7rem;align-items:flex-start;
+    background:rgba(255,193,7,.06);border:1px solid rgba(255,193,7,.22);
+    border-radius:14px;padding:1rem 1.2rem;margin-bottom:1.6rem;
+  }
+  .callout i{color:#ffc107;font-size:1.1rem;margin-top:.1rem;flex-shrink:0}
+  .callout p{font-size:.85rem;color:var(--text-dim);line-height:1.65}
+
+  footer{
+    position:relative;z-index:1;text-align:center;padding:1.75rem;
+    border-top:1px solid rgba(66,165,245,.08);color:var(--text-dim);font-size:.8rem;
+  }
+  footer a{color:var(--text-dim);text-decoration:none;margin:0 .5rem}
+  footer a:hover{color:var(--blue-glow)}
+
+  @media(max-width:600px){ header{padding:0 1rem} main{padding:2.5rem 1.1rem 4rem} section.block{padding:1.25rem 1.3rem} }
+</style>
+</head>
+<body>
+<div class="bg-layer"></div>
+<header>
+  <a href="/" class="logo-wrap">
+    <div class="logo-orb"><img src="/static/uploads/logo.png" alt="School Logo"></div>
+    <span>PAC Help Desk</span>
+  </a>
+  <a href="/chat" class="btn-hdr"><i class="bi bi-chat-dots-fill"></i><span>Open Chat</span></a>
+</header>
+
+<main>
+  <div class="eyebrow"><i class="bi bi-file-earmark-text-fill"></i> Legal</div>
+  <h1>Terms of Use</h1>
+  <p class="updated">Last updated: July 2026 · Philippine Advent College (PAC) Help Desk</p>
+
+  <div class="callout">
+    <i class="bi bi-exclamation-triangle-fill"></i>
+    <p>PAC Bot is an automated assistant. It gives helpful guidance based on FAQ entries, the Student Handbook,
+       and AI‑generated responses, but it is <strong>not a substitute</strong> for official confirmation from
+       the Registrar's Office, Business Office, or your academic adviser — especially for decisions that affect
+       enrollment, grades, or discipline.</p>
+  </div>
+
+  <section class="block">
+    <h2><i class="bi bi-check2-circle"></i>Acceptance of Terms</h2>
+    <p>By accessing or using the PAC Help Desk website and chat service ("the Service"), you agree to these
+       Terms of Use. If you do not agree, please discontinue use of the Service and contact the relevant PAC
+       office directly instead.</p>
+  </section>
+
+  <section class="block">
+    <h2><i class="bi bi-mortarboard-fill"></i>Purpose of the Service</h2>
+    <p>The Service is provided by Philippine Advent College to help students, applicants, and visitors quickly
+       find answers to common school‑related questions, including topics covered in the official Student
+       Handbook. It is intended for informational purposes only.</p>
+  </section>
+
+  <section class="block">
+    <h2><i class="bi bi-hand-thumbs-up"></i>Acceptable Use</h2>
+    <p>When using the Service, you agree that you will not:</p>
+    <ul>
+      <li>Submit abusive, threatening, obscene, or unlawful content;</li>
+      <li>Attempt to overwhelm, disrupt, or gain unauthorized access to the Service, its database, or admin
+          dashboard;</li>
+      <li>Use automated tools (bots, scrapers) to send excessive requests beyond normal chat use;</li>
+      <li>Rely on the Service to make final decisions where official written confirmation from a PAC office is
+          required (e.g. clearance, grade disputes, disciplinary matters).</li>
+    </ul>
+    <p>We apply reasonable rate limits to keep the Service available and fair for all users.</p>
+  </section>
+
+  <section class="block">
+    <h2><i class="bi bi-shield-exclamation"></i>Accuracy of Information</h2>
+    <p>We work to keep FAQ answers, schedules, and Handbook excerpts accurate and up to date, and PAC Bot is
+       instructed to answer Handbook questions using only the official excerpts on file. However, responses —
+       including AI‑generated ones — may occasionally be incomplete, outdated, or mistaken. For anything with
+       real consequences (deadlines, fees, sanctions), please verify with the appropriate PAC office before
+       acting.</p>
+  </section>
+
+  <section class="block">
+    <h2><i class="bi bi-c-circle"></i>Intellectual Property</h2>
+    <p>The PAC Help Desk name, branding, FAQ content, and Student Handbook excerpts belong to Philippine
+       Advent College. You may use information from the Service for personal, non‑commercial reference related
+       to your studies at PAC. Reproducing or redistributing Handbook content outside this purpose is not
+       permitted without permission from PAC administration.</p>
+  </section>
+
+  <section class="block">
+    <h2><i class="bi bi-arrow-repeat"></i>Availability &amp; Changes</h2>
+    <p>The Service is offered on an "as‑is" and "as‑available" basis. We may update, suspend, or modify the
+       Service — including its FAQ content, Handbook data, or these Terms — at any time without prior notice.
+       Continued use of the Service after changes means you accept the updated Terms.</p>
+  </section>
+
+  <section class="block">
+    <h2><i class="bi bi-life-preserver"></i>Limitation of Liability</h2>
+    <p>To the fullest extent permitted by law, Philippine Advent College is not liable for any loss or damage
+       arising from reliance on information provided by PAC Bot. Always confirm time‑sensitive or high‑stakes
+       information with the relevant school office.</p>
+  </section>
+
+  <section class="block">
+    <h2><i class="bi bi-envelope-fill"></i>Contact Us</h2>
+    <p>For questions about these Terms, please get in touch with PAC administration directly, or flag an issue
+       through the chat's 👎 feedback option so our team can review it.</p>
+  </section>
+</main>
+
+<footer>
+  © 2026 PAC Help Desk · <a href="/">Home</a> · <a href="/privacy">Privacy Policy</a>
+</footer>
+</body>
+</html>

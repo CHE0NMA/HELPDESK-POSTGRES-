@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PAC Help Desk</title>
+<link rel="icon" href="/static/uploads/logo.png" type="image/x-icon">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+<style>
+  :root {
+    --blue-deep:   #060f1e;
+    --blue-mid:    #0a1c38;
+    --blue-brand:  #1565c0;
+    --blue-bright: #1e88e5;
+    --blue-light:  #42a5f5;
+    --blue-glow:   #64b5f6;
+    --accent:      #00e5ff;
+    --text:        #e8f4fd;
+    --text-dim:    #7aa3c0;
+    --card-bg:     rgba(10,28,56,0.7);
+    --card-border: rgba(66,165,245,0.14);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+/* Scrollbar variables — put in :root */
+:root {
+  --scrollbar-track: rgba(255,255,255,0.05);
+  --scrollbar-thumb: rgba(255,255,255,0.15);
+}
+
+/* Light theme override */
+[data-bs-theme="light"] {
+  --scrollbar-track: rgba(0,0,0,0.05);
+  --scrollbar-thumb: rgba(0,0,0,0.15);
+}
+
+/* Scrollbar styles */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--scrollbar-track); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+[data-bs-theme="light"] ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--blue-deep);
+    color: var(--text);
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+
+  /* ── BACKGROUNDS ── */
+  .bg-layer {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(ellipse 70% 50% at 15% 5%,  rgba(21,101,192,.3) 0%, transparent 55%),
+      radial-gradient(ellipse 55% 45% at 85% 85%, rgba(0,229,255,.1)  0%, transparent 50%),
+      linear-gradient(180deg, #060f1e 0%, #091728 100%);
+  }
+
+  .grid-bg {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(66,165,245,.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(66,165,245,.035) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  /* ── HEADER ── */
+  header {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+    height: 62px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 2rem;
+    background: rgba(6,15,30,.88);
+    backdrop-filter: blur(18px);
+    border-bottom: 1px solid rgba(66,165,245,.1);
+  }
+
+  .logo-wrap {
+    display: flex; align-items: center; gap: .75rem;
+    text-decoration: none;
+    font-family: 'Sora', sans-serif; font-weight: 700; font-size: 1.05rem;
+    color: var(--text);
+  }
+
+  .logo-orb {
+    width: 36px; height: 36px; border-radius: 50%;
+    flex-shrink: 0; overflow: hidden;
+    box-shadow: 0 0 18px rgba(0,229,255,.35);
+  }
+
+  .logo-orb img { width: 100%; height: 100%; object-fit: cover; }
+
+  .hdr-btns { display: flex; align-items: center; gap: .6rem; }
+
+  .btn-hdr {
+    padding: .42rem 1.1rem; border-radius: 30px;
+    font-family: 'Sora', sans-serif; font-weight: 600; font-size: .8rem;
+    cursor: pointer; transition: all .2s;
+    text-decoration: none; display: inline-flex; align-items: center; gap: .4rem;
+    border: 1.5px solid rgba(66,165,245,.35);
+    color: var(--blue-glow); background: transparent;
+  }
+
+  .btn-hdr:hover { background: var(--blue-brand); color: #fff; border-color: var(--blue-brand); box-shadow: 0 0 18px rgba(30,136,229,.35); }
+  .btn-hdr.solid { background: var(--blue-brand); color: #fff; border-color: var(--blue-brand); }
+  .btn-hdr.solid:hover { background: var(--blue-bright); box-shadow: 0 0 22px rgba(30,136,229,.45); }
+
+  /* ── HERO ── */
+  .hero {
+    position: relative; z-index: 1;
+    min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 7rem 1.5rem 5rem;
+  }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: .5rem;
+    margin-bottom: 1.6rem;
+    background: rgba(0,229,255,.07);
+    border: 1px solid rgba(0,229,255,.22);
+    color: var(--accent); border-radius: 30px;
+    padding: .32rem .95rem; font-size: .75rem; font-weight: 700; letter-spacing: .06em;
+    animation: fd .7s ease both;
+  }
+
+  .badge .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent); animation: pulse 1.6s infinite;
+  }
+
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(1.5)} }
+
+  .hero h1 {
+    font-family: 'Sora', sans-serif; font-weight: 800;
+    font-size: clamp(2rem,6vw,3.8rem); line-height: 1.1;
+    margin-bottom: 1.2rem; animation: fd .7s .08s ease both;
+  }
+
+  .hero h1 .hi {
+    background: linear-gradient(90deg, var(--blue-light), var(--accent));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+
+  .hero p {
+    font-size: 1rem; color: var(--text-dim); max-width: 500px; line-height: 1.75;
+    margin-bottom: 2.2rem; animation: fd .7s .16s ease both;
+  }
+
+  .hero-cta {
+    display: flex; gap: .85rem; flex-wrap: wrap; justify-content: center;
+    animation: fd .7s .24s ease both;
+  }
+
+  .btn-prim {
+    padding: .7rem 1.8rem; border-radius: 40px;
+    background: linear-gradient(135deg, var(--blue-brand), var(--blue-bright));
+    color: #fff; border: none; cursor: pointer;
+    font-family: 'Sora', sans-serif; font-weight: 700; font-size: .9rem;
+    box-shadow: 0 6px 28px rgba(21,101,192,.45); transition: all .25s;
+    text-decoration: none; display: inline-flex; align-items: center; gap: .45rem;
+  }
+
+  .btn-prim:hover { transform: translateY(-2px); box-shadow: 0 12px 36px rgba(21,101,192,.55); color: #fff; }
+
+  .btn-out {
+    padding: .7rem 1.8rem; border-radius: 40px;
+    background: transparent; border: 1.5px solid rgba(66,165,245,.35);
+    color: var(--blue-glow); cursor: pointer;
+    font-family: 'Sora', sans-serif; font-weight: 600; font-size: .9rem;
+    transition: all .25s; text-decoration: none;
+    display: inline-flex; align-items: center; gap: .45rem;
+  }
+
+  .btn-out:hover { background: rgba(66,165,245,.1); border-color: var(--blue-glow); color: #fff; }
+
+  /* ── STATS ── */
+  .stats-row {
+    display: flex; gap: 2.5rem; margin-top: 3.5rem;
+    flex-wrap: wrap; justify-content: center;
+    animation: fd .7s .32s ease both;
+  }
+
+  .stat-num {
+    font-family: 'Sora', sans-serif; font-weight: 800; font-size: 1.55rem;
+    background: linear-gradient(90deg, var(--blue-light), var(--accent));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+
+  .stat-lbl { font-size: .75rem; color: var(--text-dim); margin-top: .15rem; }
+
+  /* ── SECTIONS ── */
+  section { position: relative; z-index: 1; }
+
+  .sec-head { text-align: center; margin-bottom: 2.5rem; }
+
+  .sec-tag {
+    display: inline-block; padding: .28rem .85rem; border-radius: 20px;
+    font-size: .7rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+    background: rgba(0,229,255,.07); border: 1px solid rgba(0,229,255,.18);
+    color: var(--accent); margin-bottom: .8rem;
+  }
+
+  .sec-head h2 {
+    font-family: 'Sora', sans-serif; font-weight: 700;
+    font-size: clamp(1.5rem,4vw,2.2rem); color: var(--text); margin-bottom: .6rem;
+  }
+
+  .sec-head p { color: var(--text-dim); font-size: .92rem; max-width: 460px; margin: 0 auto; }
+
+  /* ── HOW IT WORKS ── */
+  section.how { padding: 5rem 1.5rem 4rem; }
+
+  .steps {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(195px,1fr));
+    gap: 1.5rem; max-width: 820px; margin: 0 auto;
+  }
+
+  .step {
+    text-align: center; padding: 1.75rem 1.25rem;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 18px; backdrop-filter: blur(12px); transition: transform .3s;
+  }
+
+  .step:hover { transform: translateY(-4px); }
+
+  .step-n {
+    width: 50px; height: 50px; border-radius: 50%; margin: 0 auto .9rem;
+    background: linear-gradient(135deg, var(--blue-brand), var(--blue-bright));
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Sora', sans-serif; font-weight: 800; font-size: 1.05rem;
+    box-shadow: 0 0 18px rgba(21,101,192,.38);
+  }
+
+  .step h3 { font-family: 'Sora', sans-serif; font-weight: 700; font-size: .95rem; margin-bottom: .4rem; }
+  .step p  { font-size: .82rem; color: var(--text-dim); line-height: 1.6; }
+
+  /* ── FEATURED QUESTIONS ── */
+  section.featured { padding: 1rem 1.5rem 3.5rem; }
+
+  .featured-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(295px,1fr));
+    gap: .9rem; max-width: 1080px; margin: 0 auto;
+  }
+
+  .feat-card {
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 14px; padding: 1rem 1.15rem;
+    cursor: pointer; display: flex; align-items: center; gap: .85rem;
+    transition: all .25s; backdrop-filter: blur(12px); text-decoration: none;
+  }
+
+  .feat-card:hover {
+    background: rgba(21,101,192,.18); border-color: rgba(66,165,245,.3);
+    transform: translateY(-2px); box-shadow: 0 10px 28px rgba(0,0,0,.28);
+  }
+
+  .feat-icon {
+    width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: .95rem;
+    background: linear-gradient(135deg, var(--fi,var(--blue-brand)), rgba(255,255,255,.06));
+  }
+
+  .feat-text { flex: 1; min-width: 0; }
+
+  .feat-q {
+    font-size: .84rem; color: var(--text); font-weight: 500;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  .feat-cat { font-size: .7rem; color: var(--text-dim); margin-top: .14rem; }
+
+  .feat-arr { color: var(--blue-light); font-size: .78rem; flex-shrink: 0; opacity: 0; transition: opacity .2s; }
+  .feat-card:hover .feat-arr { opacity: 1; }
+
+  .feat-rank {
+    width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+    font-family: 'Sora', sans-serif; font-weight: 800; font-size: .68rem;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,.05); color: var(--text-dim);
+    border: 1px solid rgba(255,255,255,.08);
+  }
+
+  .feat-rank.gold   { background: rgba(255,193,7,.15);   color: #ffc107; border-color: rgba(255,193,7,.3); }
+  .feat-rank.silver { background: rgba(176,190,197,.12); color: #b0bec5; border-color: rgba(176,190,197,.25); }
+  .feat-rank.bronze { background: rgba(188,143,80,.12);  color: #bc8f50; border-color: rgba(188,143,80,.25); }
+
+  /* ── HANDBOOK SPOTLIGHT ── */
+  section.handbook { padding: 1rem 1.5rem 3.5rem; }
+
+  .hb-panel {
+    max-width: 1080px; margin: 0 auto;
+    display: grid; grid-template-columns: 1.1fr 1fr; gap: 0;
+    background: linear-gradient(135deg, rgba(21,101,192,.16), rgba(10,28,56,.75));
+    border: 1px solid rgba(66,165,245,.22);
+    border-radius: 22px; overflow: hidden;
+    backdrop-filter: blur(14px);
+    box-shadow: 0 18px 50px rgba(0,0,0,.3);
+  }
+
+  .hb-copy { padding: 2.1rem 2.2rem; }
+
+  .hb-icon-wrap {
+    width: 52px; height: 52px; border-radius: 14px; margin-bottom: 1.1rem;
+    background: linear-gradient(135deg, var(--blue-brand), var(--accent));
+    display: flex; align-items: center; justify-content: center; font-size: 1.4rem;
+    box-shadow: 0 6px 20px rgba(0,229,255,.22);
+  }
+
+  .hb-copy h3 { font-family: 'Sora', sans-serif; font-weight: 800; font-size: 1.35rem; margin-bottom: .55rem; }
+  .hb-copy p { font-size: .88rem; color: var(--text-dim); line-height: 1.7; margin-bottom: 1.3rem; max-width: 380px; }
+
+  .hb-stats { display: flex; gap: 1.6rem; margin-bottom: 1.5rem; }
+  .hb-stat-num {
+    font-family: 'Sora', sans-serif; font-weight: 800; font-size: 1.4rem;
+    background: linear-gradient(90deg, var(--blue-light), var(--accent));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .hb-stat-lbl { font-size: .72rem; color: var(--text-dim); }
+
+  .hb-questions {
+    padding: 1.6rem 1.9rem; background: rgba(6,15,30,.35);
+    border-left: 1px solid rgba(66,165,245,.14);
+    display: flex; flex-direction: column; gap: .55rem; justify-content: center;
+  }
+
+  .hb-q-item {
+    display: flex; align-items: center; gap: .65rem;
+    padding: .68rem .9rem; border-radius: 11px;
+    background: rgba(255,255,255,.03); border: 1px solid rgba(66,165,245,.12);
+    color: var(--text-dim); font-size: .82rem; text-decoration: none; transition: all .18s;
+  }
+  .hb-q-item:hover { background: rgba(21,101,192,.24); border-color: rgba(66,165,245,.3); color: var(--text); transform: translateX(3px); }
+  .hb-q-item i.bi-journal-bookmark-fill { color: var(--accent); font-size: .78rem; flex-shrink: 0; }
+  .hb-q-item .hb-arr { margin-left: auto; opacity: 0; transition: opacity .18s; font-size: .72rem; }
+  .hb-q-item:hover .hb-arr { opacity: 1; }
+
+  @media(max-width: 760px) {
+    .hb-panel { grid-template-columns: 1fr; }
+    .hb-questions { border-left: none; border-top: 1px solid rgba(66,165,245,.14); }
+  }
+
+  /* ── NEW & UPDATED ── */
+  section.whats-new { padding: 0 1.5rem 3.5rem; }
+
+  .new-outer { max-width: 1080px; margin: 0 auto; position: relative; }
+
+  .new-scroll {
+    display: flex; gap: .85rem; overflow-x: auto;
+    padding: .4rem .15rem 1rem; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .new-scroll::-webkit-scrollbar { display: none; }
+
+  .new-card {
+    flex-shrink: 0; width: 248px;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 14px; padding: .95rem 1.05rem;
+    text-decoration: none; transition: all .22s; cursor: pointer;
+    backdrop-filter: blur(12px); position: relative; overflow: hidden;
+  }
+
+  .new-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--nc,var(--blue-brand)), transparent);
+  }
+
+  .new-card:hover { transform: translateY(-3px); border-color: rgba(66,165,245,.28); box-shadow: 0 10px 28px rgba(0,0,0,.3); }
+
+  .new-chip {
+    display: inline-flex; align-items: center; gap: .3rem;
+    font-size: .66rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    padding: .16rem .52rem; border-radius: 20px; margin-bottom: .48rem;
+  }
+
+  .new-chip.isnew  { background: rgba(0,230,118,.1);  border: 1px solid rgba(0,230,118,.22); color: #69f0ae; }
+  .new-chip.updated{ background: rgba(64,196,255,.08); border: 1px solid rgba(64,196,255,.2);  color: var(--accent); }
+
+  .new-q {
+    font-size: .83rem; color: var(--text); font-weight: 500; line-height: 1.45;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+
+  .new-meta { font-size: .7rem; color: var(--text-dim); margin-top: .42rem; display: flex; align-items: center; gap: .35rem; }
+
+  .scroll-arrows { display: flex; justify-content: flex-end; gap: .45rem; max-width: 1080px; margin: .3rem auto 0; padding-right: .15rem; }
+
+  .sarr {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: rgba(255,255,255,.04); border: 1px solid var(--card-border);
+    color: var(--text-dim); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; font-size: .82rem; transition: all .2s;
+  }
+  .sarr:hover { background: var(--blue-brand); border-color: var(--blue-brand); color: #fff; }
+
+  /* ── CATEGORIES ── */
+  section.cats { padding: 2rem 1.5rem 6rem; }
+
+  .search-wrap { max-width: 540px; margin: 0 auto 2.5rem; position: relative; }
+
+  .srch {
+    width: 100%; padding: .85rem 1.2rem .85rem 3rem; border-radius: 40px;
+    border: 1.5px solid rgba(66,165,245,.18);
+    background: rgba(10,28,56,.7); color: var(--text);
+    font-family: 'DM Sans', sans-serif; font-size: .92rem;
+    backdrop-filter: blur(10px); outline: none; transition: all .2s;
+  }
+
+  .srch:focus { border-color: var(--blue-bright); box-shadow: 0 0 20px rgba(30,136,229,.18); }
+  .srch::placeholder { color: var(--text-dim); }
+
+  .srch-ico {
+    position: absolute; left: 1.05rem; top: 50%; transform: translateY(-50%);
+    color: var(--text-dim); font-size: .95rem; pointer-events: none;
+  }
+
+  .cat-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(285px,1fr));
+    gap: 1.35rem; max-width: 1080px; margin: 0 auto;
+  }
+
+  .cat-hidden { display: none !important; }
+
+  /* CAT CARD */
+  .cat-card {
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 18px; padding: 1.5rem;
+    transition: all .3s; backdrop-filter: blur(12px);
+    position: relative; overflow: hidden;
+  }
+
+  .cat-card::after {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2.5px;
+    background: linear-gradient(90deg, var(--cc,var(--blue-brand)), transparent);
+    opacity: 0; transition: opacity .3s;
+  }
+
+  .cat-card:hover, .cat-card.open {
+    transform: translateY(-4px); border-color: rgba(66,165,245,.3);
+    box-shadow: 0 18px 45px rgba(0,0,0,.35), 0 0 25px rgba(21,101,192,.12);
+  }
+
+  .cat-card:hover::after, .cat-card.open::after { opacity: 1; }
+
+  .cat-hdr { display: flex; align-items: flex-start; gap: .9rem; margin-bottom: .7rem; cursor: pointer; }
+
+  .cat-ico {
+    width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 1.2rem;
+    background: linear-gradient(135deg, var(--cc,var(--blue-brand)), rgba(255,255,255,.08));
+    box-shadow: 0 4px 14px rgba(0,0,0,.28);
+  }
+
+  .cat-info { flex: 1; }
+  .cat-name { font-family: 'Sora', sans-serif; font-weight: 700; font-size: .98rem; color: var(--text); margin-bottom: .12rem; }
+  .cat-cnt  { font-size: .73rem; color: var(--text-dim); }
+
+  .cat-tog {
+    width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+    background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.09);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-dim); font-size: .8rem; transition: all .3s; margin-top: 2px;
+  }
+
+  .cat-card.open .cat-tog { transform: rotate(180deg); background: var(--blue-brand); color: #fff; }
+
+  /* PREVIEW — 3 questions */
+  .q-preview { display: flex; flex-direction: column; gap: .32rem; margin-bottom: .6rem; }
+
+  .q-prev-item {
+    display: flex; align-items: center; gap: .5rem;
+    padding: .4rem .65rem; border-radius: 8px;
+    background: rgba(255,255,255,.025); border: 1px solid rgba(66,165,245,.06);
+    color: var(--text-dim); font-size: .8rem;
+    text-decoration: none; transition: all .18s;
+  }
+
+  .q-prev-item:hover { background: rgba(21,101,192,.2); border-color: rgba(66,165,245,.25); color: var(--text); }
+  .q-prev-item i     { color: var(--blue-light); font-size: .7rem; flex-shrink: 0; }
+
+  .q-prev-item span  { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* SEE MORE row */
+  .cat-more-row { display: flex; align-items: center; justify-content: space-between; margin-top: .15rem; }
+
+  .see-more {
+    display: inline-flex; align-items: center; gap: .32rem;
+    font-size: .75rem; color: var(--accent); font-weight: 600;
+    cursor: pointer; background: none; border: none; padding: 0;
+    font-family: 'DM Sans', sans-serif; transition: color .2s;
+  }
+  .see-more:hover { color: var(--blue-light); }
+
+  .cat-total-lbl { font-size: .7rem; color: var(--text-dim); }
+
+  /* FULL LIST */
+  .q-list-full {
+    display: none; flex-direction: column; gap: .35rem;
+    border-top: 1px solid rgba(66,165,245,.1); padding-top: .7rem; margin-top: .5rem;
+  }
+  .cat-card.open .q-list-full { display: flex; animation: sd .26s ease; }
+
+  @keyframes sd { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+
+  .q-item {
+    display: flex; align-items: center; gap: .6rem;
+    padding: .55rem .75rem; border-radius: 9px;
+    background: rgba(255,255,255,.03); border: 1px solid rgba(66,165,245,.07);
+    color: var(--text-dim); font-size: .82rem;
+    cursor: pointer; transition: all .2s; text-decoration: none;
+  }
+
+  .q-item:hover { background: rgba(21,101,192,.22); border-color: rgba(66,165,245,.28); color: var(--text); }
+  .q-item i.arr-l { color: var(--blue-light); font-size: .75rem; flex-shrink: 0; }
+
+  .q-arr { margin-left: auto; font-size: .68rem; color: var(--blue-bright); opacity: 0; transition: opacity .2s; }
+  .q-item:hover .q-arr { opacity: 1; }
+
+  /* FAB */
+  .fab {
+    position: fixed; bottom: 2rem; right: 2rem; z-index: 300;
+    width: 58px; height: 58px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--blue-brand), var(--accent));
+    border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.35rem; color: #fff; text-decoration: none;
+    box-shadow: 0 6px 28px rgba(0,0,0,.38); transition: all .3s;
+    animation: fabp 2.5s infinite;
+  }
+
+  .fab:hover { transform: scale(1.1); box-shadow: 0 10px 38px rgba(0,0,0,.45), 0 0 28px rgba(0,229,255,.25); }
+
+  @keyframes fabp {
+    0%,100%{ box-shadow: 0 6px 28px rgba(0,0,0,.38), 0 0 0 0 rgba(0,229,255,.38); }
+    50%    { box-shadow: 0 6px 28px rgba(0,0,0,.38), 0 0 0 13px rgba(0,229,255,0); }
+  }
+
+  .fab-tip {
+    position: absolute; right: 66px; top: 50%; transform: translateY(-50%);
+    background: rgba(10,28,56,.95); border: 1px solid rgba(66,165,245,.25);
+    padding: .38rem .8rem; border-radius: 8px;
+    white-space: nowrap; font-size: .78rem; color: var(--text);
+    opacity: 0; pointer-events: none; transition: opacity .2s;
+  }
+  .fab:hover .fab-tip { opacity: 1; }
+
+  footer {
+    position: relative; z-index: 1; text-align: center; padding: 1.75rem;
+    border-top: 1px solid rgba(66,165,245,.08); color: var(--text-dim); font-size: .8rem;
+  }
+  footer .footer-links { margin-top: .5rem; display: flex; gap: 1.1rem; justify-content: center; }
+  footer .footer-links a { color: var(--text-dim); text-decoration: none; font-size: .78rem; transition: color .2s; }
+  footer .footer-links a:hover { color: var(--blue-glow); }
+
+  /* SKELETONS */
+  .skel {
+    background: linear-gradient(90deg, rgba(255,255,255,.04) 25%, rgba(255,255,255,.08) 50%, rgba(255,255,255,.04) 75%);
+    background-size: 200% 100%; animation: shim 1.4s infinite; border-radius: 9px;
+  }
+
+  @keyframes shim { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+  .skel-feat { height: 56px; border-radius: 14px; }
+  .skel-new  { height: 108px; width: 248px; flex-shrink: 0; border-radius: 14px; }
+  .skel-cat  { height: 120px; border-radius: 18px; }
+
+  /* REVEAL */
+  @keyframes fd { from{opacity:0;transform:translateY(-14px)} to{opacity:1;transform:translateY(0)} }
+
+  .rv { opacity: 0; transform: translateY(20px); transition: opacity .55s ease, transform .55s ease; }
+  .rv.vis { opacity: 1; transform: translateY(0); }
+
+  /* EMPTY STATES */
+  .empty-state {
+    grid-column: 1 / -1; text-align: center; padding: 3rem 1.5rem;
+    color: var(--text-dim);
+  }
+
+  .empty-state i { font-size: 2.2rem; display: block; margin-bottom: .75rem; opacity: .4; }
+  .empty-state p { font-size: .9rem; line-height: 1.6; }
+  .empty-state a { color: var(--blue-light); text-decoration: none; font-weight: 600; }
+  .empty-state a:hover { color: var(--accent); }
+
+  @media(max-width:600px) {
+    header { padding: 0 1rem; }
+    .btn-hdr span { display: none; }
+    .hero { padding: 6rem 1rem 4rem; }
+    .stats-row { gap: 1.5rem; }
+    .fab { bottom: 1.5rem; right: 1.5rem; }
+    .featured-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-layer"></div>
+<div class="grid-bg"></div>
+
+<header>
+  <a href="/" class="logo-wrap">
+    <div class="logo-orb"><img src="/static/uploads/logo.png" alt="School Logo"></div>
+    <span>PAC Help Desk</span>
+  </a>
+  <div class="hdr-btns">
+    <a href="/admin" class="btn-hdr"><i class="bi bi-shield-lock"></i><span>Admin</span></a>
+    <a href="/chat"  class="btn-hdr solid"><i class="bi bi-chat-dots-fill"></i><span>Open Chat</span></a>
+  </div>
+</header>
+
+<!-- ── HERO ── -->
+<section class="hero">
+  <div class="badge"><span class="dot"></span>School Help Center · Available 24/7</div>
+  <h1>Got a School Question?<br><span class="hi">We've Got Answers.</span></h1>
+  <p>Browse concerns by topic, look up a Student Handbook policy, or jump into the chat for instant, guided answers to anything school-related.</p>
+  <div class="hero-cta">
+    <a href="#categories" class="btn-prim"><i class="bi bi-grid-fill"></i>Browse Topics</a>
+    <a href="/chat"       class="btn-out"><i class="bi bi-chat-dots"></i>Start Chatting</a>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat">
+      <div class="stat-num" id="faqCount">—</div>
+      <div class="stat-lbl">Questions Ready</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num" id="catCount">—</div>
+      <div class="stat-lbl">Topic Categories</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num" id="handbookCount">—</div>
+      <div class="stat-lbl">Handbook Sections</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num" id="visitorCount">—</div>
+      <div class="stat-lbl">Students Helped</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num" id="todayCount">—</div>
+      <div class="stat-lbl">Active Today</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">24/7</div>
+      <div class="stat-lbl">Always Available</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── HOW IT WORKS ── -->
+<section class="how">
+  <div class="sec-head rv">
+    <div class="sec-tag">How It Works</div>
+    <h2>Three Ways to Get Help</h2>
+    <p>Pick the approach that fits your situation</p>
+  </div>
+  <div class="steps">
+    <div class="step rv" style="transition-delay:.05s">
+      <div class="step-n">1</div>
+      <h3>Browse Topics</h3>
+      <p>Find questions organized by school department — no typing needed.</p>
+    </div>
+    <div class="step rv" style="transition-delay:.12s">
+      <div class="step-n">2</div>
+      <h3>Pick a Question</h3>
+      <p>Tap any guided question to get sent to chat with it pre-filled.</p>
+    </div>
+    <div class="step rv" style="transition-delay:.19s">
+      <div class="step-n">3</div>
+      <h3>Ask Freely</h3>
+      <p>Have something specific? Open the chat and type anything you need — including Handbook rules.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── FEATURED ── -->
+<section class="featured rv" id="featured">
+  <div class="sec-head">
+    <div class="sec-tag" style="background:rgba(255,160,0,.08);border-color:rgba(255,160,0,.22);color:#ffa000">🔥 Most Popular</div>
+    <h2>Featured Questions</h2>
+    <p>What students ask the most — tap any to get your answer instantly.</p>
+  </div>
+  <div class="featured-grid" id="featuredGrid">
+    <div class="skel skel-feat"></div>
+    <div class="skel skel-feat"></div>
+    <div class="skel skel-feat"></div>
+    <div class="skel skel-feat"></div>
+    <div class="skel skel-feat"></div>
+    <div class="skel skel-feat"></div>
+  </div>
+</section>
+
+<!-- ── HANDBOOK SPOTLIGHT ── -->
+<section class="handbook rv" id="handbook">
+  <div class="sec-head">
+    <div class="sec-tag" style="background:rgba(0,229,255,.08);border-color:rgba(0,229,255,.22);color:var(--accent)">📖 Student Handbook</div>
+    <h2>Know the Rules Before You Need Them</h2>
+    <p>PAC Bot has the full Student Handbook on hand — ask about policies, discipline, or the dress code any time.</p>
+  </div>
+  <div class="hb-panel">
+    <div class="hb-copy">
+      <div class="hb-icon-wrap"><i class="bi bi-journal-bookmark-fill"></i></div>
+      <h3>Handbook Q&amp;A, built right in</h3>
+      <p>No more digging through a printed handbook. Ask PAC Bot in plain English, Tagalog, or Bisaya and get a
+         direct answer sourced from the official Student Handbook — with the section it came from.</p>
+      <div class="hb-stats">
+        <div>
+          <div class="hb-stat-num" id="hbChunkCount">—</div>
+          <div class="hb-stat-lbl">Handbook sections indexed</div>
+        </div>
+        <div>
+          <div class="hb-stat-num" id="hbChapterCount">—</div>
+          <div class="hb-stat-lbl">Chapters covered</div>
+        </div>
+      </div>
+      <a href="/chat?q=What%20are%20the%20grounds%20for%20suspension%3F" class="btn-prim">
+        <i class="bi bi-journal-bookmark-fill"></i>Ask the Handbook
+      </a>
+    </div>
+    <div class="hb-questions" id="hbQuestions">
+      <a class="hb-q-item" href="/chat?q=What%20is%20the%20dress%20code%20policy%3F">
+        <i class="bi bi-journal-bookmark-fill"></i><span>What is the dress code policy?</span>
+        <i class="bi bi-arrow-right hb-arr"></i>
+      </a>
+      <a class="hb-q-item" href="/chat?q=What%20counts%20as%20a%20disciplinary%20violation%3F">
+        <i class="bi bi-journal-bookmark-fill"></i><span>What counts as a disciplinary violation?</span>
+        <i class="bi bi-arrow-right hb-arr"></i>
+      </a>
+      <a class="hb-q-item" href="/chat?q=What%20is%20the%20attendance%20and%20tardiness%20policy%3F">
+        <i class="bi bi-journal-bookmark-fill"></i><span>What's the attendance &amp; tardiness policy?</span>
+        <i class="bi bi-arrow-right hb-arr"></i>
+      </a>
+      <a class="hb-q-item" href="/chat?q=What%20are%20the%20grounds%20for%20suspension%20or%20expulsion%3F">
+        <i class="bi bi-journal-bookmark-fill"></i><span>Grounds for suspension or expulsion?</span>
+        <i class="bi bi-arrow-right hb-arr"></i>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ── NEW & UPDATED ── -->
+<section class="whats-new rv" id="whatsNew">
+  <div class="sec-head">
+    <div class="sec-tag" style="background:rgba(0,230,118,.07);border-color:rgba(0,230,118,.2);color:#69f0ae">✨ Recently Added</div>
+    <h2>New &amp; Updated</h2>
+    <p>Fresh answers just added — scroll to see what's new.</p>
+  </div>
+  <div class="new-outer">
+    <div class="new-scroll" id="newScroll">
+      <div class="skel skel-new"></div>
+      <div class="skel skel-new"></div>
+      <div class="skel skel-new"></div>
+      <div class="skel skel-new"></div>
+      <div class="skel skel-new"></div>
+    </div>
+    <div class="scroll-arrows">
+      <button class="sarr" onclick="scrollNew(-1)"><i class="bi bi-chevron-left"></i></button>
+      <button class="sarr" onclick="scrollNew(1)"><i class="bi bi-chevron-right"></i></button>
+    </div>
+  </div>
+</section>
+
+<!-- ── CATEGORIES ── -->
+<section class="cats" id="categories">
+  <div class="sec-head rv">
+    <div class="sec-tag">Browse by Topic</div>
+    <h2>What Do You Need Help With?</h2>
+    <p>3 questions shown per category — click a card to expand all.</p>
+  </div>
+  <div class="search-wrap rv">
+    <i class="bi bi-search srch-ico"></i>
+    <input class="srch" id="srch" type="text" placeholder="Search topics or questions…">
+  </div>
+  <div class="cat-grid" id="catGrid">
+    <div class="skel skel-cat"></div>
+    <div class="skel skel-cat"></div>
+    <div class="skel skel-cat"></div>
+    <div class="skel skel-cat"></div>
+    <div class="skel skel-cat"></div>
+    <div class="skel skel-cat"></div>
+  </div>
+  <div id="seeAllWrap" style="display:none;text-align:center;margin-top:2rem">
+    <button id="seeAllBtn" onclick="toggleAllCats()" class="btn-out" style="gap:.55rem">
+      <i class="bi bi-grid" id="seeAllIcon"></i>
+      <span id="seeAllText">See All Topics</span>
+    </button>
+  </div>
+</section>
+
+<footer>
+  © 2026 PAC Help Desk · Built to make school life easier
+  <div class="footer-links">
+    <a href="/privacy">Privacy Policy</a>
+    <a href="/terms">Terms of Use</a>
+    <a href="/chat">Open Chat</a>
+  </div>
+</footer>
+
+<a href="/chat" class="fab">
+  <i class="bi bi-chat-dots-fill"></i>
+  <span class="fab-tip">Open Chat</span>
+</a>
+
+<script>
+/* ── Category metadata ── */
+const CAT_META = {
+  finance:    { icon: '💳', color: '#0288d1' },
+  registrar:  { icon: '📄', color: '#00838f' },
+  tes:        { icon: '🎓', color: '#2e7d32' },
+  admission:  { icon: '🏫', color: '#4527a0' },
+  scholarship:{ icon: '🏅', color: '#e65100' },
+  enrollment: { icon: '📝', color: '#00695c' },
+  grades:     { icon: '📊', color: '#1565c0' },
+  library:    { icon: '📚', color: '#6a1b9a' },
+  schedule:   { icon: '🗓️', color: '#283593' },
+  clearance:  { icon: '✅', color: '#2e7d32' },
+  payment:    { icon: '💰', color: '#f57f17' },
+  id:         { icon: '🪪', color: '#37474f' },
+  events:     { icon: '🎉', color: '#880e4f' },
+  sports:     { icon: '⚽', color: '#1b5e20' },
+  health:     { icon: '🏥', color: '#b71c1c' },
+  wifi:       { icon: '📶', color: '#0d47a1' },
+  portal:     { icon: '🖥️', color: '#4a148c' },
+  tor:        { icon: '📜', color: '#bf360c' },
+  diploma:    { icon: '🎓', color: '#1a237e' },
+  handbook:   { icon: '📖', color: '#00acc1' },
+  rules:      { icon: '📖', color: '#00acc1' },
+  discipline: { icon: '⚖️', color: '#5d4037' },
+  default:    { icon: '📋', color: '#1565c0' },
+};
+
+function meta(c) {
+  const k = (c || '').toLowerCase();
+  for (const m in CAT_META) if (k.includes(m)) return CAT_META[m];
+  return CAT_META.default;
+}
+
+function cap(s) {
+  if (!s) return '';
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
+
+/* ── Animated counter ── */
+function animateCount(el, target, suffix = '') {
+  if (!el || isNaN(target)) return;
+  const duration = 1200, start = performance.now(), from = 0;
+  function step(now) {
+    const progress = Math.min((now - start) / duration, 1);
+    const ease = 1 - Math.pow(1 - progress, 3);
+    el.textContent = Math.round(from + (target - from) * ease) + suffix;
+    if (progress < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+/* ── Intersection observer for .rv ── */
+function observe() {
+  const ob = new IntersectionObserver(es => {
+    es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('vis'); ob.unobserve(e.target); } });
+  }, { threshold: .08 });
+  document.querySelectorAll('.rv:not(.vis)').forEach(el => ob.observe(el));
+}
+
+/* ── Visitor stats ── */
+async function loadVisitorStats() {
+  try {
+    const r = await fetch('/api/visitor_stats');
+    if (!r.ok) return;
+    const d = await r.json();
+    animateCount(document.getElementById('visitorCount'), d.total_visitors || 0, '+');
+    animateCount(document.getElementById('todayCount'),   d.today_visitors || 0);
+  } catch {}
+}
+
+/* ── Handbook stats (gracefully hides the panel if the endpoint isn't set up yet) ── */
+async function loadHandbookStats() {
+  const section = document.getElementById('handbook');
+  try {
+    const r = await fetch('/api/handbook_stats');
+    if (!r.ok) throw new Error('not available');
+    const d = await r.json();
+    const chunks   = d.chunk_count   ?? 0;
+    const chapters = d.chapter_count ?? 0;
+    if (!chunks) { section.style.display = 'none'; document.getElementById('handbookCount').closest('.stat').style.display = 'none'; return; }
+    animateCount(document.getElementById('handbookCount'),  chunks);
+    animateCount(document.getElementById('hbChunkCount'),   chunks);
+    animateCount(document.getElementById('hbChapterCount'), chapters);
+  } catch {
+    // Endpoint not wired up yet — hide the live counters but keep the
+    // handbook spotlight section (it still links out to the chat).
+    const hcStat = document.getElementById('handbookCount');
+    if (hcStat && hcStat.closest('.stat')) hcStat.closest('.stat').style.display = 'none';
+    const chunkEl = document.getElementById('hbChunkCount');
+    const chapEl  = document.getElementById('hbChapterCount');
+    if (chunkEl) chunkEl.textContent = '24/7';
+    if (chapEl)  chapEl.textContent  = 'Ready';
+  }
+}
+
+/* ── Featured questions ── */
+async function loadFeatured() {
+  const grid = document.getElementById('featuredGrid');
+  let items = [];
+
+  try {
+    const r = await fetch('/api/featured');
+    if (r.ok) items = await r.json();
+  } catch {}
+
+  if (!items.length) {
+    try {
+      const r = await fetch('/suggested_questions');
+      const d = await r.json();
+      items = (d.questions || d || []).slice(0, 6).map(q => ({
+        question: q.user_message || q.question || q,
+        category: q.topic_tag   || q.category   || ''
+      }));
+    } catch {}
+  }
+
+  grid.innerHTML = '';
+
+  if (!items.length) {
+    grid.innerHTML = `
+      <div class="empty-state">
+        <i class="bi bi-chat-square-dots"></i>
+        <p>No featured questions yet.<br>
+           <a href="/chat">Open the chat</a> to ask anything.</p>
+      </div>`;
+    return;
+  }
+
+  const rankClass = ['gold', 'silver', 'bronze'];
+  items.slice(0, 6).forEach((item, i) => {
+    const m = meta(item.category);
+    const a = document.createElement('a');
+    a.className = 'feat-card rv';
+    a.href = `/chat?q=${encodeURIComponent(item.question)}`;
+    a.style.transitionDelay = (i * .055) + 's';
+    const rc = i < 3 ? rankClass[i] : '';
+    a.innerHTML = `
+      <div class="feat-rank ${rc}">${i + 1}</div>
+      <div class="feat-icon" style="--fi:${m.color}">${m.icon}</div>
+      <div class="feat-text">
+        <div class="feat-q">${escHtml(item.question)}</div>
+        <div class="feat-cat">${cap(item.category || 'General')}</div>
+      </div>
+      <i class="bi bi-arrow-right feat-arr"></i>`;
+    grid.appendChild(a);
+  });
+  observe();
+}
+
+/* ── New & Updated ── */
+async function loadNew() {
+  const scroll = document.getElementById('newScroll');
+  let items = [];
+  try {
+    const r = await fetch('/api/recent');
+    if (r.ok) items = await r.json();
+  } catch {}
+
+  scroll.innerHTML = '';
+
+  if (!items.length) {
+    scroll.innerHTML = `<p style="color:var(--text-dim);padding:1.5rem 0;flex-shrink:0">No recent updates yet.</p>`;
+    return;
+  }
+
+  items.forEach(item => {
+    const m    = meta(item.category);
+    const card = document.createElement('a');
+    card.className = 'new-card';
+    card.href = `/chat?q=${encodeURIComponent(item.question)}`;
+    card.style.setProperty('--nc', m.color);
+    const ago = item.days_ago === 0 ? 'Today' : item.days_ago + 'd ago';
+    card.innerHTML = `
+      <div class="new-chip ${item.is_new ? 'isnew' : 'updated'}">${item.is_new ? '🟢 New' : '🔵 Updated'}</div>
+      <div class="new-q">${escHtml(item.question)}</div>
+      <div class="new-meta">${m.icon} <span>${cap(item.category || 'General')}</span> · <span>${ago}</span></div>`;
+    scroll.appendChild(card);
+  });
+}
+
+function scrollNew(d) {
+  document.getElementById('newScroll').scrollBy({ left: d * 264, behavior: 'smooth' });
+}
+
+/* ── Category cards ── */
+function buildCard(cat, questions) {
+  const m    = meta(cat);
+  const card = document.createElement('div');
+  card.className = 'cat-card rv';
+  card.style.setProperty('--cc', m.color);
+  card.dataset.cat = cat.toLowerCase();
+  card.dataset.qs  = questions.map(q => q.question.toLowerCase()).join(' ');
+
+  const PREVIEW = 3;
+  const prev    = questions.slice(0, PREVIEW);
+  const rest    = questions.slice(PREVIEW);
+  const total   = questions.length;
+
+  const prevHTML = prev.map(q => `
+    <a class="q-prev-item" href="/chat?q=${encodeURIComponent(q.question)}">
+      <i class="bi bi-arrow-right-circle-fill"></i>
+      <span>${escHtml(q.question)}</span>
+    </a>`).join('');
+
+  const restHTML = rest.map(q => `
+    <a class="q-item" href="/chat?q=${encodeURIComponent(q.question)}">
+      <i class="bi bi-arrow-right-circle-fill arr-l"></i>
+      <span>${escHtml(q.question)}</span>
+      <i class="bi bi-box-arrow-up-right q-arr"></i>
+    </a>`).join('');
+
+  card.innerHTML = `
+    <div class="cat-hdr">
+      <div class="cat-ico">${m.icon}</div>
+      <div class="cat-info">
+        <div class="cat-name">${cap(cat)}</div>
+        <div class="cat-cnt">${total} question${total !== 1 ? 's' : ''}</div>
+      </div>
+      <div class="cat-tog"><i class="bi bi-chevron-down"></i></div>
+    </div>
+    <div class="q-preview">${prevHTML}</div>
+    <div class="cat-more-row">
+      ${rest.length
+        ? `<button class="see-more" onclick="toggleCard(event,this)">
+             <i class="bi bi-plus-circle"></i> ${rest.length} more
+           </button>`
+        : '<span></span>'}
+      <span class="cat-total-lbl">${total} total</span>
+    </div>
+    ${rest.length ? `<div class="q-list-full">${restHTML}</div>` : ''}`;
+
+  card.querySelector('.cat-hdr').addEventListener('click', e => {
+    const btn = card.querySelector('.see-more');
+    if (btn) toggleCard(e, btn);
+  });
+
+  return card;
+}
+
+function toggleCard(e, btn) {
+  e.stopPropagation();
+  const card = btn.closest('.cat-card');
+  const open = card.classList.toggle('open');
+  const n    = card.querySelectorAll('.q-list-full .q-item').length;
+  btn.innerHTML = open
+    ? '<i class="bi bi-dash-circle"></i> Show less'
+    : `<i class="bi bi-plus-circle"></i> ${n} more`;
+}
+
+const CAT_LIMIT = 6;
+let catsExpanded = false;
+
+async function loadCats() {
+  try {
+    const r    = await fetch('/api/categories');
+    const data = await r.json();
+    const grid = document.getElementById('catGrid');
+    grid.innerHTML = '';
+    const cats = Object.keys(data);
+
+    animateCount(document.getElementById('faqCount'),
+      Object.values(data).reduce((a, b) => a + b.length, 0));
+    animateCount(document.getElementById('catCount'), cats.length);
+
+    if (!cats.length) {
+      grid.innerHTML = `
+        <div class="empty-state">
+          <i class="bi bi-inbox"></i>
+          <p>No categories yet.<br>
+             <a href="/chat">Open chat instead</a>.</p>
+        </div>`;
+      return;
+    }
+
+    cats.forEach((c, i) => {
+      const card = buildCard(c, data[c]);
+      card.style.transitionDelay = (i * .05) + 's';
+      if (i >= CAT_LIMIT) card.classList.add('cat-hidden');
+      grid.appendChild(card);
+    });
+
+    if (cats.length > CAT_LIMIT) {
+      const wrap = document.getElementById('seeAllWrap');
+      wrap.style.display = 'block';
+      document.getElementById('seeAllText').textContent = `See All ${cats.length} Topics`;
+    }
+    observe();
+  } catch {
+    document.getElementById('catGrid').innerHTML = `
+      <div class="empty-state">
+        <i class="bi bi-exclamation-circle"></i>
+        <p>Could not load categories.<br>
+           <a href="/chat">Open chat instead</a>.</p>
+      </div>`;
+  }
+}
+
+function toggleAllCats() {
+  catsExpanded = !catsExpanded;
+  document.querySelectorAll('.cat-card[data-cat]').forEach(c => {
+    if (c.classList.contains('cat-hidden')) {
+      c.style.display = catsExpanded ? '' : 'none';
+    }
+  });
+  document.getElementById('seeAllIcon').className = catsExpanded ? 'bi bi-grid-fill' : 'bi bi-grid';
+  document.getElementById('seeAllText').textContent = catsExpanded
+    ? 'Show Less'
+    : `See All ${document.querySelectorAll('.cat-card[data-cat]').length} Topics`;
+  if (catsExpanded) observe();
+}
+
+/* ── Search ── */
+document.getElementById('srch').addEventListener('input', function () {
+  const q = this.value.toLowerCase().trim();
+  document.querySelectorAll('.cat-card[data-cat]').forEach(card => {
+    const match = !q || card.dataset.cat.includes(q) || card.dataset.qs.includes(q);
+    if (q) {
+      card.style.display = match ? '' : 'none';
+    } else {
+      card.style.display = (!catsExpanded && card.classList.contains('cat-hidden')) ? 'none' : '';
+    }
+    if (q && match) {
+      card.classList.add('open');
+      const btn = card.querySelector('.see-more');
+      if (btn) btn.innerHTML = '<i class="bi bi-dash-circle"></i> Show less';
+    } else if (!q) {
+      card.classList.remove('open');
+      const btn = card.querySelector('.see-more');
+      if (btn) {
+        const n = card.querySelectorAll('.q-list-full .q-item').length;
+        btn.innerHTML = `<i class="bi bi-plus-circle"></i> ${n} more`;
+      }
+    }
+  });
+
+  document.getElementById('seeAllWrap').style.display = q ? 'none'
+    : (document.querySelectorAll('.cat-card[data-cat]').length > CAT_LIMIT ? 'block' : 'none');
+});
+
+/* ── Tiny HTML escaper ── */
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/* ── Boot ── */
+window.addEventListener('DOMContentLoaded', () => {
+  observe();
+  loadFeatured();
+  loadNew();
+  loadCats();
+  loadVisitorStats();
+  loadHandbookStats();
+});
+</script>
+</body>
+</html>

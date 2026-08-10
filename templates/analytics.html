@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <script>document.documentElement.setAttribute('data-bs-theme', localStorage.getItem('theme') || 'dark');</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<title>PAC Admin — Analytics</title>
+<link rel="icon" href="/static/uploads/logo.png" type="image/x-icon">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+* { box-sizing: border-box; }
+:root {
+  --bg:#0a1628; --brand:#1a73e8; --brand2:#4dabf7; --accent:#00e5ff; --accent2:#66d9f7;
+  --text:#e8f0f8; --text-dim:#a8c8e8; --muted:#8ba9cc; --card:rgba(15,31,58,.85);
+  --border:rgba(77,171,247,.15); --border2:rgba(77,171,247,.25); --sidebar:260px;
+  --success:#51cf66; --warning:#fcc419; --danger:#ff6b6b;
+  --cache-metric-bg:rgba(14,32,64,.6); --satisfaction-badge-bg:rgba(14,32,64,.6);
+  --toast-bg:rgba(10,28,56,.97);
+}
+[data-bs-theme="light"] {
+  --bg:#eef2f7; --text:#1a2a3a; --text-dim:#4a6a8a; --muted:#6a8aaa; --card:rgba(255,255,255,.92);
+  --border:rgba(26,115,232,.15); --border2:rgba(26,115,232,.25);
+  --cache-metric-bg:rgba(220,227,237,.6); --satisfaction-badge-bg:rgba(220,227,237,.6);
+  --toast-bg:rgba(255,255,255,.97);
+}
+body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); margin:0; min-height:100vh; }
+.bg-mesh { position:fixed; inset:0; pointer-events:none; z-index:0;
+  background:radial-gradient(ellipse 60% 50% at 5% 0%,rgba(26,115,232,.15) 0%,transparent 55%),
+             radial-gradient(ellipse 40% 40% at 95% 100%,rgba(0,229,255,.06) 0%,transparent 50%); }
+[data-bs-theme="light"] .bg-mesh { opacity:.25; }
+.bg-grid { position:fixed; inset:0; pointer-events:none; z-index:0;
+  background-image:linear-gradient(rgba(77,171,247,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(77,171,247,.03) 1px,transparent 1px);
+  background-size:44px 44px; }
+.sidebar { position:fixed; top:0; left:0; bottom:0; width:var(--sidebar); z-index:200;
+  background:rgba(8,16,32,.97); backdrop-filter:blur(20px); border-right:1px solid var(--border);
+  display:flex; flex-direction:column; transition:transform .28s ease, background .3s; }
+[data-bs-theme="light"] .sidebar { background:rgba(255,255,255,.95); }
+.sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:150; backdrop-filter:blur(2px); }
+.sidebar-overlay.show { display:block; }
+.sidebar-toggle { display:none; background:rgba(10,30,50,.8); border:1.5px solid var(--border); border-radius:11px;
+  padding:.4rem .6rem; color:var(--text-dim); font-size:1.15rem; cursor:pointer; align-items:center; justify-content:center; }
+.sidebar-toggle:hover { border-color:var(--accent); color:var(--text); }
+[data-bs-theme="light"] .sidebar-toggle { background:rgba(0,0,0,.05); }
+.theme-toggle-sidebar { display:flex; align-items:center; justify-content:space-between; gap:.65rem;
+  padding:.6rem .85rem; border-radius:11px; color:var(--text-dim); font-size:.85rem; cursor:pointer;
+  background:none; border:1px solid transparent; width:100%; margin-bottom:.4rem; transition:all .2s; }
+.theme-toggle-sidebar:hover { background:rgba(26,115,232,.12); border-color:rgba(77,171,247,.15); color:var(--text); }
+.theme-toggle-sidebar .theme-switch-label { display:flex; align-items:center; gap:.65rem; }
+.sidebar-brand { padding:1.5rem 1.35rem 1.25rem; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:.75rem; }
+.brand-orb { width:38px; height:38px; border-radius:50%; overflow:hidden; flex-shrink:0; box-shadow:0 0 0 2px rgba(0,229,255,.3),0 0 14px rgba(0,229,255,.2); }
+.brand-orb img { width:100%; height:100%; object-fit:cover; display:block; }
+.brand-text { font-family:'Sora',sans-serif; font-weight:800; font-size:.95rem; }
+.brand-sub { font-size:.7rem; color:var(--text-dim); }
+.sidebar-nav { flex:1; padding:1rem .75rem; overflow-y:auto; }
+.nav-section { font-size:.67rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); padding:.35rem .6rem; margin:.85rem 0 .35rem; }
+.nav-section:first-child { margin-top:0; }
+.nav-link { display:flex; align-items:center; gap:.7rem; padding:.65rem .85rem; border-radius:11px; color:var(--text-dim); text-decoration:none; font-size:.88rem; font-weight:500; margin-bottom:.2rem; border:1px solid transparent; transition:all .2s; }
+.nav-link i { width:20px; text-align:center; }
+.nav-link:hover { background:rgba(26,115,232,.18); color:var(--text); }
+.nav-link.active { background:linear-gradient(135deg,rgba(26,115,232,.35),rgba(77,171,247,.2)); border-color:rgba(77,171,247,.3); color:#fff; }
+[data-bs-theme="light"] .nav-link.active { background:linear-gradient(135deg,rgba(26,115,232,.15),rgba(77,171,247,.1)); color:var(--brand); }
+.nav-badge { margin-left:auto; padding:.2rem .55rem; border-radius:20px; font-size:.7rem; font-weight:700; }
+.badge-red { background:rgba(255,82,82,.2); color:var(--danger); border:1px solid rgba(255,82,82,.3); }
+.badge-yellow { background:rgba(255,202,40,.15); color:var(--warning); border:1px solid rgba(255,202,40,.3); }
+.sidebar-footer { padding:1rem .75rem 1.25rem; border-top:1px solid var(--border); }
+.logout-btn { display:flex; align-items:center; gap:.65rem; padding:.6rem .85rem; border-radius:11px; color:var(--text-dim); text-decoration:none; font-size:.85rem; background:none; border:1px solid transparent; width:100%; margin-bottom:.4rem; cursor:pointer; }
+.logout-btn:hover { background:rgba(255,82,82,.1); color:#ff6b6b; }
+.main { margin-left:var(--sidebar); min-height:100vh; position:relative; z-index:1; }
+.topbar { height:58px; display:flex; align-items:center; justify-content:space-between; padding:0 1.75rem;
+  background:rgba(8,16,32,.88); backdrop-filter:blur(18px); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:50; }
+[data-bs-theme="light"] .topbar { background:rgba(255,255,255,.9); }
+.topbar-title { font-family:'Sora',sans-serif; font-weight:700; font-size:1rem; display:flex; align-items:center; gap:.55rem; }
+.page-body { padding:1.75rem; }
+.btn-refresh { display:inline-flex; align-items:center; gap:.4rem; padding:.45rem .7rem; border-radius:11px;
+  background:rgba(26,115,232,.15); border:1.5px solid var(--border2); color:var(--accent2); font-weight:600; font-size:.82rem; cursor:pointer; }
+.btn-refresh:hover { background:var(--brand); color:#fff; border-color:var(--brand); }
+
+.stats-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:1rem; margin-bottom:1.5rem; }
+.stat-card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:1.25rem; position:relative; overflow:hidden; transition:transform .25s; backdrop-filter:blur(12px); }
+.stat-card:hover { transform:translateY(-2px); }
+.stat-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,var(--sc,var(--brand)),transparent); }
+.stat-val { font-family:'Sora',sans-serif; font-weight:800; font-size:1.8rem; background:linear-gradient(90deg,var(--accent2),var(--accent)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; line-height:1; }
+.stat-lbl { font-size:.78rem; color:var(--text-dim); margin-top:.35rem; }
+.stat-ico { position:absolute; right:1rem; top:1rem; font-size:1.5rem; opacity:.2; }
+
+.chart-container { position:relative; height:280px; width:100%; margin-top:.5rem; }
+.chart-title { font-family:'Sora',sans-serif; font-weight:700; font-size:.9rem; color:var(--text); margin-bottom:.5rem; display:flex; align-items:center; gap:.5rem; }
+
+.cache-stats-card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:1.25rem; margin-bottom:1.5rem; }
+.cache-stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:1rem; margin-top:.75rem; }
+.cache-metric { background:var(--cache-metric-bg); border-radius:12px; padding:.75rem; text-align:center; }
+.cache-metric-value { font-family:'Sora',sans-serif; font-weight:800; font-size:1.35rem; color:var(--accent2); }
+.cache-metric-label { font-size:.7rem; color:var(--text-dim); margin-top:.25rem; }
+
+.satisfaction-stats { display:flex; gap:1rem; justify-content:center; margin-top:.75rem; flex-wrap:wrap; }
+.satisfaction-badge { display:flex; align-items:center; gap:.5rem; padding:.5rem 1rem; border-radius:30px; background:var(--satisfaction-badge-bg); }
+.thumbs-up { color:#51cf66; }
+.thumbs-down { color:#ff6b6b; }
+
+.toast-wrap { position:fixed; bottom:20px; right:20px; z-index:9999; display:flex; flex-direction:column; gap:.5rem; }
+.toast-item { background:var(--toast-bg); border:1px solid var(--border2); padding:.6rem 1.1rem; border-radius:11px; font-size:.82rem; display:flex; align-items:center; gap:.5rem; box-shadow:0 8px 28px rgba(0,0,0,.35); color:var(--text); animation:toastIn .25s ease; }
+@keyframes toastIn { from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)} }
+.toast-item.success { border-left:3px solid var(--success); }
+.toast-item.danger { border-left:3px solid var(--danger); }
+.toast-item.info { border-left:3px solid var(--accent); }
+
+@media (max-width:900px) {
+  .sidebar { transform:translateX(-100%); }
+  .sidebar.open { transform:translateX(0); box-shadow:8px 0 32px rgba(0,0,0,.35); }
+  .main { margin-left:0; }
+  .sidebar-toggle { display:inline-flex; }
+  .page-body { padding:1.1rem; }
+  .topbar { padding:0 1rem; }
+  .stats-row { grid-template-columns:1fr 1fr; }
+  .chart-container { height:220px; }
+}
+  /* Scrollbar variables — put in :root */
+:root {
+  --scrollbar-track: rgba(255,255,255,0.05);
+  --scrollbar-thumb: rgba(255,255,255,0.15);
+}
+
+/* Light theme override */
+[data-bs-theme="light"] {
+  --scrollbar-track: rgba(0,0,0,0.05);
+  --scrollbar-thumb: rgba(0,0,0,0.15);
+}
+
+/* Scrollbar styles */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--scrollbar-track); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+[data-bs-theme="light"] ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
+</style>
+</head>
+<body>
+<div class="bg-mesh"></div>
+<div class="bg-grid"></div>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-orb"><img src="/static/uploads/logo.png" alt="PAC" onerror="this.parentElement.innerHTML='🎓'"></div>
+    <div><div class="brand-text">PAC Help Desk</div><div class="brand-sub">Admin Panel</div></div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">Management</div>
+    <a href="/dashboard" class="nav-link"><i class="bi bi-grid-fill"></i> FAQ Management</a>
+    <a href="/unanswered" class="nav-link">
+      <i class="bi bi-question-circle"></i> Unanswered
+      <span class="nav-badge badge-red" id="unansweredBadge" style="display:none"></span>
+    </a>
+    <a href="/holidays" class="nav-link"><i class="bi bi-calendar-event"></i> Holidays &amp; Events</a>
+    <a href="/handbook" class="nav-link"><i class="bi bi-journal-bookmark-fill"></i> Student Handbook</a>
+    <a href="/reports" class="nav-link">
+      <i class="bi bi-flag"></i> Reports
+      <span class="nav-badge badge-yellow" id="reportsBadge" style="display:none"></span>
+    </a>
+    <div class="nav-section">Analytics</div>
+    <a href="/analytics" class="nav-link active"><i class="bi bi-graph-up"></i> System Analytics</a>
+    <a href="/ratings" class="nav-link"><i class="bi bi-star-half"></i> Chat Ratings</a>
+    <a href="/alert_log" class="nav-link"><i class="bi bi-bell"></i> Alert Log</a>
+  </nav>
+  <div class="sidebar-footer">
+    <button type="button" class="theme-toggle-sidebar" id="themeToggle" onclick="toggleTheme()" title="Toggle theme">
+      <span class="theme-switch-label">
+        <i class="bi bi-moon-fill" id="themeIcon"></i>
+        <span id="themeLabel">Dark mode</span>
+      </span>
+      <i class="bi bi-circle-half" style="opacity:.5;font-size:.85rem"></i>
+    </button>
+    <button onclick="exportData()" class="logout-btn"><i class="bi bi-download"></i> Export Backup</button>
+    <a href="/" class="logout-btn"><i class="bi bi-house"></i> Back to Help Desk</a>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:.75rem;min-width:0">
+      <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Open menu"><i class="bi bi-list"></i></button>
+      <span class="topbar-title"><i class="bi bi-graph-up" style="color:var(--accent)"></i> Analytics</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:.6rem">
+      <button class="btn-refresh" onclick="location.reload()" title="Refresh"><i class="bi bi-arrow-clockwise"></i></button>
+    </div>
+  </div>
+
+  <div class="page-body">
+    <div class="cache-stats-card">
+      <div class="chart-title">
+        <i class="bi bi-cpu"></i> Cache Performance
+        <span style="font-size:.7rem;margin-left:auto;color:var(--muted)" id="lastUpdateTime"></span>
+      </div>
+      <div class="cache-stats-grid" id="cacheStatsGrid">
+        <div class="cache-metric">
+          <div class="cache-metric-value" id="cacheAvgTime">—</div>
+          <div class="cache-metric-label">Avg Cache Response</div>
+        </div>
+        <div class="cache-metric">
+          <div class="cache-metric-value" id="dbAvgTime">—</div>
+          <div class="cache-metric-label">Avg DB Response</div>
+        </div>
+        <div class="cache-metric">
+          <div class="cache-metric-value" id="cacheHits">—</div>
+          <div class="cache-metric-label">Cache Hits</div>
+        </div>
+        <div class="cache-metric">
+          <div class="cache-metric-value" id="speedImprovement">—</div>
+          <div class="cache-metric-label">Speed Improvement (x)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card" style="--sc:var(--accent)">
+        <div class="stat-val" id="statVisitors">—</div>
+        <div class="stat-lbl">Total Unique Visitors</div>
+        <i class="bi bi-people stat-ico"></i>
+      </div>
+      <div class="stat-card" style="--sc:var(--brand2)">
+        <div class="stat-val" id="statQueries">—</div>
+        <div class="stat-lbl">Total Queries Handled</div>
+        <i class="bi bi-chat-dots stat-ico"></i>
+      </div>
+      <div class="stat-card" style="--sc:var(--success)">
+        <div class="stat-val" id="statAnswered">—</div>
+        <div class="stat-lbl">Successfully Answered</div>
+        <i class="bi bi-check-circle stat-ico"></i>
+      </div>
+      <div class="stat-card" style="--sc:var(--warning)">
+        <div class="stat-val" id="statFaqs">—</div>
+        <div class="stat-lbl">Active Knowledge Base (FAQs)</div>
+        <i class="bi bi-journal-text stat-ico"></i>
+      </div>
+    </div>
+
+    <div class="stats-row" style="margin-bottom:1.5rem">
+      <div class="stat-card" style="--sc:var(--success)">
+        <div class="chart-title"><i class="bi bi-emoji-smile"></i> User Satisfaction</div>
+        <div class="satisfaction-stats" id="satisfactionStats">
+          <div class="satisfaction-badge"><i class="bi bi-hand-thumbs-up-fill thumbs-up"></i> <span id="thumbsUp">—</span></div>
+          <div class="satisfaction-badge"><i class="bi bi-hand-thumbs-down-fill thumbs-down"></i> <span id="thumbsDown">—</span></div>
+          <div class="satisfaction-badge"><i class="bi bi-bar-chart"></i> <span id="satisfactionRate">—</span>% positive</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+      <div class="col-lg-8">
+        <div class="stat-card">
+          <div class="chart-title"><i class="bi bi-activity"></i> Chat Volume (Last 7 Days)</div>
+          <div class="chart-container"><canvas id="activityChart"></canvas></div>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="stat-card">
+          <div class="chart-title"><i class="bi bi-pie-chart"></i> Bot Success Rate</div>
+          <div class="chart-container"><canvas id="successChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-4">
+      <div class="col-lg-6">
+        <div class="stat-card">
+          <div class="chart-title"><i class="bi bi-bar-chart"></i> Top 5 Most Asked Questions</div>
+          <div class="chart-container"><canvas id="popularChart"></canvas></div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="stat-card">
+          <div class="chart-title"><i class="bi bi-tags"></i> Top FAQ Categories</div>
+          <div class="chart-container"><canvas id="categoryChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script>
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  const ov = document.getElementById('sidebarOverlay');
+  const open = sb.classList.toggle('open');
+  ov.classList.toggle('show', open);
+  document.body.style.overflow = open ? 'hidden' : '';
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('show');
+  document.body.style.overflow = '';
+}
+document.querySelectorAll('.sidebar .nav-link').forEach(link => {
+  link.addEventListener('click', () => { if (window.innerWidth <= 900) closeSidebar(); });
+});
+
+function toggleTheme() {
+  const html = document.documentElement;
+  const newTheme = html.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-bs-theme', newTheme);
+  localStorage.setItem('theme', newTheme);
+  updateThemeUI(newTheme);
+}
+function updateThemeUI(theme) {
+  const icon = document.getElementById('themeIcon');
+  const label = document.getElementById('themeLabel');
+  if (icon) icon.className = theme === 'dark' ? 'bi bi-moon-fill' : 'bi bi-sun-fill';
+  if (label) label.textContent = theme === 'dark' ? 'Dark mode' : 'Light mode';
+}
+(function(){ const t = localStorage.getItem('theme') || 'dark'; document.documentElement.setAttribute('data-bs-theme', t); updateThemeUI(t); })();
+
+async function updateBadge(url, el) {
+  try { const d = await (await fetch(url)).json(); const c = d.count||0; if (el) { el.textContent=c; el.style.display=c>0?'inline-block':'none'; } } catch(e) {}
+}
+function refreshBadges() {
+  updateBadge('/unanswered_count', document.getElementById('unansweredBadge'));
+  updateBadge('/reports_count', document.getElementById('reportsBadge'));
+}
+refreshBadges(); setInterval(refreshBadges, 30000);
+
+function showToast(msg, type='success') {
+  const icons = {success:'check-circle-fill',danger:'x-circle-fill',warning:'exclamation-triangle-fill',info:'info-circle-fill'};
+  const wrap = document.getElementById('toastWrap');
+  const el = document.createElement('div');
+  el.className = `toast-item ${type}`;
+  el.innerHTML = `<i class="bi bi-${icons[type]||'info-circle-fill'}"></i><span>${msg}</span>`;
+  wrap.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+function exportData() { window.location.href='/api/export/faq'; showToast('Export started...','info'); }
+
+Chart.defaults.color = '#8ba9cc';
+Chart.defaults.font.family = "'DM Sans', sans-serif";
+Chart.defaults.borderColor = 'rgba(77, 171, 247, 0.12)';
+
+async function loadCacheStats() {
+  try {
+    const res = await fetch('/api/response_times');
+    const data = await res.json();
+    document.getElementById('cacheAvgTime').textContent = data.average_response_time_cache_ms + 'ms';
+    document.getElementById('dbAvgTime').textContent = data.average_response_time_db_ms + 'ms';
+    document.getElementById('cacheHits').textContent = data.cache_hit_count;
+    const speedImprovement = (data.average_response_time_db_ms / data.average_response_time_cache_ms).toFixed(1);
+    document.getElementById('speedImprovement').textContent = speedImprovement + 'x';
+    document.getElementById('lastUpdateTime').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+  } catch (err) {
+    console.error('Failed to load cache stats', err);
+    ['cacheAvgTime','dbAvgTime','cacheHits','speedImprovement'].forEach(id => {
+      document.getElementById(id).textContent = 'N/A';
+    });
+  }
+}
+
+async function loadAnalytics() {
+  try {
+    const res = await fetch('/api/analytics/chart_data');
+    const data = await res.json();
+
+    document.getElementById('statVisitors').textContent = data.stats.total_visitors || 0;
+    document.getElementById('statQueries').textContent = data.stats.total_queries || 0;
+    document.getElementById('statAnswered').textContent = data.stats.answered || 0;
+    document.getElementById('statFaqs').textContent = data.stats.faqs || 0;
+
+    document.getElementById('thumbsUp').textContent = data.stats.thumbs_up || 0;
+    document.getElementById('thumbsDown').textContent = data.stats.thumbs_down || 0;
+    const totalFeedback = (data.stats.thumbs_up || 0) + (data.stats.thumbs_down || 0);
+    const satisfactionRate = totalFeedback > 0 ? Math.round((data.stats.thumbs_up / totalFeedback) * 100) : 0;
+    document.getElementById('satisfactionRate').textContent = satisfactionRate;
+
+    new Chart(document.getElementById('activityChart'), {
+      type: 'line',
+      data: {
+        labels: data.activity.map(a => a.date),
+        datasets: [{
+          label: 'Daily Queries',
+          data: data.activity.map(a => a.count),
+          borderColor: '#00e5ff',
+          backgroundColor: 'rgba(0, 229, 255, 0.1)',
+          borderWidth: 3, tension: 0.4, fill: true,
+          pointBackgroundColor: '#0a1628', pointBorderColor: '#00e5ff', pointBorderWidth: 2, pointRadius: 4
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, grid: { color: 'rgba(77,171,247,0.08)' } },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+
+    new Chart(document.getElementById('successChart'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Answered Successfully', 'Unanswered/Fallback'],
+        datasets: [{
+          data: [data.stats.answered, data.stats.unanswered],
+          backgroundColor: ['rgba(81, 207, 102, 0.8)', 'rgba(255, 107, 107, 0.8)'],
+          borderColor: '#0a1628', borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '70%',
+        plugins: { legend: { position: 'bottom', labels: { padding: 15, usePointStyle: true } } }
+      }
+    });
+
+    new Chart(document.getElementById('popularChart'), {
+      type: 'bar',
+      data: {
+        labels: data.popular.map(p => p.question.length > 25 ? p.question.substring(0,22)+'...' : p.question),
+        datasets: [{
+          label: 'Times Asked',
+          data: data.popular.map(p => p.count),
+          backgroundColor: 'rgba(30, 136, 229, 0.8)',
+          borderRadius: 6, barPercentage: 0.7
+        }]
+      },
+      options: {
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { beginAtZero: true, grid: { color: 'rgba(77,171,247,0.08)' } },
+          y: { grid: { display: false } }
+        }
+      }
+    });
+
+    new Chart(document.getElementById('categoryChart'), {
+      type: 'bar',
+      data: {
+        labels: data.categories.map(c => c.name.length > 15 ? c.name.substring(0,12)+'...' : c.name),
+        datasets: [{
+          label: 'FAQs per Category',
+          data: data.categories.map(c => c.count),
+          backgroundColor: 'rgba(255, 202, 40, 0.8)',
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, grid: { color: 'rgba(77,171,247,0.08)' } },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+  } catch (err) {
+    console.error('Failed to load analytics data', err);
+    showToast('Failed to load analytics data', 'danger');
+  }
+}
+
+loadCacheStats();
+setInterval(loadCacheStats, 30000);
+loadAnalytics();
+</script>
+</body>
+</html>

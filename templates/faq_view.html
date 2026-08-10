@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PAC FAQ - {{ faq.question }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f0f4f8;
+            color: #1a2a3a;
+        }
+        .faq-container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .question {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1a3a6a;
+            margin-bottom: 20px;
+        }
+        .answer {
+            margin-top: 20px;
+            line-height: 1.8;
+            font-size: 16px;
+        }
+        .back-link {
+            display: inline-block;
+            margin-top: 20px;
+            color: #1a3a6a;
+            text-decoration: none;
+            padding: 10px 20px;
+            background: #e8edf4;
+            border-radius: 8px;
+        }
+        .back-link:hover {
+            background: #d5dde8;
+        }
+        .meta-info {
+            color: #666;
+            font-size: 14px;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+    <div class="faq-container">
+        <h1 class="question">{{ faq.question }}</h1>
+        <div class="answer">{{ faq.answer|safe }}</div>
+        {% if faq.image_path %}
+            <div style="margin-top: 20px;">
+                <img src="/{{ faq.image_path }}" alt="FAQ Image" style="max-width: 100%; border-radius: 8px;">
+            </div>
+        {% endif %}
+        <div class="meta-info">
+            <p>Category: {{ faq.topic or 'General' }}</p>
+            <p>Last updated: {{ faq.last_updated or 'N/A' }}</p>
+        </div>
+        <a href="/" class="back-link">← Back to Help Desk</a>
+    </div>
+</body>
+</html>
