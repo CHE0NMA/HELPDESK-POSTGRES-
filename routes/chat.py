@@ -343,10 +343,14 @@ def related_suggestions():
     try:
         try:
             cur.execute("""
-                SELECT DISTINCT user_message FROM chat_history
-                WHERE to_tsvector('english', user_message) @@ plainto_tsquery('english', %s)
-                  AND user_message != %s AND LENGTH(user_message) > 5
-                ORDER BY created_at DESC LIMIT 5
+                SELECT user_message FROM (
+                    SELECT user_message, MAX(created_at) AS last_asked
+                    FROM chat_history
+                    WHERE to_tsvector('english', user_message) @@ plainto_tsquery('english', %s)
+                      AND user_message != %s AND LENGTH(user_message) > 5
+                    GROUP BY user_message
+                ) t
+                ORDER BY last_asked DESC LIMIT 5
             """, (user_msg, user_msg))
             rows = cur.fetchall()
         except Exception:
@@ -355,9 +359,13 @@ def related_suggestions():
             # this is rolled back.
             conn.rollback()
             cur.execute("""
-                SELECT DISTINCT user_message FROM chat_history
-                WHERE user_message ILIKE %s AND user_message != %s AND LENGTH(user_message) > 5
-                ORDER BY created_at DESC LIMIT 5
+                SELECT user_message FROM (
+                    SELECT user_message, MAX(created_at) AS last_asked
+                    FROM chat_history
+                    WHERE user_message ILIKE %s AND user_message != %s AND LENGTH(user_message) > 5
+                    GROUP BY user_message
+                ) t
+                ORDER BY last_asked DESC LIMIT 5
             """, (f'%{user_msg[:20]}%', user_msg))
             rows = cur.fetchall()
 
@@ -372,12 +380,22 @@ def related_suggestions():
             """, (category, user_msg))
             rows = cur.fetchall()
             if rows:
-                return jsonify([{'user_message': r[0]} for r in rows])
+                seen = set()
+                deduped = []
+                for r in rows:
+                    if r[0] not in seen:
+                        seen.add(r[0])
+                        deduped.append(r[0])
+                return jsonify([{'user_message': m} for m in deduped])
 
         cur.execute("""
-            SELECT DISTINCT user_message FROM chat_history
-            WHERE user_message != %s AND LENGTH(user_message) > 5
-            ORDER BY created_at DESC LIMIT 5
+            SELECT user_message FROM (
+                SELECT user_message, MAX(created_at) AS last_asked
+                FROM chat_history
+                WHERE user_message != %s AND LENGTH(user_message) > 5
+                GROUP BY user_message
+            ) t
+            ORDER BY last_asked DESC LIMIT 5
         """, (user_msg,))
         rows = cur.fetchall()
         return jsonify([{'user_message': r[0]} for r in rows])

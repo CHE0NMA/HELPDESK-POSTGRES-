@@ -39,10 +39,17 @@ CROSS_CHECK_FAQ_BAR = engine.FUZZY_MIN_SCORE + 0.05
 # only reasoning over the last few chat turns and has no idea whether
 # the handbook actually covers the topic.
 _NON_ANSWER_RE = re.compile(
-    r"\b(don'?t have (that|this|the) information|haven'?t (discussed|covered|talked about)|"
+    r"\b(don'?t have (?:the |that |this |complete |full |specific |confirmed )*"
+    r"(?:information|details|data|specifics|answer)|"
+    r"didn'?t have (?:the |complete |full )*(?:information|details|data)|"
+    r"haven'?t (discussed|covered|talked about)|"
     r"wasn'?t covered|(not|isn'?t) something we'?ve covered|i don'?t know|"
     r"not sure (what|about)|no information (on|about)|not readily available|"
-    r"i('| a)m not able to find|i can'?t find (that|this))\b",
+    r"i('| a)m not able to find|i can'?t find (that|this)|"
+    r"i (only|just) (mentioned|found|got to|had)\b|"
+    r"let me try to find|i'?d be happy to (try and )?find|"
+    r"check(ing)? page \d+ (of|for) the relevant section|"
+    r"couldn'?t find any specific information)\b",
     re.IGNORECASE,
 )
 

@@ -15,6 +15,7 @@ sentence that's already 100% correct, which leaves much less room to
 drift, and if it does drift anyway we just don't use it.
 """
 import logging
+import re
 from datetime import datetime
 from typing import Optional
 
