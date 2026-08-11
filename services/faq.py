@@ -467,6 +467,19 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
         if resolved:
             return resolved if return_topic else resolved[0]
 
+    # Successful-answer memory: identical questions that previously earned
+    # a grounded, thumbs-up-worthy reply skip re-extraction.
+    try:
+        from services.answer_memory import get_cached_answer
+        from database import get_db as _gdb
+        cached_ans = get_cached_answer(_gdb, question, detected_lang)
+        if cached_ans:
+            ctx.update(user_msg=question, bot_response=cached_ans)
+            result = (cached_ans, 'Cached', None, None, detected_lang)
+            return result if return_topic else result[0]
+    except Exception:
+        pass
+
     classification = lang_service.classify_question_ai(question)
 
     if classification['is_gibberish']:
@@ -767,26 +780,48 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
 
         pure_handbook_topics = bool(re.search(
             r'\b(vision|mission|philosophy|core values|logo|hymn|founded|'
-            r'original name|brief history|want to become|envisions|'
+            r'original name|brief history|want to become|envisions|future of|'
             r'grounds? for (suspension|expulsion)|behavioral code|'
             r'(first|second|third)[ -]?degree|fraternity|sorority|'
             r'demerit|merit points?|max(imum)?\s*fine|appeal|'
-            r'unchaperoned|chaperone|cook(ing)? (in|inside)|visit other dorms|'
-            r'anti.?bullying|safe spaces|ra.?11?3?13|senior high strands?|'
-            r'heaviest demerit|food .{0,20}(cafeteria|not allowed))\b',
+            r'unchaperoned|chaperone|hike|cook(ing)? (in|inside)|visit other dorms|'
+            r'anti.?bullying|safe spaces|ra.?11?3?13|ra.?10627|11313|10627|'
+            r'senior high strands?|heaviest demerit|'
+            r'food .{0,20}(cafeteria|not allowed)|'
+            r'how bad is a (second|third)|what.?s a (second|third)[ -]?degree|'
+            r'jewelry|necklace|dress code)\b',
             question, re.I,
         ))
+        # Pure handbook topics must never be answered from FAQ/schedule —
+        # that was the source of wrong "cashier / late enrollment /
+        # scholarships" answers on dress/dorm/offense/vision questions.
+        # Data-driven handbook-only topics (admin aliases) expand the pure set
+        try:
+            from services.topic_aliases import is_handbook_only
+            if is_handbook_only(question):
+                pure_handbook_topics = True
+        except Exception:
+            try:
+                from topic_aliases import is_handbook_only
+                if is_handbook_only(question):
+                    pure_handbook_topics = True
+            except Exception:
+                pass
+
+        if pure_handbook_topics:
+            is_hb = True
+            faq_clearly_better = False
+            handbook_should_lead = bool(hb_chunks) or True
+
         combine_gap = 0.22
         # Never force-combine a weak/unrelated FAQ into a handbook answer
         both_solid = (
             (not is_hb)
+            and (not pure_handbook_topics)
             and hb_chunks and hb_score >= 0.28
             and candidates and faq_best_score >= engine.FUZZY_MIN_SCORE
             and abs(hb_score - faq_best_score) < combine_gap
         )
-        # Prefer combining whenever both sources have something useful,
-        # including pure handbook topics — FAQ often has a clearer
-        # student-facing summary of the same policy.
         if both_solid and not circuit_breaker.is_open():
             combined = _combine_handbook_and_faq(
                 question, candidates, hb_chunks, detected_lang
@@ -809,16 +844,15 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 faq_cache.set(cache_key, result_data)
                 return result_data
 
-        if handbook_should_lead or is_hb:
+        if handbook_should_lead or is_hb or pure_handbook_topics:
             hb_ans = handbook_service.answer_handbook_question(
                 question, detected_lang,
-                min_score_to_answer=(None if is_hb else hb_threshold),
+                min_score_to_answer=(None if (is_hb or pure_handbook_topics) else hb_threshold),
                 ctx=ctx,
             )
             if hb_ans:
-                # Only merge FAQ into handbook answers when FAQ is topical
-                # (already filtered) AND close in score — never for weak steals
-                if (not is_hb
+                # Never merge FAQ into pure handbook topic answers
+                if (not is_hb and not pure_handbook_topics
                         and faq_best_score >= CROSS_CHECK_FAQ_BAR
                         and faq_best_score >= hb_score - 0.05
                         and candidates and not circuit_breaker.is_open()):
@@ -835,11 +869,15 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                     )
                 result = (hb_ans, 'Handbook', None, 'handbook_query', detected_lang)
                 return result if return_topic else result[0]
-            # is_hb but handbook returned None → fall through to FAQ only
-            # after the relevance filter (candidates may already be empty).
-
-        # REMOVED: early "unanswered" exit for pure_handbook_topics.
-        # If handbook is thin, FAQs are the compensation layer.
+            # pure handbook topic with no handbook hit → do NOT fall through
+            # to unrelated FAQ (cashier/enrollment/etc.). Log + fallback.
+            if pure_handbook_topics:
+                _log_unanswered(cur, conn, question, ctx)
+                result = (
+                    lang_service.get_logged_fallback_response(detected_lang),
+                    'Unknown', None, None, detected_lang,
+                )
+                return result if return_topic else result[0]
 
         if not candidates:
             hb_ans = handbook_service.answer_handbook_question(question, detected_lang, ctx=ctx)

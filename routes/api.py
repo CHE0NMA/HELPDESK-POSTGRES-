@@ -426,8 +426,34 @@ def api_report():
     reason = (data.get('reason') or 'other')[:50]
     details = (data.get('details') or '')[:300]
     session_id = (data.get('session_id') or '')[:100]
-
-    return jsonify({'ok': True})
+    if not question:
+        return jsonify({'ok': False, 'error': 'question required'}), 400
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "INSERT INTO bad_feedback (question, answer) VALUES (%s, %s)",
+            (question, f"[{reason}] {details}\n---\n{answer}"[:2000]),
+        )
+        try:
+            from services.answer_memory import record_feedback
+            record_feedback(
+                get_db, question, 'thumbs_down',
+                correction=f"{reason}: {details}".strip(': '),
+                session_id=session_id or None,
+                source_type='report',
+            )
+        except Exception:
+            pass
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"api_report: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
 
 @bp.route('/api/featured')
 def api_featured():

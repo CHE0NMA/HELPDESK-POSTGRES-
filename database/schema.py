@@ -792,3 +792,18 @@ def ensure_handbook_fulltext_search():
     finally:
         cur.close()
         conn.close()
+
+def ensure_learning_layer():
+    """Topic aliases + answer memory tables. Delegates to services.topic_aliases
+    so seed data and runtime schema stay in one place. Safe every boot.
+    """
+    try:
+        from database.learning_schema import ensure_learning_schema
+        ensure_learning_schema(get_db)
+    except ImportError:
+        try:
+            from services.topic_aliases import ensure_topic_alias_schema, seed_default_aliases
+            ensure_topic_alias_schema(get_db)
+            seed_default_aliases(get_db, force=False)
+        except Exception as e:
+            logger.error(f"ensure_learning_layer: {e}")

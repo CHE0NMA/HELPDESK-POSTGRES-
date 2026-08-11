@@ -2,211 +2,211 @@
   {
     "number": 1,
     "question": "What's the real full name of this school and where are the campuses?",
-    "answer": "The real full name of this school is Philippine Advent College, Inc. I found this in Excerpt 2, which mentions the campus of Philippine Advent College, Inc. in Magsaysay, Sindangan, Zamboanga del Norte.",
+    "answer": "The real full name of this school is Philippine Advent College, Inc. I found this in Excerpt 2, which mentions the campus of Philippine Advent College, Inc. It's located in Magsaysay, Sindangan, Zamboanga del Norte.",
     "status": "passed",
-    "timestamp": "2026-08-11T16:04:05.574872"
+    "timestamp": "2026-08-11T20:53:48.666900"
   },
   {
     "number": 2,
     "question": "What was PAC called before it became a college?",
-    "answer": "Hey! Before it became a college, PAC was originally known as the Hillside View Elementary School (HVES) and became an academy before turning into a college, as it says on page 6 under the Brief History of PAC.",
+    "answer": "According to the Brief History of PAC on page 6, PAC was originally known as the Hillside View Elementary School before it became a college. It's mentioned that in 1975, the Philippine Advent College, originally known as Hillside View Elementary School, became an academy and later a college.",
     "status": "passed",
-    "timestamp": "2026-08-11T16:04:10.487048"
+    "timestamp": "2026-08-11T20:53:54.350490"
   },
   {
     "number": 3,
     "question": "When did this school start and who founded it?",
-    "answer": "It was founded by former Mayor Mariano J.S. Macias and Margie C. Macias, along with their children and the local Seventh-day Adventist church community and elders (Brief History of PAC, p. 6).",
+    "answer": "PAC was founded by Mayor Mariano J.S. Macias and Margie C. Macias, as stated in the Brief History of PAC on page 6. They, along with their children, played a foundational role in the establishment of the institution as founders. The local Seventh-day Adventist church community also strongly supported the inception of PAC.",
     "status": "passed",
-    "timestamp": "2026-08-11T16:04:20.220837"
+    "timestamp": "2026-08-11T20:54:06.017981"
   },
   {
     "number": 4,
     "question": "What does the school logo mean?",
-    "answer": "Hey! According to the handbook (Logo and Symbols, p. 10), the wide-open Bible in the center means it's the foundation of Christian education. Plus, the light illuminating it shows that God is the true source of all wisdom, 1975 is when the school was established, the blue background stands for royalty, the red in the name means passion, love, and power, and the white in the center represents the purity of its mission!",
+    "answer": "The school logo features the Bible, which is the foundation of Christian education, and it's wide open in the center. According to the Logo and Symbols section on page 10, the Bible is the central element of the logo, symbolizing the institution's guide and source of wisdom. The logo also includes other elements like the year 1975, and colors such as blue, red, and white, which represent royalty, passion, love, power, and purity. The Bible is the main focus, representing the institution's foundation and values.",
     "status": "passed",
-    "timestamp": "2026-08-11T16:04:25.090655"
+    "timestamp": "2026-08-11T20:54:11.408709"
   },
   {
     "number": 5,
     "question": "Who wrote the PAC hymn?",
-    "answer": "Hey! According to the handbook, the music was composed by L.V. Pilon and the lyrics were written by SL La Sage (PAC Hymn, p. 7).",
+    "answer": "The PAC hymn was composed by L.V. Pilon and the lyrics were written by SL La Sage, as stated in the KEY FACTS section on page 7. You can find the full hymn in the PAC Hymn excerpt on page 7.",
     "status": "passed",
-    "timestamp": "2026-08-11T16:04:29.714910"
+    "timestamp": "2026-08-11T20:54:16.499336"
   },
   {
     "number": 6,
     "question": "What's the school's philosophy about education?",
-    "answer": "Hey! According to the Philippine Advent College's Philosophy (p. 8), the school advocates that God is the source of true education and is committed to reflecting Christ in the total lifestyle of the faculty and students for useful and fruitful citizenship now and for fitness in the world to come.",
+    "answer": "According to the Philippine Advent College's Philosophy on page 8, the school believes that God is the source of true education. They're committed to reflecting Christ in the lifestyle of faculty and students, aiming for useful and fruitful citizenship in this world and the next. It's all about balancing life now and in the future.",
     "status": "passed",
-    "timestamp": "2026-08-11T16:04:33.787048"
+    "timestamp": "2026-08-11T20:54:21.122356"
   },
   {
     "number": 7,
     "question": "What does PAC want to become in the future?",
     "answer": "<div class=\"text\">That's a good question — I don't have a confirmed answer for it yet, but I've saved it so our staff can add it soon. Feel free to ask me something else in the meantime!</div>",
     "status": "failed",
-    "timestamp": "2026-08-11T16:04:40.030152"
+    "timestamp": "2026-08-11T20:54:26.623053"
   },
   {
     "number": 8,
     "question": "What's the main mission of the college?",
-    "answer": "Hey! According to the handbook, the main mission of Philippine Advent College is to offer an excellent and distinctive Christian education designed to prepare its students for productive lives of useful human service and uncompromising personal integrity.",
+    "answer": "The main mission of the college is to offer an excellent and distinctive Christian education designed to prepare its students for productive lives of useful human service and uncompromising personal integrity, as stated in the Mission section on page 8. This is the core purpose of Philippine Advent College.",
     "status": "passed",
-    "timestamp": "2026-08-11T16:04:44.438228"
+    "timestamp": "2026-08-11T20:54:31.579603"
   },
   {
     "number": 9,
     "question": "What are the core values again? The PAC ones.",
-    "answer": "<div class=\"text\">That's a good question — I don't have a confirmed answer for it yet, but I've saved it so our staff can add it soon. Feel free to ask me something else in the meantime!</div>",
-    "status": "failed",
-    "timestamp": "2026-08-11T16:04:48.144059"
+    "answer": "The core values are Purpose-Driven, Academic Excellence Oriented, and Christ-Centered, which stand for P, A, and C. According to the handbook, being Purpose-Driven means living and leading with a clear objective, Academic Excellence Oriented means being motivated and disciplined to achieve excellent results, and Christ-Centered means being motivated with love and purpose, embodying Christian education. You can find more details on page 8 in the Core Values section.",
+    "status": "passed",
+    "timestamp": "2026-08-11T20:54:36.938333"
   },
   {
     "number": 10,
     "question": "What is the vision of PAC in simple words?",
-    "answer": "<div class=\"text\">Philippine Advent College envisions to be a Center of Excellence in Christian Education, promoting world-class academic excellence and globally competitive technical education while recognizing God as the true Source of Knowledge.</div>",
+    "answer": "PAC's vision is to be a Center of Excellence in Christian Education by promoting world-class academic excellence and technical education in an environment that stresses discovery and investigation, all while remembering who is the true Source of Knowledge, as stated in the Vision section on page 8. In simple words, they aim to provide excellent Christian education.",
     "status": "passed",
-    "timestamp": "2026-08-11T16:04:51.212682"
+    "timestamp": "2026-08-11T20:54:42.155139"
   },
   {
     "number": 11,
     "question": "Tell me about the school philosophy again.",
-    "answer": "<div class=\"text\">Philippine Advent College advocates that God is the source of true education and is committed to reflecting Christ in the total lifestyle of faculty and students.</div>",
+    "answer": "So our school philosophy is basically that God is the source of true education, and we're committed to reflecting Christ in our lifestyle as students and faculty, aiming to be good citizens now and in the future. This is from the Philippine Advent College's Philosophy section on page 8. It's all about being useful and fruitful in this life and the next.",
     "status": "passed",
-    "timestamp": "2026-08-11T16:04:54.236451"
+    "timestamp": "2026-08-11T20:54:46.754935"
   },
   {
     "number": 12,
     "question": "How many points do we start with each semester?",
-    "answer": "Students typically start with 30 merit points at the beginning of each semester. Demerits are deducted according to the degree of offense.",
+    "answer": "You start with 30 merit points at the beginning of each semester. Demerits are deducted from that total, depending on the offense.",
     "status": "passed",
-    "timestamp": "2026-08-11T16:04:57.545323"
+    "timestamp": "2026-08-11T20:54:53.989601"
   },
   {
     "number": 13,
     "question": "What's a first degree offense worth in demerits?",
-    "answer": "First-degree (light) offenses carry 5 demerits. Examples include minor violations of campus rules such as littering or other listed light offenses in the Student Handbook.",
+    "answer": "According to the section **First-Degree Offense (5 Demerits)** (see page 21):\n\nAll violations such as but not limited to, as the case may be, expressed in the\n\nKEY FACTS:\n- 5 Demerits",
     "status": "passed",
-    "timestamp": "2026-08-11T16:05:00.495671"
+    "timestamp": "2026-08-11T20:54:59.200504"
   },
   {
     "number": 14,
     "question": "How bad is a second-degree offense?",
-    "answer": "First-degree (light) offenses carry 5 demerits. Examples include minor violations of campus rules such as littering or other listed light offenses in the Student Handbook.",
+    "answer": "A second-degree offense can result in 30 demerits, and if physical labor or suspension isn't possible, you might get a fine of up to P1,500.00, depending on the gravity of the offense. This is according to the Second-Degree Offense section on page 16. It's pretty serious, so hopefully you can avoid it.",
     "status": "passed",
-    "timestamp": "2026-08-11T16:05:03.331729"
+    "timestamp": "2026-08-11T20:55:04.893442"
   },
   {
     "number": 15,
     "question": "What's the heaviest demerit level?",
-    "answer": "<div class=\"text\">That's a good question — I don't have a confirmed answer for it yet, but I've saved it so our staff can add it soon. Feel free to ask me something else in the meantime!</div>",
-    "status": "failed",
-    "timestamp": "2026-08-11T16:05:06.491465"
+    "answer": "The heaviest demerit level mentioned is 30 demerits, which is classified as a Third-Degree Offense, as seen in the excerpts from pages 19 and 21. This level of offense can lead to penalties such as community service, suspension, exclusion, expulsion, or dismissal. It's associated with serious violations like immorality, forgery, and substance abuse.",
+    "status": "passed",
+    "timestamp": "2026-08-11T20:55:10.457103"
   },
   {
     "number": 16,
     "question": "Give examples of light or first-degree offenses.",
-    "answer": "First-degree (light) offenses carry 5 demerits. Examples include minor violations of campus rules such as littering or other listed light offenses in the Student Handbook.",
+    "answer": "According to the handbook, examples of light or first-degree offenses aren't explicitly listed, but it's mentioned in Excerpt 3 – First-Degree Offense (5 Demerits) that these offenses are worth 5 demerits and don't require restitution of lost or damaged property. Unfortunately, specific examples aren't provided.",
     "status": "passed",
-    "timestamp": "2026-08-11T16:05:09.421628"
+    "timestamp": "2026-08-11T20:55:15.103292"
   },
   {
     "number": 17,
     "question": "What counts as a serious or third-degree offense?",
-    "answer": "First-degree (light) offenses carry 5 demerits. Examples include minor violations of campus rules such as littering or other listed light offenses in the Student Handbook.",
+    "answer": "According to the handbook, a serious or third-degree offense includes things like immorality, forgery, and possession or consumption of harmful substances, as well as other cases like physical injury, theft, and vandalism, as listed in Excerpt 2 on page 21. These offenses can carry 30 demerits and may result in penalties like community service, suspension, or expulsion. Excerpt 1 on page 19 also mentions specific examples of third-degree offenses, such as living together, premarital sex, and possession of alcoholic beverages or narcotics.",
     "status": "passed",
-    "timestamp": "2026-08-11T16:05:12.475441"
+    "timestamp": "2026-08-11T20:55:19.686496"
   },
   {
     "number": 18,
     "question": "What happens if you get 20 or more demerits?",
-    "answer": "Accumulating 20 demerits or more may place a student under disciplinary probation and subject them to further disciplinary measures as stated in the Student Handbook.",
+    "answer": "If you get 20 or more demerits, you'll be placed on probation immediately, as stated in the F. DISCIPLINARY MEASURES section on page 14. This means you won't be able to hold any office or responsibility during the midterm or semester end. According to the rules, probation will last for one semester, and if it's not lifted, you might face denial of admission for the following term.",
     "status": "passed",
-    "timestamp": "2026-08-11T16:05:15.620700"
+    "timestamp": "2026-08-11T20:55:26.316710"
   },
   {
     "number": 19,
     "question": "Is there a maximum fine for violations?",
-    "answer": "<div class=\"text\">That's a good question — I don't have a confirmed answer for it yet, but I've saved it so our staff can add it soon. Feel free to ask me something else in the meantime!</div>",
-    "status": "failed",
-    "timestamp": "2026-08-11T16:05:18.564866"
+    "answer": "According to the F. DISCIPLINARY MEASURES section on page 14, community service or fines \"up to P1,500.00 pesos\" may be imposed, so yes, there is a maximum fine for violations, which is P1,500.00 pesos.",
+    "status": "passed",
+    "timestamp": "2026-08-11T20:55:32.352476"
   },
   {
     "number": 20,
     "question": "How long do I have to appeal a disciplinary decision?",
-    "answer": "<div class=\"text\">That's a good question — I don't have a confirmed answer for it yet, but I've saved it so our staff can add it soon. Feel free to ask me something else in the meantime!</div>",
-    "status": "failed",
-    "timestamp": "2026-08-11T16:05:21.823241"
+    "answer": "According to the section **F. DISCIPLINARY MEASURES** (see page 14):\n\nCommunity service or fines (up to P1,500.00 pesos) may be imposed based on the severity of the offenses as determined by the Student Disciplinary Committee.",
+    "status": "passed",
+    "timestamp": "2026-08-11T20:55:38.436514"
   },
   {
     "number": 21,
     "question": "Can we wear jewelry like rings or necklaces?",
-    "answer": "Jewelry is generally restricted. A simple wedding ring may be allowed for married students. Necklaces, bracelets, and other ornamental jewelry are typically not permitted under the Dress and Appearance policy.",
+    "answer": "According to the section **Library Rules and Dress Code** (see page 43):\n\nStudents are required to wear proper attire. - Students are required to wear proper attire.",
     "status": "passed",
-    "timestamp": "2026-08-11T16:05:24.675197"
+    "timestamp": "2026-08-11T20:55:45.288913"
   },
   {
     "number": 22,
     "question": "What's the dress code for students?",
-    "answer": "Students are expected to wear the prescribed school uniform on class days and maintain a neat, modest appearance consistent with Adventist standards. Specific rules are in the Student Handbook under Dress and Appearance.",
+    "answer": "According to the handbook, students are required to wear proper attire, as stated in Excerpt 2 - Library Rules and Dress Code (p.43). Additionally, Excerpt 4 - DORMITORY STUDENT’S PLEDGE (p.90) mentions that students should wear decent dresses and proper attire in all Sabbath programs, midweek, and prayer meetings, and specifically states that men should wear pants and women should wear skirts during worship, with no pajamas, short pants, or nighties allowed. A school uniform is also prescribed for all students, as mentioned in Excerpt 3 - School Uniform (p.25).",
     "status": "passed",
-    "timestamp": "2026-08-11T16:05:27.641223"
+    "timestamp": "2026-08-11T20:55:50.566374"
   },
   {
     "number": 23,
     "question": "Is it okay to go on hikes without a chaperone?",
     "answer": "<div class=\"text\">That's a good question — I don't have a confirmed answer for it yet, but I've saved it so our staff can add it soon. Feel free to ask me something else in the meantime!</div>",
     "status": "failed",
-    "timestamp": "2026-08-11T16:05:30.870870"
+    "timestamp": "2026-08-11T20:55:54.500602"
   },
   {
     "number": 24,
     "question": "Are we allowed to visit other dorms freely?",
-    "answer": "<div class=\"text\">Payments are accepted at the Business Office / Cashier during office hours (usually Monday to Friday, 8:00 AM to 5:00 PM). Keep your official receipt.</div>",
-    "status": "passed",
-    "timestamp": "2026-08-11T16:05:34.188313"
+    "answer": "<div class=\"text\">That's a good question — I don't have a confirmed answer for it yet, but I've saved it so our staff can add it soon. Feel free to ask me something else in the meantime!</div>",
+    "status": "failed",
+    "timestamp": "2026-08-11T20:55:58.424381"
   },
   {
     "number": 25,
     "question": "Can we cook inside the dorm?",
     "answer": "<div class=\"text\">That's a good question — I don't have a confirmed answer for it yet, but I've saved it so our staff can add it soon. Feel free to ask me something else in the meantime!</div>",
     "status": "failed",
-    "timestamp": "2026-08-11T16:05:37.110094"
+    "timestamp": "2026-08-11T20:56:02.413331"
   },
   {
     "number": 26,
     "question": "What food is not allowed in the cafeteria?",
-    "answer": "<div class=\"text\">Yes. Late enrollment is usually permitted within the first 1-2 weeks of classes but carries an additional late enrollment fee. Exact deadlines are announced by the Registrar each term.</div>",
+    "answer": "According to the section **Second-Degree Offense** (see page 16):\n\nHowever, if physical labor or suspension is not available, applicable, or practical, a fine\nof not more than one thousand five hundred pesos(P1,500.00) will be imposed, which\nshall be determined by the committee according to the gravity of the offense.",
     "status": "passed",
-    "timestamp": "2026-08-11T16:05:40.123328"
+    "timestamp": "2026-08-11T20:56:07.706584"
   },
   {
     "number": 27,
     "question": "Is there an anti-bullying law in the handbook?",
-    "answer": "<div class=\"text\">There is generally no class on declared holidays and special non-working days. Confirm specific dates through official announcements or the school calendar.</div>",
+    "answer": "Yes, there is an anti-bullying law mentioned in the handbook, specifically RA 10627 Anti-Bullying Act 2013, which is listed under grievance proceedings. It's also worth noting that psychological distress like bullying is mentioned separately. You can find this information on page 21.",
     "status": "passed",
-    "timestamp": "2026-08-11T16:05:43.028902"
+    "timestamp": "2026-08-11T20:56:12.038144"
   },
   {
     "number": 28,
     "question": "What's the Safe Spaces Act and its RA number?",
     "answer": "<div class=\"text\">That's a good question — I don't have a confirmed answer for it yet, but I've saved it so our staff can add it soon. Feel free to ask me something else in the meantime!</div>",
     "status": "failed",
-    "timestamp": "2026-08-11T16:05:46.132660"
+    "timestamp": "2026-08-11T20:56:16.943170"
   },
   {
     "number": 29,
     "question": "What programs or courses does PAC actually offer?",
-    "answer": "Hey! According to the handbook (p. 11), PAC actually offers quite a few programs. Here are the ones listed:\n\n1. Bachelor of Science in Nursing (Main Campus only)\n2. Bachelor of Midwifery (Main Campus only)\n3. Bachelor of Early Childhood Education (Main & Salug Campus)\n4. Bachelor of Elementary Education (Main Campus only)\n5. Bachelor of Science in Secondary Education Major in English (Main Campus only)\n6. Bachelor of Science in Secondary Education Major in Math (Main Campus only)\n7. Bachelor of Science in Secondary Education Major in Filipino (Main Campus only)\n8. Bachelor of Physical Education (Main & LBP Campus)\n9. Bachelor of Technical-Vocational Teacher Education (LBP Campus only)\n10. Bachelor of Science in Social Work (Salug Campus only)",
+    "answer": "According to the Programs Offered section on page 11, PAC offers a Bachelor of science in Nursing and a Bachelor of Midwifery, both of which are only available on the Main Campus. Additionally, the School of Teacher Education & Arts offers several programs, including Bachelor of Early Childhood Education, Bachelor of Elementary Education, and others, with varying campus availability. You can check the specific programs and their corresponding campuses on page 11.",
     "status": "passed",
-    "timestamp": "2026-08-11T16:05:50.424998"
+    "timestamp": "2026-08-11T20:56:22.051818"
   },
   {
     "number": 30,
     "question": "What senior high strands are available?",
-    "answer": "<div class=\"text\">PAC offers academic scholarships, athletic scholarships, and need-based financial assistance. Visit the Scholarship or Student Affairs Office for eligibility, requirements, and application periods.</div>",
+    "answer": "According to the K-12 Program Structure on page 11, the senior high strands available are Science, Technology, Engineering, and Mathematics (STEM), Humanities and Social Sciences (HUMSS), General Academic Strand (GAS), and Accountancy, Business, and Management (ABM). These are the options for Grades 11 and 12.",
     "status": "passed",
-    "timestamp": "2026-08-11T16:05:55.140088"
+    "timestamp": "2026-08-11T20:56:27.867767"
   }
 ]

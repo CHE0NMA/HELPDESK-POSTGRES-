@@ -433,3 +433,63 @@ CREATE TRIGGER trg_visitor_stats_last_seen
 -- meaningfully deduped — free-text student phrasing rarely repeats
 -- verbatim, so this may not buy you much in practice.
 -- =====================================================================
+
+
+-- =====================================================================
+-- Continuous-learning layer (topic aliases, feedback, success cache)
+-- Added for data-driven handbook ranking — see services/topic_aliases.py
+-- =====================================================================
+
+CREATE TABLE IF NOT EXISTS handbook_topic_aliases (
+    id              SERIAL PRIMARY KEY,
+    topic_key       TEXT NOT NULL,
+    match_pattern   TEXT NOT NULL,
+    title_needles   TEXT[] NOT NULL DEFAULT '{}',
+    content_needles TEXT[] NOT NULL DEFAULT '{}',
+    source_priority TEXT NOT NULL DEFAULT 'handbook_only',
+    priority        INT NOT NULL DEFAULT 10,
+    hit_count       INT NOT NULL DEFAULT 0,
+    is_active       SMALLINT NOT NULL DEFAULT 1,
+    notes           TEXT,
+    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_hta_active ON handbook_topic_aliases (is_active, priority DESC);
+CREATE TRIGGER trg_hta_updated_at
+    BEFORE UPDATE ON handbook_topic_aliases
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at_generic();
+
+-- Optional metadata on handbook_chunks (safe ADD IF NOT EXISTS)
+ALTER TABLE handbook_chunks ADD COLUMN IF NOT EXISTS topic_tags TEXT[] DEFAULT '{}';
+ALTER TABLE handbook_chunks ADD COLUMN IF NOT EXISTS key_facts JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE handbook_chunks ADD COLUMN IF NOT EXISTS embedding JSONB;
+
+CREATE TABLE IF NOT EXISTS answer_feedback (
+    id              SERIAL PRIMARY KEY,
+    question        TEXT NOT NULL,
+    question_norm   TEXT,
+    rating          TEXT,
+    correction      TEXT,
+    source_type     TEXT,
+    chunk_ids       INT[],
+    faq_id          INT,
+    session_id      TEXT,
+    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_af_created ON answer_feedback (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_af_norm ON answer_feedback (question_norm);
+
+CREATE TABLE IF NOT EXISTS answer_success_cache (
+    id              SERIAL PRIMARY KEY,
+    question_norm   TEXT NOT NULL,
+    detected_lang   TEXT NOT NULL DEFAULT 'english',
+    source_type     TEXT NOT NULL,
+    chunk_ids       INT[],
+    faq_id          INT,
+    answer_text     TEXT NOT NULL,
+    hit_count       INT NOT NULL DEFAULT 1,
+    last_hit_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT answer_success_cache_q_lang UNIQUE (question_norm, detected_lang)
+);
+CREATE INDEX IF NOT EXISTS idx_asc_lang ON answer_success_cache (detected_lang);

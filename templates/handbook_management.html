@@ -260,7 +260,115 @@ textarea.form-control { resize:vertical; min-height:60px; }
     </div>
 
     <!-- PDF Upload -->
-    <div class="card">
+
+    <!-- Topic aliases (learning layer) -->
+    <div class="card" id="topicAliasesCard">
+      <div class="card-header">
+        <span><i class="bi bi-signpost-2" style="color:var(--accent)"></i> Topic routing aliases</span>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+          <button type="button" class="btn-outline" onclick="loadAliasSuggestions()" title="From unanswered">
+            <i class="bi bi-lightbulb"></i> Suggestions
+          </button>
+          <button type="button" class="btn-outline" onclick="seedAliases()" title="Load defaults">
+            <i class="bi bi-database-add"></i> Seed defaults
+          </button>
+          <button type="button" class="btn-refresh" onclick="loadAliases()">
+            <i class="bi bi-arrow-clockwise"></i>
+          </button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="info-box">
+          <i class="bi bi-info-circle-fill"></i>
+          <div>
+            Aliases map student phrasings to the correct handbook section titles
+            (e.g. “want to become” → Vision). Edit here instead of hardcoding in Python.
+            <strong>handbook_only</strong> blocks FAQ/schedule from stealing the answer.
+          </div>
+        </div>
+
+        <div class="search-bar">
+          <input type="text" class="form-control" id="aliasSearch" placeholder="Filter aliases…" oninput="renderAliases()">
+          <button type="button" class="btn-primary" onclick="openAliasForm()">
+            <i class="bi bi-plus-lg"></i> New alias
+          </button>
+        </div>
+
+        <div id="aliasForm" class="edit-panel" style="margin-bottom:1rem;padding:1rem;border:1px solid var(--border);border-radius:14px;background:var(--stat-box-bg)">
+          <input type="hidden" id="alias_id" value="">
+          <div class="row g-2">
+            <div class="col-md-4">
+              <label class="form-label">Topic key</label>
+              <input class="form-control" id="alias_topic_key" placeholder="e.g. vision">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Priority (higher wins)</label>
+              <input class="form-control" id="alias_priority" type="number" value="50">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Source priority</label>
+              <select class="form-select" id="alias_source_priority">
+                <option value="handbook_only">handbook_only</option>
+                <option value="faq_ok">faq_ok</option>
+                <option value="schedule_ok">schedule_ok</option>
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Match pattern (regex)</label>
+              <input class="form-control" id="alias_match_pattern" placeholder="\\b(want to become|envision)\\b">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Title needles (comma-separated)</label>
+              <input class="form-control" id="alias_title_needles" placeholder="vision, core values">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Content needles (comma-separated)</label>
+              <input class="form-control" id="alias_content_needles" placeholder="envisions, center of excellence">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Notes</label>
+              <input class="form-control" id="alias_notes" placeholder="Optional">
+            </div>
+          </div>
+          <div style="display:flex;gap:.5rem;margin-top:.85rem;flex-wrap:wrap">
+            <button type="button" class="btn-primary" id="aliasSaveBtn" onclick="saveAlias()">
+              <i class="bi bi-save2-fill"></i> Save alias
+            </button>
+            <button type="button" class="btn-outline" onclick="closeAliasForm()">Cancel</button>
+          </div>
+          <div id="aliasFormStatus" class="status-msg" style="margin-top:.75rem"></div>
+        </div>
+
+        <div id="aliasSuggestionsBox" style="display:none;margin-bottom:1rem">
+          <div class="warn-box" style="margin-bottom:.5rem">
+            <i class="bi bi-lightbulb-fill"></i>
+            <div>Frequent unanswered questions with no matching alias. Approve creates a draft pattern you should tighten.</div>
+          </div>
+          <div id="aliasSuggestionsList"></div>
+        </div>
+
+        <div style="overflow-x:auto">
+          <table class="sched-table" id="aliasesTable">
+            <thead>
+              <tr>
+                <th>Key</th>
+                <th>Pattern</th>
+                <th>Titles</th>
+                <th>Priority</th>
+                <th>Hits</th>
+                <th>Source</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="aliasesList">
+              <tr class="no-data"><td colspan="7">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+<div class="card">
       <div class="card-header"><i class="bi bi-cloud-arrow-up-fill" style="color:var(--handbook)"></i> 1. Upload Handbook PDF → Chunks</div>
       <div class="card-body">
         <div class="warn-box">
@@ -954,6 +1062,214 @@ async function deleteChunk(id) {
     else showToast(d.error || 'Delete failed', 'danger');
   } catch (e) { showToast('Network error: ' + e.message, 'danger'); }
 }
+
+/* ---------- Topic aliases ---------- */
+let allAliases = [];
+
+async function loadAliases() {
+  const tbody = document.getElementById('aliasesList');
+  if (!tbody) return;
+  try {
+    const r = await fetch('/api/admin/topic_aliases');
+    if (r.status === 401 || r.status === 403) {
+      tbody.innerHTML = '<tr class="no-data"><td colspan="7">Login required.</td></tr>';
+      return;
+    }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    allAliases = d.aliases || [];
+    renderAliases();
+  } catch (e) {
+    tbody.innerHTML = `<tr class="no-data"><td colspan="7">Failed: ${escHtml(e.message)}</td></tr>`;
+  }
+}
+
+function renderAliases() {
+  const tbody = document.getElementById('aliasesList');
+  const q = (document.getElementById('aliasSearch')?.value || '').toLowerCase().trim();
+  let rows = allAliases.filter(a => a.is_active !== false && a.is_active !== 0);
+  // also show inactive lightly? show all, mark inactive
+  rows = allAliases;
+  if (q) {
+    rows = rows.filter(a =>
+      (a.topic_key || '').toLowerCase().includes(q) ||
+      (a.match_pattern || '').toLowerCase().includes(q) ||
+      (a.title_needles || []).join(' ').toLowerCase().includes(q)
+    );
+  }
+  if (!rows.length) {
+    tbody.innerHTML = '<tr class="no-data"><td colspan="7">No aliases. Click “Seed defaults” or “New alias”.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(a => {
+    const active = a.is_active === true || a.is_active === 1;
+    const titles = (a.title_needles || []).slice(0, 3).join(', ');
+    const pat = (a.match_pattern || '').length > 48
+      ? (a.match_pattern || '').slice(0, 46) + '…' : (a.match_pattern || '');
+    return `<tr style="${active ? '' : 'opacity:.45'}">
+      <td class="title-cell">${escHtml(a.topic_key || '')}</td>
+      <td class="preview-cell" title="${escHtml(a.match_pattern || '')}"><code style="font-size:.72rem">${escHtml(pat)}</code></td>
+      <td class="preview-cell">${escHtml(titles)}</td>
+      <td>${a.priority ?? 0}</td>
+      <td>${a.hit_count ?? 0}</td>
+      <td><span class="badge-type">${escHtml(a.source_priority || 'handbook_only')}</span></td>
+      <td>
+        <button class="act-btn" onclick="editAlias(${a.id})" title="Edit"><i class="bi bi-pencil"></i></button>
+        <button class="act-btn del" onclick="deleteAlias(${a.id})" title="Deactivate"><i class="bi bi-trash"></i></button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function openAliasForm(prefill) {
+  document.getElementById('aliasForm').classList.add('open');
+  document.getElementById('alias_id').value = prefill?.id || '';
+  document.getElementById('alias_topic_key').value = prefill?.topic_key || '';
+  document.getElementById('alias_priority').value = prefill?.priority ?? 50;
+  document.getElementById('alias_source_priority').value = prefill?.source_priority || 'handbook_only';
+  document.getElementById('alias_match_pattern').value = prefill?.match_pattern || '';
+  document.getElementById('alias_title_needles').value = (prefill?.title_needles || []).join(', ');
+  document.getElementById('alias_content_needles').value = (prefill?.content_needles || []).join(', ');
+  document.getElementById('alias_notes').value = prefill?.notes || '';
+  document.getElementById('aliasFormStatus').style.display = 'none';
+  document.getElementById('aliasForm').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function closeAliasForm() {
+  document.getElementById('aliasForm').classList.remove('open');
+}
+
+function editAlias(id) {
+  const a = allAliases.find(x => x.id === id);
+  if (a) openAliasForm(a);
+}
+
+function _splitNeedles(s) {
+  return (s || '').split(',').map(x => x.trim()).filter(Boolean);
+}
+
+async function saveAlias() {
+  const id = document.getElementById('alias_id').value;
+  const payload = {
+    topic_key: document.getElementById('alias_topic_key').value.trim(),
+    match_pattern: document.getElementById('alias_match_pattern').value.trim(),
+    priority: parseInt(document.getElementById('alias_priority').value, 10) || 50,
+    source_priority: document.getElementById('alias_source_priority').value,
+    title_needles: _splitNeedles(document.getElementById('alias_title_needles').value),
+    content_needles: _splitNeedles(document.getElementById('alias_content_needles').value),
+    notes: document.getElementById('alias_notes').value.trim() || null,
+  };
+  if (!payload.topic_key || !payload.match_pattern) {
+    showToast('Topic key and match pattern required', 'warning');
+    return;
+  }
+  const btn = document.getElementById('aliasSaveBtn');
+  btn.disabled = true;
+  try {
+    const url = id ? `/api/admin/topic_aliases/${id}` : '/api/admin/topic_aliases';
+    const method = id ? 'PUT' : 'POST';
+    const r = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      body: JSON.stringify(payload),
+    });
+    const d = await r.json();
+    if (r.ok && d.success) {
+      showToast(id ? 'Alias updated' : 'Alias created', 'success');
+      closeAliasForm();
+      loadAliases();
+    } else {
+      showToast(d.error || 'Save failed', 'danger');
+    }
+  } catch (e) {
+    showToast('Network error: ' + e.message, 'danger');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function deleteAlias(id) {
+  if (!confirm('Deactivate this alias?')) return;
+  try {
+    const r = await fetch(`/api/admin/topic_aliases/${id}`, {
+      method: 'DELETE',
+      headers: { 'X-CSRFToken': getCsrf() },
+    });
+    const d = await r.json();
+    if (r.ok && d.success) {
+      showToast('Alias deactivated', 'success');
+      loadAliases();
+    } else showToast(d.error || 'Failed', 'danger');
+  } catch (e) {
+    showToast('Network error: ' + e.message, 'danger');
+  }
+}
+
+async function seedAliases() {
+  if (!confirm('Seed default PAC aliases if the table is empty?')) return;
+  try {
+    const r = await fetch('/api/admin/seed_aliases', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      body: JSON.stringify({ force: false }),
+    });
+    const d = await r.json();
+    showToast(d.seeded ? `Seeded ${d.seeded} aliases` : 'Already seeded (or empty force)', 'success');
+    loadAliases();
+  } catch (e) {
+    showToast('Seed failed: ' + e.message, 'danger');
+  }
+}
+
+async function loadAliasSuggestions() {
+  const box = document.getElementById('aliasSuggestionsBox');
+  const list = document.getElementById('aliasSuggestionsList');
+  try {
+    const r = await fetch('/api/admin/alias_suggestions');
+    const d = await r.json();
+    const tips = d.suggestions || [];
+    if (!tips.length) {
+      box.style.display = 'block';
+      list.innerHTML = '<div class="text-dim" style="font-size:.85rem;color:var(--text-dim)">No frequent unanswered gaps right now.</div>';
+      return;
+    }
+    box.style.display = 'block';
+    window._aliasTips = tips;
+    list.innerHTML = tips.map((t, i) => `
+      <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;padding:.55rem 0;border-bottom:1px solid var(--border)">
+        <div style="flex:1;min-width:180px">
+          <div style="font-weight:600;font-size:.88rem">${escHtml(t.sample_question || '')}</div>
+          <div style="font-size:.72rem;color:var(--muted)">asked ${t.frequency}×</div>
+        </div>
+        <button type="button" class="btn-outline" onclick="approveSuggestionIdx(${i})">
+          <i class="bi bi-plus-lg"></i> Draft alias
+        </button>
+      </div>
+    `).join('');
+  } catch (e) {
+    showToast('Suggestions failed: ' + e.message, 'danger');
+  }
+}
+
+function approveSuggestionIdx(i) {
+  const t = (window._aliasTips || [])[i];
+  if (!t) return;
+  openAliasForm({
+    topic_key: t.suggested_topic_key || 'new_topic',
+    match_pattern: t.suggested_pattern || '',
+    priority: 60,
+    source_priority: 'handbook_only',
+    title_needles: [],
+    content_needles: [],
+    notes: t.notes || 'From unanswered suggestions',
+  });
+}
+
+// Boot
+if (document.getElementById('aliasesList')) {
+  loadAliases();
+}
+
 </script>
 </body>
 </html>

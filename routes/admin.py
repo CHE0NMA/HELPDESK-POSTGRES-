@@ -918,3 +918,169 @@ def api_mass_insert_handbook_faqs():
         return jsonify(success=False, error='No valid FAQ pairs found'), 400
     n = mass_insert_faqs(get_db, faqs, retire_previous=retire)
     return jsonify(success=True, inserted=n, message=f'Inserted {n} handbook FAQs')
+
+
+
+# ---- Topic aliases (learning layer) ----
+@bp.route("/api/admin/topic_aliases", methods=["GET"])
+def api_list_topic_aliases():
+    if not admin_required():
+        return jsonify({"error": "Unauthorized"}), 403
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """
+            SELECT id, topic_key, match_pattern, title_needles, content_needles,
+                   source_priority, priority, hit_count, is_active, notes
+            FROM handbook_topic_aliases
+            ORDER BY priority DESC, id ASC
+            """
+        )
+        rows = cur.fetchall()
+        return jsonify({
+            "aliases": [{
+                "id": r[0], "topic_key": r[1], "match_pattern": r[2],
+                "title_needles": list(r[3] or []), "content_needles": list(r[4] or []),
+                "source_priority": r[5], "priority": r[6], "hit_count": r[7],
+                "is_active": bool(r[8]), "notes": r[9],
+            } for r in rows]
+        })
+    finally:
+        cur.close()
+        conn.close()
+
+
+@bp.route("/api/admin/topic_aliases", methods=["POST"])
+@csrf.exempt
+def api_create_topic_alias():
+    if not admin_required():
+        return jsonify({"error": "Unauthorized"}), 403
+    data = request.get_json(silent=True) or {}
+    if not data.get("topic_key") or not data.get("match_pattern"):
+        return jsonify({"error": "topic_key and match_pattern required"}), 400
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """
+            INSERT INTO handbook_topic_aliases
+                (topic_key, match_pattern, title_needles, content_needles,
+                 source_priority, priority, notes)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (
+                data["topic_key"][:80],
+                data["match_pattern"][:500],
+                data.get("title_needles") or [],
+                data.get("content_needles") or [],
+                data.get("source_priority") or "handbook_only",
+                int(data.get("priority") or 50),
+                data.get("notes"),
+            ),
+        )
+        new_id = cur.fetchone()[0]
+        conn.commit()
+        try:
+            from services.topic_aliases import invalidate_alias_cache
+            invalidate_alias_cache()
+        except Exception:
+            pass
+        return jsonify({"success": True, "id": new_id})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+
+@bp.route("/api/admin/topic_aliases/<int:alias_id>", methods=["PUT"])
+@csrf.exempt
+def api_update_topic_alias(alias_id):
+    if not admin_required():
+        return jsonify({"error": "Unauthorized"}), 403
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """
+            UPDATE handbook_topic_aliases SET
+                topic_key = COALESCE(%s, topic_key),
+                match_pattern = COALESCE(%s, match_pattern),
+                title_needles = COALESCE(%s, title_needles),
+                content_needles = COALESCE(%s, content_needles),
+                source_priority = COALESCE(%s, source_priority),
+                priority = COALESCE(%s, priority),
+                is_active = COALESCE(%s, is_active),
+                notes = COALESCE(%s, notes),
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (
+                data.get("topic_key"),
+                data.get("match_pattern"),
+                data.get("title_needles"),
+                data.get("content_needles"),
+                data.get("source_priority"),
+                data.get("priority"),
+                data.get("is_active"),
+                data.get("notes"),
+                alias_id,
+            ),
+        )
+        conn.commit()
+        try:
+            from services.topic_aliases import invalidate_alias_cache
+            invalidate_alias_cache()
+        except Exception:
+            pass
+        return jsonify({"success": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+
+@bp.route("/api/admin/topic_aliases/<int:alias_id>", methods=["DELETE"])
+@csrf.exempt
+def api_delete_topic_alias(alias_id):
+    if not admin_required():
+        return jsonify({"error": "Unauthorized"}), 403
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("UPDATE handbook_topic_aliases SET is_active = 0 WHERE id = %s", (alias_id,))
+        conn.commit()
+        try:
+            from services.topic_aliases import invalidate_alias_cache
+            invalidate_alias_cache()
+        except Exception:
+            pass
+        return jsonify({"success": True})
+    finally:
+        cur.close()
+        conn.close()
+
+
+@bp.route("/api/admin/alias_suggestions")
+def api_alias_suggestions():
+    if not admin_required():
+        return jsonify({"error": "Unauthorized"}), 403
+    from services.topic_aliases import suggest_aliases_from_unanswered
+    tips = suggest_aliases_from_unanswered(get_db, min_count=3, limit=30)
+    return jsonify({"suggestions": tips})
+
+
+@bp.route("/api/admin/seed_aliases", methods=["POST"])
+@csrf.exempt
+def api_seed_aliases():
+    if not admin_required():
+        return jsonify({"error": "Unauthorized"}), 403
+    from services.topic_aliases import seed_default_aliases
+    n = seed_default_aliases(get_db, force=bool((request.get_json(silent=True) or {}).get("force")))
+    return jsonify({"seeded": n})

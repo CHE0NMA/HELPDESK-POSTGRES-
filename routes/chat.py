@@ -247,6 +247,21 @@ def satisfaction_feedback():
             VALUES (%s, %s, %s, %s, NOW())
         """, (sid, question[:500], (answer or '')[:1000], rating))
         conn.commit()
+        # Continuous-learning: lock in good answers / drop bad cache entries
+        try:
+            from services.answer_memory import promote_from_thumbs_up, record_feedback
+            if rating == 'thumbs_up':
+                promote_from_thumbs_up(
+                    get_db, question, answer or '',
+                    detected_lang='english', source_type='chat',
+                )
+            else:
+                record_feedback(
+                    get_db, question, 'thumbs_down',
+                    session_id=sid, source_type='chat',
+                )
+        except Exception as mem_err:
+            logger.debug(f"answer_memory hook: {mem_err}")
         if rating == 'thumbs_down':
             log_unanswered_standalone(question, session_id=sid)
         return jsonify({'status': 'success'})

@@ -10,6 +10,11 @@ services/handbook.py's search query now depends on. Safe to run every
 boot (no-ops once already applied). Everything else here was already
 portable (init_pool()/ensure_admin_exists()/etc. are the same function
 names, just backed by psycopg2 now).
+
+--- Learning layer ---
+ensure_learning_layer() creates handbook_topic_aliases, answer_feedback,
+answer_success_cache and seeds default aliases so ranking works before
+any admin edits.
 """
 import logging
 import os
@@ -30,8 +35,10 @@ from config import UPLOAD_FOLDER, validate_config
 from extensions import csrf
 from database import init_pool
 from database.schema import (
-    ensure_core_tables,ensure_admin_exists, ensure_schedule_schema, migrate_create_chat_sessions,
-    migrate_add_uuid_to_faq, ensure_handbook_fulltext_search, ensure_faq_embedding_column,
+    ensure_core_tables, ensure_admin_exists, ensure_schedule_schema,
+    migrate_create_chat_sessions, migrate_add_uuid_to_faq,
+    ensure_handbook_fulltext_search, ensure_faq_embedding_column,
+    ensure_learning_layer,
 )
 from services.alerts import (
     batch_process_unanswered, check_stale_faqs, promote_high_frequency_faqs,
@@ -85,10 +92,7 @@ def create_app():
     os.makedirs(app.config['BACKUP_FOLDER'], exist_ok=True)
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-    csrf.init_app(app)  # routes that must stay exempt (JSON APIs posted
-                        # from JS without a CSRF token) call @csrf.exempt
-                        # directly above their own @bp.route — see
-                        # routes/chat.py, routes/admin.py, routes/schedules.py
+    csrf.init_app(app)
 
     Limiter(get_remote_address, app=app,
             default_limits=[os.environ.get('RATE_LIMIT_DEFAULT', '200 per day;50 per hour')],
@@ -116,6 +120,7 @@ def create_app():
     migrate_add_uuid_to_faq()
     ensure_handbook_fulltext_search()
     ensure_faq_embedding_column()
+    ensure_learning_layer()  # topic aliases + answer memory tables + seed
     Thread(target=warm_response_tables, daemon=True).start()
 
     scheduler = BackgroundScheduler()
@@ -124,6 +129,28 @@ def create_app():
     scheduler.add_job(func=batch_process_unanswered, trigger="interval", minutes=30)
     scheduler.add_job(func=check_frequent_missing_dates, trigger="interval", minutes=30)
     scheduler.add_job(func=cleanup_old_sessions, trigger="interval", days=7)
+
+    # Optional: daily log of alias suggestions from frequent unanswered Qs
+    try:
+        from services.topic_aliases import suggest_aliases_from_unanswered
+        from database import get_db as _gdb
+
+        def _log_alias_suggestions():
+            try:
+                tips = suggest_aliases_from_unanswered(_gdb, min_count=3, limit=15)
+                if tips:
+                    app.logger.info(
+                        "Alias suggestions (%d): %s",
+                        len(tips),
+                        "; ".join(t["sample_question"][:40] for t in tips[:5]),
+                    )
+            except Exception as e:
+                app.logger.warning(f"alias suggestion job: {e}")
+
+        scheduler.add_job(func=_log_alias_suggestions, trigger="interval", hours=24)
+    except Exception as e:
+        app.logger.warning(f"Could not schedule alias suggestions: {e}")
+
     scheduler.start()
     app.scheduler = scheduler
 
