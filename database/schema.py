@@ -38,15 +38,55 @@ from database import get_db
 
 logger = logging.getLogger("pac_helpdesk.database.schema")
 
+
 def ensure_core_tables():
-    """Create the most important tables if they don't exist yet.
-    This is a lightweight fallback for free-tier deploys where we can't
-    run full_schema.sql manually.
+    """Create every table the app needs if it doesn't exist yet.
+
+    Free-tier fallback when full_schema.sql was never run against the
+    Render Postgres instance. Mirrors database/full_schema.sql.
+    Safe to call every boot — CREATE TABLE IF NOT EXISTS is a no-op
+    once tables exist.
     """
     conn = get_db()
     cur = conn.cursor()
     try:
-        # admin_users
+        cur.execute("""
+            CREATE OR REPLACE FUNCTION set_updated_at_generic()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                NEW.updated_at = CURRENT_TIMESTAMP;
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+        """)
+        cur.execute("""
+            CREATE OR REPLACE FUNCTION set_last_activity()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                NEW.last_activity = CURRENT_TIMESTAMP;
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+        """)
+        cur.execute("""
+            CREATE OR REPLACE FUNCTION set_faq_last_updated()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                NEW.last_updated = CURRENT_TIMESTAMP;
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+        """)
+        cur.execute("""
+            CREATE OR REPLACE FUNCTION set_visitor_last_seen()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                NEW.last_seen = CURRENT_TIMESTAMP;
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+        """)
+
         cur.execute("""
             CREATE TABLE IF NOT EXISTS admin_users (
                 id SERIAL PRIMARY KEY,
@@ -56,7 +96,6 @@ def ensure_core_tables():
             )
         """)
 
-        # faq
         cur.execute("""
             CREATE TABLE IF NOT EXISTS faq (
                 id SERIAL PRIMARY KEY,
@@ -80,8 +119,21 @@ def ensure_core_tables():
                 embedding JSONB
             )
         """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_faq_topic ON faq(topic)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_faq_priority_score ON faq(priority_score)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_faq_source ON faq(source)")
+        cur.execute("""
+            DO $$ BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_trigger WHERE tgname = 'trg_faq_last_updated'
+                ) THEN
+                    CREATE TRIGGER trg_faq_last_updated
+                        BEFORE UPDATE ON faq
+                        FOR EACH ROW EXECUTE FUNCTION set_faq_last_updated();
+                END IF;
+            END $$;
+        """)
 
-        # unanswered_questions
         cur.execute("""
             CREATE TABLE IF NOT EXISTS unanswered_questions (
                 id SERIAL PRIMARY KEY,
@@ -91,8 +143,11 @@ def ensure_core_tables():
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_unanswered_questions_created_at "
+            "ON unanswered_questions(created_at)"
+        )
 
-        # chat_sessions
         cur.execute("""
             CREATE TABLE IF NOT EXISTS chat_sessions (
                 id SERIAL PRIMARY KEY,
@@ -104,8 +159,13 @@ def ensure_core_tables():
                 user_agent TEXT
             )
         """)
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_chat_sessions_uuid ON chat_sessions(public_uuid)"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_chat_sessions_session ON chat_sessions(session_id)"
+        )
 
-        # chat_history
         cur.execute("""
             CREATE TABLE IF NOT EXISTS chat_history (
                 id SERIAL PRIMARY KEY,
@@ -119,8 +179,64 @@ def ensure_core_tables():
                 chat_uuid VARCHAR(36)
             )
         """)
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_chat_history_session_id ON chat_history(session_id)"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_chat_history_created_at ON chat_history(created_at)"
+        )
 
-        # handbook_chunks
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS chat_ratings (
+                id SERIAL PRIMARY KEY,
+                session_id VARCHAR(100),
+                rating INTEGER NOT NULL,
+                comment TEXT,
+                exchange_count INTEGER DEFAULT 0,
+                detected_language VARCHAR(20),
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_chat_ratings_created_at ON chat_ratings(created_at)"
+        )
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS satisfaction_feedback (
+                id SERIAL PRIMARY KEY,
+                session_id VARCHAR(100),
+                question TEXT,
+                answer TEXT,
+                rating VARCHAR(20),
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_satisfaction_feedback_created_at "
+            "ON satisfaction_feedback(created_at)"
+        )
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS visitor_stats (
+                id SERIAL PRIMARY KEY,
+                fingerprint VARCHAR(32) NOT NULL UNIQUE,
+                question_count INTEGER DEFAULT 0,
+                first_seen TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_seen TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cur.execute("""
+            DO $$ BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_trigger WHERE tgname = 'trg_visitor_stats_last_seen'
+                ) THEN
+                    CREATE TRIGGER trg_visitor_stats_last_seen
+                        BEFORE UPDATE ON visitor_stats
+                        FOR EACH ROW EXECUTE FUNCTION set_visitor_last_seen();
+                END IF;
+            END $$;
+        """)
+
         cur.execute("""
             CREATE TABLE IF NOT EXISTS handbook_chunks (
                 id SERIAL PRIMARY KEY,
@@ -135,9 +251,236 @@ def ensure_core_tables():
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_handbook_chunks_chunk_order "
+            "ON handbook_chunks(chunk_order)"
+        )
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS alert_history (
+                id SERIAL PRIMARY KEY,
+                severity VARCHAR(20) NOT NULL,
+                subject VARCHAR(255) NOT NULL,
+                message TEXT,
+                channels VARCHAR(100),
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_alert_history_created_at ON alert_history(created_at)"
+        )
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS bad_feedback (
+                id SERIAL PRIMARY KEY,
+                question TEXT,
+                answer TEXT,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS faq_review_queue (
+                id SERIAL PRIMARY KEY,
+                faq_id INTEGER UNIQUE,
+                reason TEXT,
+                status VARCHAR(20) DEFAULT 'pending',
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS pending_faq_drafts (
+                id SERIAL PRIMARY KEY,
+                question TEXT NOT NULL,
+                frequency INTEGER DEFAULT 1,
+                last_asked TIMESTAMP,
+                suggested_category VARCHAR(100),
+                status VARCHAR(20) DEFAULT 'pending',
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS missing_date_queries (
+                id SERIAL PRIMARY KEY,
+                question TEXT,
+                detected_date DATE,
+                asked_count INTEGER DEFAULT 1,
+                last_asked TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS abbreviations (
+                id SERIAL PRIMARY KEY,
+                abbreviation VARCHAR(50) NOT NULL UNIQUE,
+                expansion VARCHAR(255) NOT NULL,
+                language VARCHAR(20) DEFAULT 'all',
+                is_active SMALLINT DEFAULT 1,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS greetings (
+                id SERIAL PRIMARY KEY,
+                language VARCHAR(20) NOT NULL UNIQUE,
+                greeting_text TEXT NOT NULL,
+                is_active SMALLINT DEFAULT 1,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS fallback_responses (
+                id SERIAL PRIMARY KEY,
+                language VARCHAR(20) NOT NULL UNIQUE,
+                response_text TEXT NOT NULL,
+                is_active SMALLINT DEFAULT 1,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS non_school_responses (
+                id SERIAL PRIMARY KEY,
+                language VARCHAR(20) NOT NULL UNIQUE,
+                response_text TEXT NOT NULL,
+                is_active SMALLINT DEFAULT 1,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS ai_feedback (
+                id SERIAL PRIMARY KEY,
+                ai_response_id INTEGER,
+                user_feedback SMALLINT,
+                user_correction TEXT,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS ai_generated_responses (
+                id SERIAL PRIMARY KEY,
+                question TEXT NOT NULL,
+                answer TEXT NOT NULL,
+                intent VARCHAR(50),
+                confidence REAL DEFAULT 0,
+                was_helpful SMALLINT,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS topic_classifications (
+                id SERIAL PRIMARY KEY,
+                topic VARCHAR(50) NOT NULL,
+                keyword VARCHAR(100) NOT NULL,
+                is_school SMALLINT DEFAULT 1,
+                weight REAL DEFAULT 1,
+                is_active SMALLINT DEFAULT 1,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS dynamic_schedules (
+                id SERIAL PRIMARY KEY,
+                title VARCHAR(200) NOT NULL,
+                description TEXT,
+                content_type VARCHAR(30) DEFAULT 'event',
+                start_date DATE NOT NULL,
+                end_date DATE,
+                repeat_type VARCHAR(10) DEFAULT 'none'
+                    CHECK (repeat_type IN ('none','yearly','monthly','weekly')),
+                repeat_until_year INTEGER,
+                is_closed SMALLINT DEFAULT 0,
+                special_hours_start TIME,
+                special_hours_end TIME,
+                message_english TEXT,
+                message_tagalog TEXT,
+                message_bisaya TEXT,
+                created_by VARCHAR(100),
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                is_active SMALLINT DEFAULT 1,
+                departments JSONB,
+                grade_levels JSONB
+            )
+        """)
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_dynamic_schedules_start_date "
+            "ON dynamic_schedules(start_date)"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_dynamic_schedules_is_active "
+            "ON dynamic_schedules(is_active)"
+        )
+        cur.execute("""
+            DO $$ BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_trigger WHERE tgname = 'trg_dynamic_schedules_updated_at'
+                ) THEN
+                    CREATE TRIGGER trg_dynamic_schedules_updated_at
+                        BEFORE UPDATE ON dynamic_schedules
+                        FOR EACH ROW EXECUTE FUNCTION set_updated_at_generic();
+                END IF;
+            END $$;
+        """)
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS emergency_closures (
+                id SERIAL PRIMARY KEY,
+                title VARCHAR(200) NOT NULL,
+                reason VARCHAR(20) NOT NULL
+                    CHECK (reason IN ('heavy_rain','typhoon','flood','earthquake','power_outage','other')),
+                severity VARCHAR(10) DEFAULT 'medium'
+                    CHECK (severity IN ('low','medium','high','critical')),
+                start_date DATE NOT NULL,
+                end_date DATE,
+                start_time TIME,
+                end_time TIME,
+                affected_departments JSONB NOT NULL,
+                affected_grades JSONB,
+                message_english TEXT,
+                message_tagalog TEXT,
+                message_bisaya TEXT,
+                is_active SMALLINT DEFAULT 1,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                created_by VARCHAR(100)
+            )
+        """)
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_emergency_closures_start_date "
+            "ON emergency_closures(start_date)"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_emergency_closures_is_active "
+            "ON emergency_closures(is_active)"
+        )
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS default_schedules (
+                id SERIAL PRIMARY KEY,
+                department VARCHAR(50) NOT NULL,
+                grade_level VARCHAR(20) DEFAULT 'all',
+                day_of_week INTEGER NOT NULL,
+                start_time TIME NOT NULL,
+                end_time TIME NOT NULL,
+                has_class SMALLINT DEFAULT 1,
+                is_active SMALLINT DEFAULT 1,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT unique_schedule UNIQUE (department, grade_level, day_of_week)
+            )
+        """)
 
         conn.commit()
-        logger.info("Core tables ensured")
+        logger.info("Core tables ensured (full set)")
     except Exception as e:
         logger.error(f"ensure_core_tables error: {e}")
         conn.rollback()
@@ -206,65 +549,50 @@ def ensure_admin_exists():
         conn.close()
 
 
+
 def ensure_schedule_schema():
+    """Idempotent schedule-table migrations + seed data.
+
+    Tables themselves are created in ensure_core_tables(). This only adds
+    missing columns/triggers and seeds default_schedules when empty.
+    """
     ensure_updated_at_trigger_fn()
     conn = get_db()
     cur = conn.cursor()
     try:
-        if not _column_exists(cur, 'dynamic_schedules', 'grade_levels'):
-            cur.execute("ALTER TABLE dynamic_schedules ADD COLUMN grade_levels JSONB NULL")
-            conn.commit()
-            logger.info("dynamic_schedules.grade_levels column added")
-
-        if not _table_exists(cur, 'emergency_closures'):
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS emergency_closures (
-                    id SERIAL PRIMARY KEY,
-                    title VARCHAR(200) NOT NULL,
-                    reason VARCHAR(20) NOT NULL
-                        CHECK (reason IN ('heavy_rain','typhoon','flood','earthquake','power_outage','other')),
-                    severity VARCHAR(10) DEFAULT 'medium'
-                        CHECK (severity IN ('low','medium','high','critical')),
-                    start_date DATE NOT NULL, end_date DATE NULL,
-                    start_time TIME NULL, end_time TIME NULL,
-                    affected_departments JSONB NOT NULL, affected_grades JSONB NULL,
-                    message_english TEXT, message_tagalog TEXT, message_bisaya TEXT,
-                    is_active SMALLINT DEFAULT 1,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    created_by VARCHAR(100)
+        if _table_exists(cur, 'dynamic_schedules'):
+            if not _column_exists(cur, 'dynamic_schedules', 'grade_levels'):
+                cur.execute(
+                    "ALTER TABLE dynamic_schedules ADD COLUMN grade_levels JSONB NULL"
                 )
-            """)
-            cur.execute(
-                "CREATE INDEX IF NOT EXISTS idx_emergency_closures_dates "
-                "ON emergency_closures(start_date, end_date)"
-            )
-            cur.execute(
-                "CREATE INDEX IF NOT EXISTS idx_emergency_closures_active "
-                "ON emergency_closures(is_active)"
-            )
-            cur.execute("""
-                CREATE TRIGGER trg_emergency_closures_updated_at
-                BEFORE UPDATE ON emergency_closures
-                FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-            """)
-            conn.commit()
-            logger.info("emergency_closures table created")
-
-        if not _table_exists(cur, 'default_schedules'):
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS default_schedules (
-                    id SERIAL PRIMARY KEY,
-                    department VARCHAR(50) NOT NULL, grade_level VARCHAR(20) DEFAULT 'all',
-                    day_of_week INT NOT NULL, start_time TIME NOT NULL, end_time TIME NOT NULL,
-                    has_class SMALLINT DEFAULT 1, is_active SMALLINT DEFAULT 1,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    CONSTRAINT unique_schedule UNIQUE (department, grade_level, day_of_week)
+                conn.commit()
+                logger.info("dynamic_schedules.grade_levels column added")
+            if not _column_exists(cur, 'dynamic_schedules', 'departments'):
+                cur.execute(
+                    "ALTER TABLE dynamic_schedules ADD COLUMN departments JSONB NULL"
                 )
+                conn.commit()
+                logger.info("dynamic_schedules.departments column added")
+
+        if _table_exists(cur, 'emergency_closures'):
+            cur.execute("""
+                DO $$ BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_trigger
+                        WHERE tgname = 'trg_emergency_closures_updated_at'
+                    ) THEN
+                        CREATE TRIGGER trg_emergency_closures_updated_at
+                            BEFORE UPDATE ON emergency_closures
+                            FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+                    END IF;
+                END $$;
             """)
             conn.commit()
-            logger.info("default_schedules table created")
-            _seed_default_schedules(cur, conn)
+
+        if _table_exists(cur, 'default_schedules'):
+            cur.execute("SELECT COUNT(*) FROM default_schedules")
+            if cur.fetchone()[0] == 0:
+                _seed_default_schedules(cur, conn)
     except Exception as e:
         logger.error(f"ensure_schedule_schema error: {e}")
         conn.rollback()

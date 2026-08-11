@@ -905,16 +905,16 @@ def api_import_handbook_chunks():
         cur.close()
         conn.close()
 
-
-
-    @app.route('/api/admin/mass_insert_handbook_faqs', methods=['POST'])
-    @admin_required
-    def api_mass_insert_handbook_faqs():
-        data = request.get_json(silent=True) or {}
-        text = data.get('text') or ''
-        retire = bool(data.get('retire_previous', True))
-        faqs = parse_pasted_faqs(text)
-        if not faqs:
-            return jsonify(success=False, error='No valid FAQ pairs found'), 400
-        n = mass_insert_faqs(get_db, faqs, retire_previous=retire)
-        return jsonify(success=True, inserted=n, message=f'Inserted {n} handbook FAQs')
+@bp.route('/api/admin/mass_insert_handbook_faqs', methods=['POST'])
+@csrf.exempt
+def api_mass_insert_handbook_faqs():
+    if not admin_required():
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.get_json(silent=True) or {}
+    text = data.get('text') or ''
+    retire = bool(data.get('retire_previous', True))
+    faqs = parse_pasted_faqs(text)
+    if not faqs:
+        return jsonify(success=False, error='No valid FAQ pairs found'), 400
+    n = mass_insert_faqs(get_db, faqs, retire_previous=retire)
+    return jsonify(success=True, inserted=n, message=f'Inserted {n} handbook FAQs')
