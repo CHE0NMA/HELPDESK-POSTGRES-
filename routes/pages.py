@@ -1,6 +1,11 @@
-"""Page routes that render HTML (landing page, chat UI, chat-by-uuid)."""
+"""Page routes that render HTML (landing page, chat UI, chat-by-uuid).
+
+Preserves ?q= across /chat → /new_chat → /chat/<uuid> so landing-page
+question cards auto-ask in chat. Passes `prefill` into chat.html.
+"""
 import logging
 from datetime import datetime, timedelta
+from urllib.parse import urlencode
 
 from flask import Blueprint, redirect, render_template, request, send_from_directory, session
 
@@ -29,8 +34,6 @@ def _session_expired() -> bool:
 
 
 def _reset_session_for_new_chat():
-    """Same cleanup new_chat() does, factored out so the timeout check
-    can call it before deciding where to redirect."""
     from services.conversation import conversation_contexts
     sid = session.get('persistent_session_id')
     if sid and sid in conversation_contexts:
@@ -38,6 +41,14 @@ def _reset_session_for_new_chat():
     for k in ['last_topic', 'last_intent', 'last_category', 'conversation_turn',
               'persistent_session_id', 'chat_session', 'current_chat_uuid', 'last_activity']:
         session.pop(k, None)
+
+
+def _prefill_query_string() -> str:
+    """Keep q / prefill across redirects."""
+    q = (request.args.get('q') or request.args.get('prefill') or '').strip()
+    if not q:
+        return ''
+    return '?' + urlencode({'q': q[:500]})
 
 
 @bp.route('/')
@@ -55,10 +66,10 @@ def uploaded_file(filename):
 
 @bp.route('/chat')
 def chat_ui():
-    # A stale session (idle 6+ hours) never resumes silently — start fresh.
+    qs = _prefill_query_string()
     if _session_expired():
         _reset_session_for_new_chat()
-        return redirect('/new_chat')
+        return redirect('/new_chat' + qs)
 
     session_id = session.get('persistent_session_id')
     chat_uuid = session.get('current_chat_uuid')
@@ -71,7 +82,7 @@ def chat_ui():
             row = cur.fetchone()
             if row:
                 session['current_chat_uuid'] = row[0]
-                return redirect(f'/chat/{row[0]}')
+                return redirect(f'/chat/{row[0]}{qs}')
         except Exception as e:
             logger.error(f"chat_ui error: {e}")
         finally:
@@ -84,20 +95,22 @@ def chat_ui():
         try:
             cur.execute("SELECT session_id FROM chat_sessions WHERE public_uuid = %s", (chat_uuid,))
             if cur.fetchone():
-                return redirect(f'/chat/{chat_uuid}')
+                return redirect(f'/chat/{chat_uuid}{qs}')
         except Exception as e:
             logger.error(f"chat_ui error: {e}")
         finally:
             cur.close()
             conn.close()
 
-    return redirect('/new_chat')
+    return redirect('/new_chat' + qs)
 
 
 @bp.route('/new_chat')
 def new_chat():
     import uuid
     from services.conversation import conversation_contexts
+
+    qs = _prefill_query_string()
 
     sid = session.get('persistent_session_id')
     if sid and sid in conversation_contexts:
@@ -129,15 +142,17 @@ def new_chat():
     session.permanent = True
     _touch_activity()
 
-    return redirect(f'/chat/{chat_uuid}')
+    return redirect(f'/chat/{chat_uuid}{qs}')
 
 
 @bp.route('/chat/<string:chat_uuid>')
 def chat_with_uuid(chat_uuid):
+    qs_prefill = (request.args.get('q') or request.args.get('prefill') or '').strip()[:500]
 
     if _session_expired():
         _reset_session_for_new_chat()
-        return redirect('/new_chat')
+        extra = ('?' + urlencode({'q': qs_prefill})) if qs_prefill else ''
+        return redirect('/new_chat' + extra)
 
     conn = get_db()
     cur = conn.cursor()
@@ -168,9 +183,13 @@ def chat_with_uuid(chat_uuid):
         session['persistent_session_id'] = session_id
         _touch_activity()
 
-        return render_template('chat.html', chats=chats, chat_uuid=chat_uuid)
+        return render_template(
+            'chat.html',
+            chats=chats,
+            chat_uuid=chat_uuid,
+            prefill=qs_prefill,
+        )
     except Exception as e:
-
         logger.error(f"chat_with_uuid error: {e}", exc_info=True)
         return redirect('/chat')
     finally:

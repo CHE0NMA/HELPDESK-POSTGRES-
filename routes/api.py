@@ -428,3 +428,175 @@ def api_report():
     session_id = (data.get('session_id') or '')[:100]
 
     return jsonify({'ok': True})
+
+@bp.route('/api/featured')
+def api_featured():
+    """Most-asked questions for the landing page Featured grid."""
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT user_message, COUNT(*) AS freq
+            FROM chat_history
+            WHERE created_at >= NOW() - INTERVAL '60 days'
+              AND LENGTH(user_message) > 8
+              AND LOWER(user_message) NOT IN (
+                'hi','hello','hey','yes','no','ok','thanks','thank you',
+                'kumusta','kamusta','musta'
+              )
+            GROUP BY user_message
+            ORDER BY freq DESC
+            LIMIT 8
+        """)
+        rows = cur.fetchall()
+        items = []
+        for msg, freq in rows:
+            items.append({'question': msg, 'category': '', 'count': freq})
+        if not items:
+            cur.execute("""
+                SELECT question, topic
+                FROM faq
+                WHERE question IS NOT NULL AND question != ''
+                ORDER BY priority_score DESC NULLS LAST, id DESC
+                LIMIT 8
+            """)
+            for q, topic in cur.fetchall():
+                items.append({'question': q, 'category': topic or 'General', 'count': 0})
+        return jsonify(items)
+    except Exception as e:
+        logger.error(f"api_featured error: {e}")
+        return jsonify([])
+    finally:
+        cur.close()
+        conn.close()
+
+
+@bp.route('/api/recent')
+def api_recent():
+    """Recently added / updated FAQs for landing New & Updated strip."""
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        try:
+            cur.execute("""
+                SELECT question, COALESCE(topic, category, 'General') AS cat,
+                       COALESCE(last_updated, created_at, NOW()) AS touched
+                FROM faq
+                WHERE question IS NOT NULL AND question != ''
+                ORDER BY COALESCE(last_updated, created_at, NOW()) DESC
+                LIMIT 12
+            """)
+        except Exception:
+            conn.rollback()
+            cur.execute("""
+                SELECT question, COALESCE(topic, 'General'), NOW()
+                FROM faq
+                WHERE question IS NOT NULL AND question != ''
+                ORDER BY id DESC
+                LIMIT 12
+            """)
+        rows = cur.fetchall()
+        today = datetime.now().date()
+        items = []
+        for question, cat, touched in rows:
+            try:
+                day = touched.date() if hasattr(touched, 'date') else today
+                days_ago = max(0, (today - day).days)
+            except Exception:
+                days_ago = 0
+            items.append({
+                'question': question,
+                'category': cat or 'General',
+                'days_ago': days_ago,
+                'is_new': days_ago <= 7,
+            })
+        return jsonify(items)
+    except Exception as e:
+        logger.error(f"api_recent error: {e}")
+        return jsonify([])
+    finally:
+        cur.close()
+        conn.close()
+
+
+@bp.route('/api/handbook_stats')
+def api_handbook_stats():
+    """Counts for landing handbook spotlight."""
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT COUNT(*) FROM handbook_chunks WHERE is_active = 1")
+        chunk_count = cur.fetchone()[0] or 0
+        try:
+            cur.execute("""
+                SELECT COUNT(DISTINCT chapter)
+                FROM handbook_chunks
+                WHERE is_active = 1 AND chapter IS NOT NULL AND chapter != ''
+            """)
+            chapter_count = cur.fetchone()[0] or 0
+        except Exception:
+            chapter_count = 0
+        return jsonify({
+            'chunk_count': chunk_count,
+            'chapter_count': chapter_count,
+        })
+    except Exception as e:
+        logger.error(f"api_handbook_stats error: {e}")
+        return jsonify({'chunk_count': 0, 'chapter_count': 0})
+    finally:
+        cur.close()
+        conn.close()
+
+
+@bp.route('/api/my_chats')
+def api_my_chats():
+    """Resolve chat UUIDs (from browser localStorage) into sidebar titles."""
+    raw = (request.args.get('uuids') or '').strip()
+    if not raw:
+        return jsonify({'chats': []})
+    uuids = [u.strip() for u in raw.split(',') if u.strip()][:40]
+    if not uuids:
+        return jsonify({'chats': []})
+
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        placeholders = ','.join(['%s'] * len(uuids))
+        cur.execute(f"""
+            SELECT public_uuid, session_id
+            FROM chat_sessions
+            WHERE public_uuid IN ({placeholders})
+        """, uuids)
+        session_map = {r[0]: r[1] for r in cur.fetchall()}
+        if not session_map:
+            return jsonify({'chats': []})
+
+        out = []
+        for uuid in uuids:
+            sid = session_map.get(uuid)
+            if not sid:
+                continue
+            cur.execute("""
+                SELECT user_message FROM chat_history
+                WHERE session_id = %s
+                ORDER BY created_at ASC LIMIT 1
+            """, (sid,))
+            first = cur.fetchone()
+            cur.execute("""
+                SELECT MAX(created_at) FROM chat_history WHERE session_id = %s
+            """, (sid,))
+            last_row = cur.fetchone()
+            title = (first[0] if first else 'New conversation') or 'New conversation'
+            last_at = last_row[0] if last_row else None
+            out.append({
+                'uuid': uuid,
+                'title': title[:80],
+                'last_at': last_at.isoformat() if last_at else None,
+            })
+        return jsonify({'chats': out})
+    except Exception as e:
+        logger.error(f"api_my_chats error: {e}")
+        return jsonify({'chats': []})
+    finally:
+        cur.close()
+        conn.close()

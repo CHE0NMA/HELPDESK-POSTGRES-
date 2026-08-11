@@ -2,9 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>PAC Help Desk</title>
 <link rel="icon" href="/static/logo.png" type="image/x-icon">
+<meta name="theme-color" content="#060f1e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PAC HELP DESK">
+<link rel="apple-touch-icon" href="/static/logo.png">
+<link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
@@ -22,28 +29,18 @@
     --text-dim:    #7aa3c0;
     --card-bg:     rgba(10,28,56,0.7);
     --card-border: rgba(66,165,245,0.14);
+    --scrollbar-track: rgba(255,255,255,0.05);
+    --scrollbar-thumb: rgba(255,255,255,0.15);
   }
 
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   html { scroll-behavior: smooth; }
-/* Scrollbar variables — put in :root */
-:root {
-  --scrollbar-track: rgba(255,255,255,0.05);
-  --scrollbar-thumb: rgba(255,255,255,0.15);
-}
 
-/* Light theme override */
-[data-bs-theme="light"] {
-  --scrollbar-track: rgba(0,0,0,0.05);
-  --scrollbar-thumb: rgba(0,0,0,0.15);
-}
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--scrollbar-track); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
 
-/* Scrollbar styles */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--scrollbar-track); border-radius: 3px; }
-::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
-[data-bs-theme="light"] ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
   body {
     font-family: 'DM Sans', sans-serif;
     background: var(--blue-deep);
@@ -52,7 +49,6 @@
     min-height: 100vh;
   }
 
-  /* ── BACKGROUNDS ── */
   .bg-layer {
     position: fixed; inset: 0; z-index: 0; pointer-events: none;
     background:
@@ -69,7 +65,6 @@
     background-size: 48px 48px;
   }
 
-  /* ── HEADER ── */
   header {
     position: fixed; top: 0; left: 0; right: 0; z-index: 200;
     height: 62px;
@@ -110,7 +105,6 @@
   .btn-hdr.solid { background: var(--blue-brand); color: #fff; border-color: var(--blue-brand); }
   .btn-hdr.solid:hover { background: var(--blue-bright); box-shadow: 0 0 22px rgba(30,136,229,.45); }
 
-  /* ── HERO ── */
   .hero {
     position: relative; z-index: 1;
     min-height: 100vh;
@@ -178,7 +172,6 @@
 
   .btn-out:hover { background: rgba(66,165,245,.1); border-color: var(--blue-glow); color: #fff; }
 
-  /* ── STATS ── */
   .stats-row {
     display: flex; gap: 2.5rem; margin-top: 3.5rem;
     flex-wrap: wrap; justify-content: center;
@@ -193,7 +186,6 @@
 
   .stat-lbl { font-size: .75rem; color: var(--text-dim); margin-top: .15rem; }
 
-  /* ── SECTIONS ── */
   section { position: relative; z-index: 1; }
 
   .sec-head { text-align: center; margin-bottom: 2.5rem; }
@@ -212,7 +204,6 @@
 
   .sec-head p { color: var(--text-dim); font-size: .92rem; max-width: 460px; margin: 0 auto; }
 
-  /* ── HOW IT WORKS ── */
   section.how { padding: 5rem 1.5rem 4rem; }
 
   .steps {
@@ -239,7 +230,6 @@
   .step h3 { font-family: 'Sora', sans-serif; font-weight: 700; font-size: .95rem; margin-bottom: .4rem; }
   .step p  { font-size: .82rem; color: var(--text-dim); line-height: 1.6; }
 
-  /* ── FEATURED QUESTIONS ── */
   section.featured { padding: 1rem 1.5rem 3.5rem; }
 
   .featured-grid {
@@ -269,7 +259,8 @@
 
   .feat-q {
     font-size: .84rem; color: var(--text); font-weight: 500;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; overflow-wrap: anywhere; word-break: break-word;
   }
 
   .feat-cat { font-size: .7rem; color: var(--text-dim); margin-top: .14rem; }
@@ -289,7 +280,6 @@
   .feat-rank.silver { background: rgba(176,190,197,.12); color: #b0bec5; border-color: rgba(176,190,197,.25); }
   .feat-rank.bronze { background: rgba(188,143,80,.12);  color: #bc8f50; border-color: rgba(188,143,80,.25); }
 
-  /* ── HANDBOOK SPOTLIGHT ── */
   section.handbook { padding: 1rem 1.5rem 3.5rem; }
 
   .hb-panel {
@@ -344,7 +334,6 @@
     .hb-questions { border-left: none; border-top: 1px solid rgba(66,165,245,.14); }
   }
 
-  /* ── NEW & UPDATED ── */
   section.whats-new { padding: 0 1.5rem 3.5rem; }
 
   .new-outer { max-width: 1080px; margin: 0 auto; position: relative; }
@@ -382,6 +371,7 @@
   .new-q {
     font-size: .83rem; color: var(--text); font-weight: 500; line-height: 1.45;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    overflow-wrap: anywhere; word-break: break-word;
   }
 
   .new-meta { font-size: .7rem; color: var(--text-dim); margin-top: .42rem; display: flex; align-items: center; gap: .35rem; }
@@ -396,7 +386,6 @@
   }
   .sarr:hover { background: var(--blue-brand); border-color: var(--blue-brand); color: #fff; }
 
-  /* ── CATEGORIES ── */
   section.cats { padding: 2rem 1.5rem 6rem; }
 
   .search-wrap { max-width: 540px; margin: 0 auto 2.5rem; position: relative; }
@@ -424,7 +413,6 @@
 
   .cat-hidden { display: none !important; }
 
-  /* CAT CARD */
   .cat-card {
     background: var(--card-bg); border: 1px solid var(--card-border);
     border-radius: 18px; padding: 1.5rem;
@@ -467,7 +455,6 @@
 
   .cat-card.open .cat-tog { transform: rotate(180deg); background: var(--blue-brand); color: #fff; }
 
-  /* PREVIEW — 3 questions */
   .q-preview { display: flex; flex-direction: column; gap: .32rem; margin-bottom: .6rem; }
 
   .q-prev-item {
@@ -480,10 +467,11 @@
 
   .q-prev-item:hover { background: rgba(21,101,192,.2); border-color: rgba(66,165,245,.25); color: var(--text); }
   .q-prev-item i     { color: var(--blue-light); font-size: .7rem; flex-shrink: 0; }
+  .q-prev-item span  {
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; overflow-wrap: anywhere; word-break: break-word;
+  }
 
-  .q-prev-item span  { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-  /* SEE MORE row */
   .cat-more-row { display: flex; align-items: center; justify-content: space-between; margin-top: .15rem; }
 
   .see-more {
@@ -496,7 +484,6 @@
 
   .cat-total-lbl { font-size: .7rem; color: var(--text-dim); }
 
-  /* FULL LIST */
   .q-list-full {
     display: none; flex-direction: column; gap: .35rem;
     border-top: 1px solid rgba(66,165,245,.1); padding-top: .7rem; margin-top: .5rem;
@@ -515,11 +502,11 @@
 
   .q-item:hover { background: rgba(21,101,192,.22); border-color: rgba(66,165,245,.28); color: var(--text); }
   .q-item i.arr-l { color: var(--blue-light); font-size: .75rem; flex-shrink: 0; }
+  .q-item span { overflow-wrap: anywhere; word-break: break-word; }
 
   .q-arr { margin-left: auto; font-size: .68rem; color: var(--blue-bright); opacity: 0; transition: opacity .2s; }
   .q-item:hover .q-arr { opacity: 1; }
 
-  /* FAB */
   .fab {
     position: fixed; bottom: 2rem; right: 2rem; z-index: 300;
     width: 58px; height: 58px; border-radius: 50%;
@@ -555,7 +542,6 @@
   footer .footer-links a { color: var(--text-dim); text-decoration: none; font-size: .78rem; transition: color .2s; }
   footer .footer-links a:hover { color: var(--blue-glow); }
 
-  /* SKELETONS */
   .skel {
     background: linear-gradient(90deg, rgba(255,255,255,.04) 25%, rgba(255,255,255,.08) 50%, rgba(255,255,255,.04) 75%);
     background-size: 200% 100%; animation: shim 1.4s infinite; border-radius: 9px;
@@ -567,13 +553,11 @@
   .skel-new  { height: 108px; width: 248px; flex-shrink: 0; border-radius: 14px; }
   .skel-cat  { height: 120px; border-radius: 18px; }
 
-  /* REVEAL */
   @keyframes fd { from{opacity:0;transform:translateY(-14px)} to{opacity:1;transform:translateY(0)} }
 
   .rv { opacity: 0; transform: translateY(20px); transition: opacity .55s ease, transform .55s ease; }
   .rv.vis { opacity: 1; transform: translateY(0); }
 
-  /* EMPTY STATES */
   .empty-state {
     grid-column: 1 / -1; text-align: center; padding: 3rem 1.5rem;
     color: var(--text-dim);
@@ -585,12 +569,53 @@
   .empty-state a:hover { color: var(--accent); }
 
   @media(max-width:600px) {
-    header { padding: 0 1rem; }
-    .btn-hdr span { display: none; }
-    .hero { padding: 6rem 1rem 4rem; }
-    .stats-row { gap: 1.5rem; }
-    .fab { bottom: 1.5rem; right: 1.5rem; }
-    .featured-grid { grid-template-columns: 1fr; }
+    header { padding: 0 .75rem; height: 56px; }
+    .logo-wrap span {
+      font-size: .9rem; max-width: 42vw;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .btn-hdr { padding: .38rem .7rem; font-size: .72rem; }
+    .btn-hdr span, #pwaInstallBtn span { display: none; }
+
+    .hero { padding: 5.5rem 1rem 3rem; min-height: auto; }
+    .hero h1 { font-size: clamp(1.55rem, 7vw, 2.2rem); }
+    .hero p { font-size: .9rem; margin-bottom: 1.5rem; }
+    .hero-cta {
+      flex-direction: column; align-items: stretch;
+      width: 100%; max-width: 320px;
+    }
+    .btn-prim, .btn-out { justify-content: center; width: 100%; }
+
+    .stats-row {
+      gap: .85rem 1.1rem; margin-top: 2.2rem;
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      width: 100%; max-width: 420px;
+    }
+    .stat { text-align: center; }
+    .stat-num { font-size: 1.15rem; }
+    .stat-lbl { font-size: .65rem; }
+
+    section.how, section.featured, section.handbook,
+    section.whats-new, section.cats { padding-left: 1rem; padding-right: 1rem; }
+
+    .steps { grid-template-columns: 1fr; gap: 1rem; }
+    .featured-grid, .cat-grid { grid-template-columns: 1fr; }
+
+    .hb-panel { border-radius: 16px; }
+    .hb-copy { padding: 1.35rem 1.2rem; }
+    .hb-questions { padding: 1rem 1.1rem; }
+    .new-card { width: 210px; }
+
+    .fab {
+      bottom: max(1.25rem, env(safe-area-inset-bottom));
+      right: max(1.25rem, env(safe-area-inset-right));
+      width: 52px; height: 52px;
+    }
+    .fab-tip { display: none; }
+    footer {
+      padding: 1.25rem 1rem max(1.5rem, env(safe-area-inset-bottom));
+    }
+    footer .footer-links { flex-wrap: wrap; gap: .6rem .9rem; }
   }
 </style>
 </head>
@@ -605,12 +630,14 @@
     <span>PAC Help Desk</span>
   </a>
   <div class="hdr-btns">
+    <button type="button" id="pwaInstallBtn" class="btn-hdr" style="display:none" title="Install app">
+      <i class="bi bi-download"></i><span>Install</span>
+    </button>
     <a href="/admin" class="btn-hdr"><i class="bi bi-shield-lock"></i><span>Admin</span></a>
     <a href="/chat"  class="btn-hdr solid"><i class="bi bi-chat-dots-fill"></i><span>Open Chat</span></a>
   </div>
 </header>
 
-<!-- ── HERO ── -->
 <section class="hero">
   <div class="badge"><span class="dot"></span>School Help Center · Available 24/7</div>
   <h1>Got a School Question?<br><span class="hi">We've Got Answers.</span></h1>
@@ -648,7 +675,6 @@
   </div>
 </section>
 
-<!-- ── HOW IT WORKS ── -->
 <section class="how">
   <div class="sec-head rv">
     <div class="sec-tag">How It Works</div>
@@ -674,7 +700,6 @@
   </div>
 </section>
 
-<!-- ── FEATURED ── -->
 <section class="featured rv" id="featured">
   <div class="sec-head">
     <div class="sec-tag" style="background:rgba(255,160,0,.08);border-color:rgba(255,160,0,.22);color:#ffa000">🔥 Most Popular</div>
@@ -691,7 +716,6 @@
   </div>
 </section>
 
-<!-- ── HANDBOOK SPOTLIGHT ── -->
 <section class="handbook rv" id="handbook">
   <div class="sec-head">
     <div class="sec-tag" style="background:rgba(0,229,255,.08);border-color:rgba(0,229,255,.22);color:var(--accent)">📖 Student Handbook</div>
@@ -739,7 +763,6 @@
   </div>
 </section>
 
-<!-- ── NEW & UPDATED ── -->
 <section class="whats-new rv" id="whatsNew">
   <div class="sec-head">
     <div class="sec-tag" style="background:rgba(0,230,118,.07);border-color:rgba(0,230,118,.2);color:#69f0ae">✨ Recently Added</div>
@@ -761,7 +784,6 @@
   </div>
 </section>
 
-<!-- ── CATEGORIES ── -->
 <section class="cats" id="categories">
   <div class="sec-head rv">
     <div class="sec-tag">Browse by Topic</div>
@@ -803,7 +825,6 @@
 </a>
 
 <script>
-/* ── Category metadata ── */
 const CAT_META = {
   finance:    { icon: '💳', color: '#0288d1' },
   registrar:  { icon: '📄', color: '#00838f' },
@@ -841,7 +862,6 @@ function cap(s) {
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 
-/* ── Animated counter ── */
 function animateCount(el, target, suffix = '') {
   if (!el || isNaN(target)) return;
   const duration = 1200, start = performance.now(), from = 0;
@@ -854,7 +874,6 @@ function animateCount(el, target, suffix = '') {
   requestAnimationFrame(step);
 }
 
-/* ── Intersection observer for .rv ── */
 function observe() {
   const ob = new IntersectionObserver(es => {
     es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('vis'); ob.unobserve(e.target); } });
@@ -862,7 +881,6 @@ function observe() {
   document.querySelectorAll('.rv:not(.vis)').forEach(el => ob.observe(el));
 }
 
-/* ── Visitor stats ── */
 async function loadVisitorStats() {
   try {
     const r = await fetch('/api/visitor_stats');
@@ -873,7 +891,6 @@ async function loadVisitorStats() {
   } catch {}
 }
 
-/* ── Handbook stats (gracefully hides the panel if the endpoint isn't set up yet) ── */
 async function loadHandbookStats() {
   const section = document.getElementById('handbook');
   try {
@@ -882,13 +899,15 @@ async function loadHandbookStats() {
     const d = await r.json();
     const chunks   = d.chunk_count   ?? 0;
     const chapters = d.chapter_count ?? 0;
-    if (!chunks) { section.style.display = 'none'; document.getElementById('handbookCount').closest('.stat').style.display = 'none'; return; }
+    if (!chunks) {
+      const hc = document.getElementById('handbookCount');
+      if (hc && hc.closest('.stat')) hc.closest('.stat').style.display = 'none';
+      return;
+    }
     animateCount(document.getElementById('handbookCount'),  chunks);
     animateCount(document.getElementById('hbChunkCount'),   chunks);
     animateCount(document.getElementById('hbChapterCount'), chapters);
   } catch {
-    // Endpoint not wired up yet — hide the live counters but keep the
-    // handbook spotlight section (it still links out to the chat).
     const hcStat = document.getElementById('handbookCount');
     if (hcStat && hcStat.closest('.stat')) hcStat.closest('.stat').style.display = 'none';
     const chunkEl = document.getElementById('hbChunkCount');
@@ -898,7 +917,6 @@ async function loadHandbookStats() {
   }
 }
 
-/* ── Featured questions ── */
 async function loadFeatured() {
   const grid = document.getElementById('featuredGrid');
   let items = [];
@@ -952,7 +970,6 @@ async function loadFeatured() {
   observe();
 }
 
-/* ── New & Updated ── */
 async function loadNew() {
   const scroll = document.getElementById('newScroll');
   let items = [];
@@ -987,7 +1004,6 @@ function scrollNew(d) {
   document.getElementById('newScroll').scrollBy({ left: d * 264, behavior: 'smooth' });
 }
 
-/* ── Category cards ── */
 function buildCard(cat, questions) {
   const m    = meta(cat);
   const card = document.createElement('div');
@@ -1114,7 +1130,6 @@ function toggleAllCats() {
   if (catsExpanded) observe();
 }
 
-/* ── Search ── */
 document.getElementById('srch').addEventListener('input', function () {
   const q = this.value.toLowerCase().trim();
   document.querySelectorAll('.cat-card[data-cat]').forEach(card => {
@@ -1142,7 +1157,6 @@ document.getElementById('srch').addEventListener('input', function () {
     : (document.querySelectorAll('.cat-card[data-cat]').length > CAT_LIMIT ? 'block' : 'none');
 });
 
-/* ── Tiny HTML escaper ── */
 function escHtml(s) {
   return String(s)
     .replace(/&/g, '&amp;')
@@ -1151,7 +1165,6 @@ function escHtml(s) {
     .replace(/"/g, '&quot;');
 }
 
-/* ── Boot ── */
 window.addEventListener('DOMContentLoaded', () => {
   observe();
   loadFeatured();
@@ -1160,6 +1173,33 @@ window.addEventListener('DOMContentLoaded', () => {
   loadVisitorStats();
   loadHandbookStats();
 });
+
+/* ---- PWA install ---- */
+let _deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  _deferredPrompt = e;
+  const btn = document.getElementById('pwaInstallBtn');
+  if (btn) btn.style.display = 'inline-flex';
+});
+document.getElementById('pwaInstallBtn')?.addEventListener('click', async () => {
+  if (!_deferredPrompt) return;
+  _deferredPrompt.prompt();
+  try { await _deferredPrompt.userChoice; } catch (e) {}
+  _deferredPrompt = null;
+  const btn = document.getElementById('pwaInstallBtn');
+  if (btn) btn.style.display = 'none';
+});
+window.addEventListener('appinstalled', () => {
+  _deferredPrompt = null;
+  const btn = document.getElementById('pwaInstallBtn');
+  if (btn) btn.style.display = 'none';
+});
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register("{{ url_for('static', filename='service-worker.js') }}")
+    .catch(() => {});
+}
 </script>
 </body>
 </html>

@@ -626,6 +626,18 @@
     .rate-limit-counter span:not(#msg-remaining) { display: none; }
     .logo-wrap span { max-width: 110px; }
   }
+
+  @media (max-width: 480px) {
+    .header { height: 52px; padding: 0 .65rem; }
+    .hdr-btn span { display: none; }
+    .rate-limit-counter { display: none; }
+    .message.user .bubble { max-width: 88%; }
+    .bot-content { max-width: calc(100% - 36px); }
+    .chat-area { padding: .85rem .75rem; gap: .7rem; }
+    .input-area { padding: .55rem .65rem max(.85rem, env(safe-area-inset-bottom)); }
+    #welcome { width: min(96vw, 520px); }
+  }
+
 </style>
 </head>
 <body>
@@ -660,7 +672,7 @@
 
     <div class="sidebar" id="sidebar">
       <div class="sidebar-head">
-        <span class="sidebar-title">This Session</span>
+        <span class="sidebar-title">Conversations</span>
         <div class="sidebar-close" onclick="toggleSidebar()"><i class="bi bi-x-lg"></i></div>
       </div>
       <a href="/new_chat" class="new-chat-btn">
@@ -858,6 +870,72 @@ if (!persistentSessionId) {
   persistentSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
   localStorage.setItem('persistent_session_id', persistentSessionId);
 }
+
+/* ---- Recent conversations (survive New Chat) ---- */
+const CHAT_HISTORY_KEY = 'pac_chat_history_v1';
+const MAX_SAVED_CHATS = 25;
+
+function getSavedChats() {
+  try { return JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || '[]'); }
+  catch { return []; }
+}
+
+function saveChatToHistory(uuid, title) {
+  if (!uuid) return;
+  let list = getSavedChats().filter(c => c.uuid !== uuid);
+  list.unshift({
+    uuid,
+    title: (title || 'Conversation').slice(0, 80),
+    updated: Date.now(),
+  });
+  list = list.slice(0, MAX_SAVED_CHATS);
+  localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(list));
+}
+
+async function loadSidebarHistory() {
+  const listEl = document.getElementById('sidebarList');
+  if (!listEl) return;
+
+  const saved = getSavedChats();
+  const currentMatch = window.location.pathname.match(/\/chat\/([0-9a-f-]{36})/i);
+  const currentUuid = currentMatch ? currentMatch[1] : null;
+  if (!saved.length) return;
+
+  let enriched = saved;
+  try {
+    const r = await fetch('/api/my_chats?uuids=' + encodeURIComponent(saved.map(c => c.uuid).join(',')));
+    if (r.ok) {
+      const d = await r.json();
+      const byUuid = {};
+      (d.chats || []).forEach(c => { byUuid[c.uuid] = c; });
+      enriched = saved.map(c => ({
+        ...c,
+        title: (byUuid[c.uuid] && byUuid[c.uuid].title) || c.title,
+      }));
+    }
+  } catch (e) {}
+
+  let historyHtml = '<div style="padding:.55rem 1rem .25rem;font-size:.68rem;color:var(--text-muted);letter-spacing:.06em;text-transform:uppercase">Recent chats</div>';
+  enriched.forEach(c => {
+    const active = c.uuid === currentUuid
+      ? ' style="background:rgba(21,101,192,.25);border-color:rgba(66,165,245,.3)"'
+      : '';
+    const label = String(c.title || 'Conversation')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    historyHtml += `
+      <a class="sidebar-item" href="/chat/${c.uuid}"${active}
+         style="text-decoration:none;color:inherit">
+        <i class="bi bi-clock-history"></i>
+        <span>${label}</span>
+      </a>`;
+  });
+
+  const wrap = document.createElement('div');
+  wrap.id = 'sidebarHistory';
+  wrap.innerHTML = historyHtml;
+  listEl.insertBefore(wrap, listEl.firstChild);
+}
+
 
 /* ---------- rate limit ---------- */
 function loadMessageCount() {
@@ -1201,6 +1279,12 @@ async function send() {
       body: JSON.stringify({ message: msg, session_id: persistentSessionId }),
     });
     const data = await res.json();
+    // Remember this chat so New Chat keeps it in the sidebar
+    {
+      const uuid = data.chat_uuid
+        || (window.location.pathname.match(/\/chat\/([0-9a-f-]{36})/i) || [])[1];
+      if (uuid) saveChatToHistory(uuid, msg);
+    }
     const rawReply = data.reply || 'Sorry, I could not process that.';
     const category = data.category || null;
 
@@ -1776,16 +1860,38 @@ window.addEventListener('DOMContentLoaded', () => {
   if (chatArea.children.length > 0) scrollToBottom(false);
   else applyWelcomeGreeting();
   loadTopSuggestions();
+  loadSidebarHistory();
 
   if (window.speechSynthesis) speechSynthesis.getVoices();
 
-  const prefill = {{ (prefill|tojson if prefill is defined else '""')|safe }};
-  if (prefill && prefill !== 'None' && String(prefill).trim()) {
+  // Seed current chat into history if page loaded with messages
+  {% if chat_uuid is defined and chat_uuid and chats %}
+  saveChatToHistory(
+    {{ chat_uuid|tojson }},
+    {{ (chats[0].user if chats else 'Conversation')|tojson }}
+  );
+  {% endif %}
+
+  // Prefill: server (Jinja) first, then URL ?q=
+  let prefill = {{ (prefill|tojson if prefill is defined else '""')|safe }};
+  if (!prefill || prefill === 'None') {
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      prefill = sp.get('q') || sp.get('prefill') || '';
+    } catch (e) { prefill = ''; }
+  }
+  if (prefill && String(prefill).trim()) {
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.delete('q');
+      u.searchParams.delete('prefill');
+      window.history.replaceState(null, '', u.pathname + u.search);
+    } catch (e) {}
     setTimeout(() => {
-      msgInput.value = prefill;
+      msgInput.value = String(prefill).trim();
       autoResize(msgInput);
-      setTimeout(send, 400);
-    }, 300);
+      setTimeout(send, 350);
+    }, 250);
   }
 });
 
