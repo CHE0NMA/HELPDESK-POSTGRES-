@@ -693,10 +693,15 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
         # FAQ can lead when it clearly outscores a weak handbook hit.
         # Handbook text is often broad; curated FAQs fill specific gaps
         # (dress details, scholarships, strands, appeal windows, etc.).
+        # FAQ must beat handbook by a clear margin. For handbook-shaped
+        # questions (dress, demerits, strands, RA laws), require an even
+        # larger gap so a loosely matched FAQ (e.g. office hours, scholarships)
+        # cannot steal the answer.
+        faq_margin = 0.22 if is_hb else 0.10
         faq_clearly_better = (
             candidates
-            and faq_best_score >= engine.FUZZY_MIN_SCORE + 0.08
-            and faq_best_score >= (hb_score + 0.10)
+            and faq_best_score >= engine.FUZZY_MIN_SCORE + 0.12
+            and faq_best_score >= (hb_score + faq_margin)
         )
 
         handbook_should_lead = (
@@ -753,8 +758,9 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 ctx=ctx,
             )
             if hb_ans:
-                # Always allow FAQ to fill gaps when it has a solid match
+                # Merge FAQ only when it is competitive and not a weak steal
                 if (faq_best_score >= CROSS_CHECK_FAQ_BAR
+                        and faq_best_score >= hb_score - 0.05
                         and candidates and not circuit_breaker.is_open()):
                     hb_ans = _merge_with_faq(
                         hb_ans, question, candidates, detected_lang
