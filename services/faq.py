@@ -21,11 +21,17 @@ from utils.text import normalize_input
 
 logger = logging.getLogger("pac_helpdesk.faq")
 
+# Split multi-intent questions so each clause can be answered.
+# Handles: "What is X and where is Y?", "A? B?", "X, and who founded it?"
 COMPOUND_SPLIT_RE = re.compile(
-    r'\s+(?:and|at saka|saka|tas|ug|dayon|unya)\s+'
-    r'(?=what|how|when|where|who|which|is|are|can|could|do|does|will'
-    r'|paano|ano|kailan|saan|sino|magkano|ilan'
-    r'|unsa|kanus-a|asa|kinsa|pila)\b',
+    r'(?:'
+    r'\s+(?:and|at saka|saka|tas|ug|dayon|unya|,\s*and)\s+'
+    r'(?=what|how|when|where|who|which|is|are|can|could|do|does|will|what\'s|whats|'
+    r'paano|ano|kailan|saan|sino|magkano|ilan|'
+    r'unsa|kanus-a|asa|kinsa|pila)\b'
+    r'|\?\s+(?=what|how|when|where|who|which|is|are|can|do|does|will|'
+    r'paano|ano|kailan|saan|sino)'
+    r')',
     re.IGNORECASE
 )
 
@@ -62,11 +68,24 @@ def _looks_like_non_answer(text: str) -> bool:
 
 
 def split_compound_question(question: str) -> List[str]:
-    if len(question.split()) < 6:
-        return [question]
-    parts = COMPOUND_SPLIT_RE.split(question)
+    """Split multi-part questions into standalone clauses.
+
+    Handbook topics are included — previously we skipped compound handling
+    when is_handbook_question was true, so "full name and campuses" only
+    answered one half (often the wrong half).
+    """
+    q = (question or '').strip()
+    if len(q.split()) < 6:
+        return [q]
+    parts = COMPOUND_SPLIT_RE.split(q)
     parts = [p.strip(' ?.,') for p in parts if p and p.strip(' ?.,')]
-    return parts if len(parts) > 1 else [question]
+    # Keep only parts that still look like a real question fragment
+    cleaned = []
+    for p in parts:
+        if len(p.split()) < 2:
+            continue
+        cleaned.append(p if p.endswith('?') else p)
+    return cleaned if len(cleaned) > 1 else [q]
 
 
 def _answer_followup_via_search(question: str, ctx, detected_lang: str):
@@ -362,9 +381,9 @@ _NOTE_HEADERS = {
         'bisaya': "Gikan sa handbook, para sa kinatibuk-ang palisiya:",
     },
     'faq': {
-        'english': "Related to that, here's what we also have on file:",
-        'tagalog': "Kaugnay nito, ito rin ang nasa records namin:",
-        'bisaya': "Kalabot niini, kini pud ang naa sa among mga record:",
+        'english': "More specifically, from our help desk notes:",
+        'tagalog': "Mas partikular, mula sa help desk notes:",
+        'bisaya': "Mas piho, gikan sa help desk notes:",
     },
     'date': {
         'english': "Also, regarding the schedule:",
@@ -409,6 +428,10 @@ def _merge_with_date(base_answer: str, date_ans: str, detected_lang: str) -> str
 
 def _combine_handbook_and_faq(question: str, candidates: list, hb_chunks: list,
                                detected_lang: str) -> Optional[str]:
+    """FAQ often holds the clearer student-facing answer; handbook holds
+    the official wording. Prefer FAQ first, handbook as supporting policy.
+    Either alone is fine when the other is missing.
+    """
     faq_ans, _matched = engine.smart_extract_answer(
         user_question=question,
         candidates=candidates,
@@ -416,10 +439,20 @@ def _combine_handbook_and_faq(question: str, candidates: list, hb_chunks: list,
         llm_chat_fn=llm_chat,
         ai_cache=ai_cache,
     )
-    hb_ans = handbook_service.answer_from_selected_chunk(question, hb_chunks[0], detected_lang)
+    hb_ans = None
+    if hb_chunks:
+        hb_ans = handbook_service.answer_from_selected_chunk(
+            question, hb_chunks[0], detected_lang
+        )
 
     if faq_ans and hb_ans:
-        return f"{faq_ans}\n\n{_note_header('handbook', detected_lang)} {hb_ans}"
+        # Avoid near-duplicate doubles
+        if faq_ans.strip().lower()[:120] == hb_ans.strip().lower()[:120]:
+            return faq_ans
+        return (
+            f"{faq_ans}\n\n"
+            f"{_note_header('handbook', detected_lang)} {hb_ans}"
+        )
     return faq_ans or hb_ans
 
 
@@ -570,14 +603,27 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 result = (ai_followup, 'Follow-up', None, None, detected_lang)
                 return result if return_topic else result[0]
 
+
     is_hb = handbook_service.is_handbook_question(question)
     parts = split_compound_question(question)
-    if len(parts) > 1 and not is_hb:
-        sub_answers, last_topic, last_intent = [], None, None
+    if len(parts) > 1:
+        sub_answers = []
+        last_topic, last_intent = None, None
         for part in parts:
             part_class = lang_service.classify_question_ai(part)
-            if part_class['is_gibberish'] or not part_class['is_school_related']:
+            if part_class.get('is_gibberish') or not part_class.get('is_school_related', True):
                 continue
+            # Prefer handbook when the clause is handbook-shaped
+            part_ans = None
+            if handbook_service.is_handbook_question(part) or is_hb:
+                part_ans = handbook_service.answer_handbook_question(
+                    part, detected_lang, min_score_to_answer=0.12, ctx=None,
+                )
+                if part_ans:
+                    sub_answers.append(part_ans)
+                    last_topic = 'Handbook'
+                    last_intent = 'handbook_query'
+                    continue
             r = _lookup_faq_answer(part, detected_lang)
             if r and r[0]:
                 sub_answers.append(r[0])
@@ -599,6 +645,12 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 detected_lang,
             )
             return result if return_topic else result[0]
+        # One part only succeeded — still better than a single wrong chunk
+        if len(sub_answers) == 1 and len(parts) >= 2:
+            # Fall through so full question also tries normal path;
+            # but prefer the good partial if later path fails.
+            pass
+
 
     norm_q = normalize_input(question)
     cache_key = f"{norm_q}_{detected_lang}"
@@ -638,9 +690,22 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
         else:
             hb_threshold = 0.35
 
-        handbook_should_lead = hb_chunks and (
-            (is_hb and hb_score >= hb_threshold)
-            or (hb_score >= hb_threshold and hb_score >= faq_best_score)
+        # FAQ can lead when it clearly outscores a weak handbook hit.
+        # Handbook text is often broad; curated FAQs fill specific gaps
+        # (dress details, scholarships, strands, appeal windows, etc.).
+        faq_clearly_better = (
+            candidates
+            and faq_best_score >= engine.FUZZY_MIN_SCORE + 0.08
+            and faq_best_score >= (hb_score + 0.10)
+        )
+
+        handbook_should_lead = (
+            hb_chunks
+            and not faq_clearly_better
+            and (
+                (is_hb and hb_score >= hb_threshold)
+                or (hb_score >= hb_threshold and hb_score >= faq_best_score)
+            )
         )
 
         pure_handbook_topics = bool(re.search(
@@ -650,17 +715,23 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             r'(first|second|third)[ -]?degree|fraternity|sorority)\b',
             question, re.I,
         ))
-        combine_gap = 0.18
+        combine_gap = 0.22
         both_solid = (
-            not pure_handbook_topics
-            and hb_chunks and hb_score >= 0.32
+            hb_chunks and hb_score >= 0.28
             and candidates and faq_best_score >= engine.FUZZY_MIN_SCORE
             and abs(hb_score - faq_best_score) < combine_gap
         )
+        # Prefer combining whenever both sources have something useful,
+        # including pure handbook topics — FAQ often has a clearer
+        # student-facing summary of the same policy.
         if both_solid and not circuit_breaker.is_open():
-            combined = _combine_handbook_and_faq(question, candidates, hb_chunks, detected_lang)
+            combined = _combine_handbook_and_faq(
+                question, candidates, hb_chunks, detected_lang
+            )
             if combined and date_service.is_date_question(question, ctx=ctx):
-                date_ans = date_service.answer_date_question(question, detected_lang, ctx=ctx)
+                date_ans = date_service.answer_date_question(
+                    question, detected_lang, ctx=ctx
+                )
                 combined = _merge_with_date(combined, date_ans, detected_lang)
             if combined:
                 ctx.update(
@@ -682,10 +753,12 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 ctx=ctx,
             )
             if hb_ans:
-                if (not pure_handbook_topics
-                        and faq_best_score >= CROSS_CHECK_FAQ_BAR
+                # Always allow FAQ to fill gaps when it has a solid match
+                if (faq_best_score >= CROSS_CHECK_FAQ_BAR
                         and candidates and not circuit_breaker.is_open()):
-                    hb_ans = _merge_with_faq(hb_ans, question, candidates, detected_lang)
+                    hb_ans = _merge_with_faq(
+                        hb_ans, question, candidates, detected_lang
+                    )
                 is_disambiguation = ctx.last_disambiguation is not None
                 if not is_disambiguation:
                     ctx.update(
@@ -696,16 +769,11 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                     )
                 result = (hb_ans, 'Handbook', None, 'handbook_query', detected_lang)
                 return result if return_topic else result[0]
+            # Handbook topic but generation failed / too vague → fall through
+            # to FAQ instead of "I don't have a confirmed answer".
 
-        if is_hb and pure_handbook_topics and (
-            not candidates or faq_best_score < engine.FUZZY_MIN_SCORE + 0.10
-        ):
-            _log_unanswered(cur, conn, question, ctx)
-            result = (
-                lang_service.get_logged_fallback_response(detected_lang),
-                'Unknown', None, None, detected_lang,
-            )
-            return result if return_topic else result[0]
+        # REMOVED: early "unanswered" exit for pure_handbook_topics.
+        # If handbook is thin, FAQs are the compensation layer.
 
         if not candidates:
             hb_ans = handbook_service.answer_handbook_question(question, detected_lang, ctx=ctx)

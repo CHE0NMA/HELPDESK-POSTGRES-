@@ -434,8 +434,25 @@ def chunk_is_relevant_hard(question: str, chunk: Dict) -> bool:
     lead_score = _lead_fuzzy_score(question, chunk)
 
     exp_words = _content_words(expanded) - _GENERIC
-    blob = f"{chunk.get('section_title', '')} {chunk.get('content', '')[:900]}".lower()
+    title = (chunk.get('section_title') or '')
+    content = chunk.get('content') or ''
+    blob = f"{title} {content[:900]}".lower()
     exp_hits = sum(1 for w in exp_words if w in blob)
+
+    q_l = (question or '').lower()
+    title_l = title.lower()
+    # Reject obvious topic mismatches early (identity vs internship/fees)
+    identity_q = any(w in q_l for w in (
+        'logo', 'hymn', 'founded', 'founder', 'history', 'campus', 'campuses',
+        'original name', 'full name', 'vision', 'philosophy', 'core values',
+        'demerit', 'offense', 'dress', 'fraternity', 'bullying', 'safe spaces',
+    ))
+    admin_title = any(w in title_l for w in (
+        'internship', 'requirements of the college dean', 'fees',
+        'host training', 'sipp coordinator',
+    ))
+    if identity_q and admin_title and title_score < 0.55:
+        return False
 
     if title_score >= 0.45:
         return True

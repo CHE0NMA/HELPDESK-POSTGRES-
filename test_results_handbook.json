@@ -1,0 +1,212 @@
+[
+  {
+    "number": 1,
+    "question": "What's the real full name of this school and where are the campuses?",
+    "answer": "<div class=\"text\">According to the section <strong>REQUIREMENTS OF THE COLLEGE DEAN</strong> (see page 57):<br><br>Assume full responsibility over the students during their internship.</div>",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:47:32.419830"
+  },
+  {
+    "number": 2,
+    "question": "What was PAC called before it became a college?",
+    "answer": "[ERROR] HTTPConnectionPool(host='127.0.0.1', port=5000): Read timed out. (read timeout=45)",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:48:18.935994"
+  },
+  {
+    "number": 3,
+    "question": "When did this school start and who founded it?",
+    "answer": "Students are expected to wear the prescribed school uniform on class days and maintain a neat, modest appearance consistent with Adventist standards. Specific rules are in the Student Handbook under Dress and Appearance.",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:48:29.532049"
+  },
+  {
+    "number": 4,
+    "question": "What does the school logo mean?",
+    "answer": "The school logo features the Bible, which is the foundation of Christian education, and it's wide open in the center. According to the Logo and Symbols section on page 10, the Bible is the central element of the logo. The logo also has other elements that symbolize royalty, passion, love, power, and purity, but the Bible is the main focus.",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:48:46.317239"
+  },
+  {
+    "number": 5,
+    "question": "Who wrote the PAC hymn?",
+    "answer": "The PAC hymn was composed by L.V. Pilon and the lyrics were written by SL La Sage, as stated in the KEY FACTS section on page 7. You can find the full hymn in the PAC Hymn excerpt.",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:48:51.386600"
+  },
+  {
+    "number": 6,
+    "question": "What's the school's philosophy about education?",
+    "answer": "Philippine Advent College's philosophy is that God is the source of true education, and they're committed to reflecting Christ in the total lifestyle of the faculty and students for useful and fruitful citizenship. This is according to their philosophy on page 8. They want to prepare students to have a lifestyle characterized by kindness, patience, and love for all men, which is also mentioned on page 8.",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:48:57.054009"
+  },
+  {
+    "number": 7,
+    "question": "What does PAC want to become in the future?",
+    "answer": "According to the Vision on page 8, Philippine Advent College envisions to be a Center of Excellence in Christian Education. It wants to promote world-class academic excellence and globally competitive technical education. This is what PAC wants to become in the future.",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:49:02.161190"
+  },
+  {
+    "number": 8,
+    "question": "What's the main mission of the college?",
+    "answer": "The main mission of the college is to offer an excellent and distinctive Christian education designed to prepare its students for productive lives of useful human service and uncompromising personal integrity, as stated in the Mission section on page 8. This is the core purpose of Philippine Advent College.",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:49:07.205247"
+  },
+  {
+    "number": 9,
+    "question": "What are the core values again? The PAC ones.",
+    "answer": "The core values of PAC are Purpose-Driven Living, Academic Excellence Oriented, and Christ-Centered, which can be remembered as P, A, and C. According to the handbook, being Purpose-Driven means living and leading with a clear objective, Academic Excellence Oriented means being motivated and disciplined to achieve excellent academic results, and Christ-Centered means being motivated with love and purpose, embodying Christian education. You can find more details about these values on page 8 of the handbook.",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:49:12.301043"
+  },
+  {
+    "number": 10,
+    "question": "What is the vision of PAC in simple words?",
+    "answer": "The vision of PAC is to be a Center of Excellence in Christian Education, promoting academic excellence and learning in an environment that values discovery and the true Source of Knowledge. This is stated in the Vision section on page 8 of the handbook. In simple words, PAC aims to provide world-class education while staying true to its Christian values.",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:49:17.756442"
+  },
+  {
+    "number": 11,
+    "question": "Tell me about the school philosophy again.",
+    "answer": "The school philosophy is centered around being a Center of Excellence in Christian Education, promoting academic excellence and technical education in an environment that stresses discovery and investigation, while remembering who is the true Source of Knowledge, as stated in the Vision on page 8. The college aims to offer an excellent and distinctive Christian education to prepare students for productive lives of useful human service and uncompromising personal integrity, as mentioned in the Mission on page 8. The core values of the school include being purpose-driven, academically excellent, and Christ-centered, as outlined on page 8.",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:49:22.262520"
+  },
+  {
+    "number": 12,
+    "question": "How many points do we start with each semester?",
+    "answer": "<div class=\"text\">You start with 30 merit points at the beginning of each semester. Demerits are deducted according to the degree of offense, but the initial points are always 30.</div>",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:49:28.909501"
+  },
+  {
+    "number": 13,
+    "question": "What's a first degree offense worth in demerits?",
+    "answer": "According to the section **First-Degree Offense (5 Demerits)** (see page 21):\n\nAll violations such as but not limited to, as the case may be, expressed in the\n\nKEY FACTS:\n- 5 Demerits",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:49:33.787657"
+  },
+  {
+    "number": 14,
+    "question": "How bad is a second-degree offense?",
+    "answer": "A second-degree offense is considered pretty serious, with 30 demerits, and if physical labor or suspension isn't possible, you could be fined up to P1,500.00, depending on the gravity of the offense. This is according to the Second-Degree Offense section on page 16.",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:49:39.117094"
+  },
+  {
+    "number": 15,
+    "question": "What's the heaviest demerit level?",
+    "answer": "<div class=\"text\">According to the Third-Degree Offense section on page 19, the heaviest demerit level mentioned is 30 Demerits, which can lead to withdrawal or dismissal for the semester or the remainder of the school year. This is for serious offenses like immorality, forgery, and substance abuse.</div>",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:49:45.182097"
+  },
+  {
+    "number": 16,
+    "question": "Give examples of light or first-degree offenses.",
+    "answer": "The handbook doesn't specifically provide examples of light or first-degree offenses, it only mentions the punishments for first-degree offenses, such as rendering labor for free or paying a fine, and that some first-degree offenses are worth 5 demerits.",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:49:49.696110"
+  },
+  {
+    "number": 17,
+    "question": "What counts as a serious or third-degree offense?",
+    "answer": "According to Excerpt 2 – Third-Degree Offense (p.19), a serious or third-degree offense includes things like immorality, forgery, possession and consumption of alcoholic beverages, vaping, tobacco consumption, narcotics, and prohibited drugs. These offenses can lead to withdrawal or dismissal for the semester or the remainder of the school year. It's also worth noting that third-degree offenses are associated with 30 demerits.",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:49:54.197103"
+  },
+  {
+    "number": 18,
+    "question": "What happens if you get 20 or more demerits?",
+    "answer": "<div class=\"text\">So if you get 20 or more demerits, you might be put under disciplinary probation, and you could also face other disciplinary measures that are outlined in the Student Handbook.</div>",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:50:00.795129"
+  },
+  {
+    "number": 19,
+    "question": "Is there a maximum fine for violations?",
+    "answer": "<div class=\"text\">According to the Second-Degree Offense section on page 16, a fine of not more than one thousand five hundred pesos (P1,500.00) will be imposed, so yes, there is a maximum fine for violations, which is P1,500.00. This fine is determined by the committee based on the gravity of the offense.</div>",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:50:08.093397"
+  },
+  {
+    "number": 20,
+    "question": "How long do I have to appeal a disciplinary decision?",
+    "answer": "<div class=\"text\">According to the section <strong>Disciplinary Sanctions</strong> (see page 15):<br><br>to impose appropriate and reasonable disciplinary measures for minor offenses or infractions of good discipline committed in their presence, provided that no cruel or physically harmful punishment shall be imposed upon any erring student. KEY FACTS:<br>- Disciplinary measures can be imposed for minor offenses<br>- No cruel or physically harmful punishment is allowed</div>",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:50:14.194523"
+  },
+  {
+    "number": 21,
+    "question": "Can we wear jewelry like rings or necklaces?",
+    "answer": "<div class=\"text\">Jewelry is generally restricted, but a simple wedding ring might be okay if you're married. Other than that, necklaces, bracelets, and stuff like that are usually not allowed. So, unfortunately, rings and necklaces are probably not gonna be permitted.</div>",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:50:20.059643"
+  },
+  {
+    "number": 22,
+    "question": "What's the dress code for students?",
+    "answer": "<div class=\"text\">The handbook doesn't really specify a full dress code, but it does mention that boys' haircuts need to be at least 1 inch above the ear and 3 inches above the collar line, according to The Uniform section on page 25. It also says students must wear their official school ID on campus. That's about it, though - it doesn't give a lot of detail on other dress code rules.</div>",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:50:25.012036"
+  },
+  {
+    "number": 23,
+    "question": "Is it okay to go on hikes without a chaperone?",
+    "answer": "First-degree (light) offenses carry 5 demerits. Examples include minor violations of campus rules such as littering or other listed light offenses in the Student Handbook.",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:50:32.376024"
+  },
+  {
+    "number": 24,
+    "question": "Are we allowed to visit other dorms freely?",
+    "answer": "<div class=\"text\">According to the section <strong>FEES</strong> (see page 61):<br><br>2012, also<br>known as the \"Enhanced Policies, Guidelines, and Procedures Governing Increases<br>in Tuition and Other School Fees, Introduction of New Fees, and for Other Purposes.\"<br>2. In no case shall the school charge the student fees other than the<br>approved/prescribed fee or other school fees not duly noted by CHED.</div>",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:50:37.500640"
+  },
+  {
+    "number": 25,
+    "question": "Can we cook inside the dorm?",
+    "answer": "According to the handbook excerpt on page 18, \"Cooking within the dormitory premises and anywhere without proper authority from the home dean\" is not allowed, so it seems cooking inside the dorm is not permitted unless you get approval from the home dean. You'd need to get permission first.",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:50:44.619422"
+  },
+  {
+    "number": 26,
+    "question": "What food is not allowed in the cafeteria?",
+    "answer": "<div class=\"text\">According to the section <strong>4. PAC adheres to these CHED principles through its cafeteria operations, vendor</strong> (see page 80):<br><br>Components of PAC Food Services<br>Campus Cafeteria<br>The PAC Cafeteria serves as the main dining facility on campus and offers:<br>1. selection, food safety procedures, and regular facility inspections. Vegetarian and plant-forward food options<br>3. Operating hours are posted at the cafeteria entrance and may vary based on<br>academic schedules.</div>",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:50:50.477676"
+  },
+  {
+    "number": 27,
+    "question": "Is there an anti-bullying law in the handbook?",
+    "answer": "<div class=\"text\">The full name is Philippine Advent College, Inc. (PAC). It was originally known as Hillside View Elementary School (HVES) and was founded in 1975.</div>",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:51:01.488701"
+  },
+  {
+    "number": 28,
+    "question": "What's the Safe Spaces Act and its RA number?",
+    "answer": "Students are expected to wear the prescribed school uniform on class days and maintain a neat, modest appearance consistent with Adventist standards. Specific rules are in the Student Handbook under Dress and Appearance.",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:51:08.016486"
+  },
+  {
+    "number": 29,
+    "question": "What programs or courses does PAC actually offer?",
+    "answer": "<div class=\"text\">Hey! PAC actually offers a bunch of different programs under Teacher Education, Business Education, Computer Studies, and more depending on the campus. Some examples of what they offer are BEEd, BSEd majors, BSBA, BSIT, BSCS, BPEd, and Social Work!</div>",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:51:13.372877"
+  },
+  {
+    "number": 30,
+    "question": "What senior high strands are available?",
+    "answer": "<div class=\"text\">PAC offers academic scholarships, athletic scholarships, and need-based financial assistance. Visit the Scholarship or Student Affairs Office for eligibility, requirements, and application periods.</div>",
+    "status": "passed",
+    "timestamp": "2026-08-11T12:51:18.845618"
+  }
+]
