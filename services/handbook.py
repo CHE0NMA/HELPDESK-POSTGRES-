@@ -73,6 +73,15 @@ _QUERY_EXPANSIONS = [
     (r'\b(visit|visiting).{0,15}(other )?dorms?\b', 'dormitory visit other dorms'),
     (r'\b(senior high|strands?|shs)\b', 'senior high stem humss gas abm'),
     (r'\b(programs?|courses?).{0,20}(offer|available)\b', 'bachelor programs education business computer'),
+    (r'\b(scholarship|scholarships|financial aid|financial assistance)\b',
+     'scholarship financial assistance grant stipend'),
+    (r'\b(appeal).{0,40}(decision|disciplinary|sanction|how long)\b',
+     'prescription appeal disciplinary days'),
+    (r'\b(visit).{0,20}(dorm|dormitory|other dorms)\b',
+     'dormitory visit other dorms residence'),
+    (r'\b(anti.?bullying|bullying)\b',
+     'anti-bullying bullying policy'),
+
     (r'\b(heaviest|worst|most serious).{0,20}(demerit|offense|level)\b', 'third degree offense demerits'),
     (r'\b(maximum fine|max fine|fine for|biggest (fine|amount)|money for the fine)\b', 'fine pesos demerit offense'),
     # Disciplinary suspension vs class suspension — topic routing only
@@ -293,12 +302,77 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8) -> List[Dict]:
             if title_l.strip() == "mission" and "step 5" in content_preview:
                 noise = 0.08
 
+            q_l = question.lower()
+            # Long internship/admin chapters match generic "college"/"PAC"
+            identity_q = any(w in q_l for w in (
+                'logo', 'hymn', 'founded', 'founder', 'history', 'campus',
+                'campuses', 'original name', 'full name', 'vision', 'mission',
+                'philosophy', 'core values', 'demerit', 'offense', 'dress',
+                'fraternity', 'suspension', 'expulsion', 'scholarship',
+                'strand', 'senior high', 'bullying', 'appeal', 'dorm',
+            ))
+            admin_title = any(w in title_l for w in (
+                'internship', 'requirements of the college dean', 'fees',
+                'sipp', 'host training', 'memorandum of agreement',
+            ))
+            if identity_q and admin_title:
+                noise *= 0.15
+
+            distinctive = q_words - _GENERIC - _STOP
+            dist_hits = sum(1 for w in distinctive if len(w) >= 4 and w in blob)
+            dist_factor = 1.0 + 0.25 * min(dist_hits, 4) if dist_hits else 0.55
+
+            # Prefer section titles that match the question topic
+            title_boost = 1.0
+            topic_title_cues = [
+                (('strand', 'senior high', 'stem', 'humss', 'gas', 'abm', 'shs'),
+                 ('program', 'academic', 'senior', 'strand', 'offering')),
+                (('program', 'course', 'courses', 'bachelor', 'what programs'),
+                 ('program', 'academic', 'offering')),
+                (('campus', 'campuses'),
+                 ('program', 'history', 'campus', 'offering')),
+                (('dress', 'uniform', 'attire', 'jewelry', 'haircut', 'appearance'),
+                 ('dress', 'appearance', 'uniform')),
+                (('dorm', 'dormitory', 'visit other'),
+                 ('dorm', 'dormitory', 'residence', 'offense')),
+                (('appeal', 'prescription'),
+                 ('appeal', 'prescription', 'disciplinary')),
+                (('bullying', 'anti-bullying'),
+                 ('bullying', 'grievance', 'third')),
+                (('safe spaces', '11313', 'harassment'),
+                 ('safe spaces', 'gender', 'harassment', 'sexual')),
+                (('scholarship', 'financial aid', 'financial assistance'),
+                 ('scholarship', 'financial', 'admission', 'rights')),
+                (('logo', 'emblem'), ('logo', 'symbol', 'emblem')),
+                (('hymn',), ('hymn',)),
+                (('founded', 'founder', 'history', 'original name'),
+                 ('history', 'brief')),
+                (('vision',), ('vision',)),
+                (('mission',), ('mission',)),
+                (('philosophy',), ('philosophy',)),
+                (('core values',), ('core values', 'values')),
+                (('demerit', 'first degree', 'second degree', 'third degree',
+                  'first-degree', 'second-degree', 'third-degree', 'offense'),
+                 ('degree', 'offense', 'demerit', 'behavioral')),
+            ]
+            for q_cues, t_cues in topic_title_cues:
+                if any(c in q_l for c in q_cues):
+                    if any(c in title_l for c in t_cues):
+                        title_boost = max(title_boost, 2.2)
+                    elif any(c in blob for c in q_cues):
+                        title_boost = max(title_boost, 1.25)
+                    else:
+                        title_boost = min(title_boost, 0.7)
+                    break
+
             score = (
                 (fts + 0.05)
                 * (0.35 + 1.8 * title_sim)
                 * length_factor
                 * overlap_factor
                 * noise
+                * dist_factor
+                * title_boost
             )
             scored.append({
                 'id': r[0], 'chapter': r[1], 'section_title': r[2],
