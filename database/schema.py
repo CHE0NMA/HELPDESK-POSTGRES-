@@ -608,49 +608,50 @@ def _seed_default_schedules(cur, conn):
     # which silently shifted every lookup by one day -- e.g. Monday was
     # reading the row meant for Sunday, which is why "no class Monday"
     # could show up with zero holiday data involved.)
+    # has_class is SMALLINT (0/1), not BOOLEAN — Postgres rejects True/False here.
     rows = [
-        ('college', 'all', 0, '08:00', '17:00', True),   # Monday
-        ('college', 'all', 1, '08:00', '17:00', True),   # Tuesday
-        ('college', 'all', 2, '08:00', '17:00', True),   # Wednesday
-        ('college', 'all', 3, '08:00', '17:00', True),   # Thursday
-        ('college', 'all', 4, '08:00', '17:00', True),   # Friday
-        ('college', 'all', 5, '00:00', '00:00', False),  # Saturday
-        ('college', 'all', 6, '00:00', '00:00', False),  # Sunday
-        ('highschool', '7-10', 0, '07:30', '16:30', True),
-        ('highschool', '7-10', 1, '07:30', '16:30', True),
-        ('highschool', '7-10', 2, '07:30', '16:30', True),
-        ('highschool', '7-10', 3, '07:30', '16:30', True),
-        ('highschool', '7-10', 4, '07:30', '16:30', True),
-        ('highschool', '7-10', 5, '00:00', '00:00', False),
-        ('highschool', '7-10', 6, '00:00', '00:00', False),
-        ('highschool', '11-12', 0, '08:00', '17:00', True),
-        ('highschool', '11-12', 1, '08:00', '17:00', True),
-        ('highschool', '11-12', 2, '08:00', '17:00', True),
-        ('highschool', '11-12', 3, '08:00', '17:00', True),
-        ('highschool', '11-12', 4, '08:00', '17:00', True),
-        ('highschool', '11-12', 5, '00:00', '00:00', False),
-        ('highschool', '11-12', 6, '00:00', '00:00', False),
-        ('elementary', 'k-6', 0, '07:30', '16:00', True),
-        ('elementary', 'k-6', 1, '07:30', '16:00', True),
-        ('elementary', 'k-6', 2, '07:30', '16:00', True),
-        ('elementary', 'k-6', 3, '07:30', '16:00', True),
-        ('elementary', 'k-6', 4, '07:30', '16:00', True),
-        ('elementary', 'k-6', 5, '00:00', '00:00', False),
-        ('elementary', 'k-6', 6, '00:00', '00:00', False),
-        ('registrar', 'all', 0, '08:00', '17:00', True),
-        ('registrar', 'all', 1, '08:00', '17:00', True),
-        ('registrar', 'all', 2, '08:00', '17:00', True),
-        ('registrar', 'all', 3, '08:00', '17:00', True),
-        ('registrar', 'all', 4, '08:00', '17:00', True),
-        ('registrar', 'all', 5, '00:00', '00:00', False),
-        ('registrar', 'all', 6, '00:00', '00:00', False),
-        ('business', 'all', 0, '08:00', '17:00', True),
-        ('business', 'all', 1, '08:00', '17:00', True),
-        ('business', 'all', 2, '08:00', '17:00', True),
-        ('business', 'all', 3, '08:00', '17:00', True),
-        ('business', 'all', 4, '08:00', '17:00', True),
-        ('business', 'all', 5, '00:00', '00:00', False),
-        ('business', 'all', 6, '00:00', '00:00', False),
+        ('college', 'all', 0, '08:00', '17:00', 1),   # Monday
+        ('college', 'all', 1, '08:00', '17:00', 1),   # Tuesday
+        ('college', 'all', 2, '08:00', '17:00', 1),   # Wednesday
+        ('college', 'all', 3, '08:00', '17:00', 1),   # Thursday
+        ('college', 'all', 4, '08:00', '17:00', 1),   # Friday
+        ('college', 'all', 5, '00:00', '00:00', 0),  # Saturday
+        ('college', 'all', 6, '00:00', '00:00', 0),  # Sunday
+        ('highschool', '7-10', 0, '07:30', '16:30', 1),
+        ('highschool', '7-10', 1, '07:30', '16:30', 1),
+        ('highschool', '7-10', 2, '07:30', '16:30', 1),
+        ('highschool', '7-10', 3, '07:30', '16:30', 1),
+        ('highschool', '7-10', 4, '07:30', '16:30', 1),
+        ('highschool', '7-10', 5, '00:00', '00:00', 0),
+        ('highschool', '7-10', 6, '00:00', '00:00', 0),
+        ('highschool', '11-12', 0, '08:00', '17:00', 1),
+        ('highschool', '11-12', 1, '08:00', '17:00', 1),
+        ('highschool', '11-12', 2, '08:00', '17:00', 1),
+        ('highschool', '11-12', 3, '08:00', '17:00', 1),
+        ('highschool', '11-12', 4, '08:00', '17:00', 1),
+        ('highschool', '11-12', 5, '00:00', '00:00', 0),
+        ('highschool', '11-12', 6, '00:00', '00:00', 0),
+        ('elementary', 'k-6', 0, '07:30', '16:00', 1),
+        ('elementary', 'k-6', 1, '07:30', '16:00', 1),
+        ('elementary', 'k-6', 2, '07:30', '16:00', 1),
+        ('elementary', 'k-6', 3, '07:30', '16:00', 1),
+        ('elementary', 'k-6', 4, '07:30', '16:00', 1),
+        ('elementary', 'k-6', 5, '00:00', '00:00', 0),
+        ('elementary', 'k-6', 6, '00:00', '00:00', 0),
+        ('registrar', 'all', 0, '08:00', '17:00', 1),
+        ('registrar', 'all', 1, '08:00', '17:00', 1),
+        ('registrar', 'all', 2, '08:00', '17:00', 1),
+        ('registrar', 'all', 3, '08:00', '17:00', 1),
+        ('registrar', 'all', 4, '08:00', '17:00', 1),
+        ('registrar', 'all', 5, '00:00', '00:00', 0),
+        ('registrar', 'all', 6, '00:00', '00:00', 0),
+        ('business', 'all', 0, '08:00', '17:00', 1),
+        ('business', 'all', 1, '08:00', '17:00', 1),
+        ('business', 'all', 2, '08:00', '17:00', 1),
+        ('business', 'all', 3, '08:00', '17:00', 1),
+        ('business', 'all', 4, '08:00', '17:00', 1),
+        ('business', 'all', 5, '00:00', '00:00', 0),
+        ('business', 'all', 6, '00:00', '00:00', 0),
     ]
     for dept, grade, dow, start_t, end_t, has_class in rows:
         cur.execute("""

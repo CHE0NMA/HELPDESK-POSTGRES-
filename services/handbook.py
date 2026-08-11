@@ -47,43 +47,48 @@ _GENERIC = {
 }
 
 _QUERY_EXPANSIONS = [
-    (r'\b(light|minor)\s+offenses?\b', 'first degree demerit offense'),
-    (r'\b(medium|moderate)\s+offenses?\b', 'second degree demerit offense'),
-    (r'\b(serious|heavy|heaviest|worst)\s+offenses?\b', 'third degree demerit offense'),
-    (r'\b(called before|original name|formerly known|old name)\b', 'originally known founded history hillside view'),
+    # Topic-shaped synonyms only — NO edition-specific facts (years, names,
+    # demerit counts). Those live in handbook_chunks and must come from
+    # re-ingest when the manual changes.
+    (r'\b(light|minor)\s+offenses?\b', 'first degree offense demerit'),
+    (r'\b(medium|moderate)\s+offenses?\b', 'second degree offense demerit'),
+    (r'\b(serious|heavy|heaviest|worst)\s+offenses?\b', 'third degree offense demerit'),
+    (r'\b(called before|original name|formerly known|old name)\b', 'originally known history founded'),
     (r'\b(want to become|aspire to be|future of the (school|college)|what does .+ want)\b', 'vision envisions center of excellence'),
-    (r'\b(start with|how many points|points do we start|merit points)\b', 'merit points demerit 30 points'),
-    (r'\b(can we wear|allowed to wear|jewelry|necklace|ring)\b', 'dress appearance jewelry wedding ring'),
+    (r'\b(start with|how many points|points do we start|merit points|how many merits)\b', 'merit points demerit system'),
+    (r'\b(can we wear|allowed to wear|jewelry|necklace|ring)\b', 'dress appearance jewelry'),
     (r'\b(hike|outing).{0,20}(chaperone|without)\b', 'unchaperoned hike outing first degree'),
-    (r'\b(too many|accumulate|reach|over|more than|\d+\+?)\s*.{0,15}(demerits?)\b', 'probation disciplinary measures 20 demerits'),
-    (r'\b(philosophy|school.?s? philosophy|philosophy about)\b', 'philosophy god is the source true education'),
-    (r'\b(mission of|main mission|what.?s the mission)\b', 'mission useful human service personal integrity'),
+    (r'\b(too many|accumulate|reach|over|more than|\d+\+?)\s*.{0,15}(demerits?)\b', 'probation disciplinary demerits'),
+    (r'\b(philosophy|school.?s? philosophy|philosophy about)\b', 'philosophy true education'),
+    (r'\b(mission of|main mission|what.?s the mission)\b', 'mission human service integrity'),
     (r'\b(core values|pac values|the pac ones)\b', 'core values purpose-driven academic excellence christ-centered'),
-    (r'\b(logo|emblem|symbol|what does .+ logo)\b', 'logo symbols bible torch 1975'),
-    (r'\b(hymn|who wrote|composer|lyrics)\b', 'hymn pilon la sage alma mater'),
-    (r'\b(founded|when did .+ start|who founded|founder)\b', 'founded 1975 macias hillside view history'),
-    (r'\b(full name|real name|name of (this )?school|campuses)\b', 'philippine advent college inc campuses'),
-    (r'\b(anti.?bullying|bullying law|ra.?10627)\b', 'anti-bullying ra 10627'),
-    (r'\b(safe spaces|ra.?11313)\b', 'safe spaces act ra 11313'),
+    (r'\b(logo|emblem|symbol|what does .+ logo)\b', 'logo symbols bible torch'),
+    (r'\b(hymn|who wrote|composer|lyrics)\b', 'hymn alma mater'),
+    (r'\b(founded|when did .+ start|who founded|founder|when .{0,12} (built|established))\b', 'founded history established'),
+    (r'\b(full name|real name|name of (this )?school|campuses|other campuses|how many campuses)\b', 'college campuses campus locations'),
+    (r'\b(anti.?bullying|bullying law|ra.?10627)\b', 'anti-bullying'),
+    (r'\b(safe spaces|ra.?11313)\b', 'safe spaces act'),
     (r'\b(dress code|how (should|do) (i|we) dress)\b', 'dress and appearance uniform attire'),
-    (r'\b(cook|cooking).{0,15}(dorm|dormitory)\b', 'dormitory cooking prohibited rice cooker'),
+    (r'\b(cook|cooking).{0,15}(dorm|dormitory)\b', 'dormitory cooking prohibited'),
     (r'\b(visit|visiting).{0,15}(other )?dorms?\b', 'dormitory visit other dorms'),
-    (r'\b(senior high|strands?|shs)\b', 'senior high stem humss gas abm grades'),
+    (r'\b(senior high|strands?|shs)\b', 'senior high stem humss gas abm'),
     (r'\b(programs?|courses?).{0,20}(offer|available)\b', 'bachelor programs education business computer'),
-    (r'\b(heaviest|worst|most serious).{0,20}(demerit|offense|level)\b', 'third degree offense 30 demerits'),
-    (r'\b(maximum fine|max fine|fine for)\b', 'fine 1500 pesos demerit'),
-    (r'\b(appeal).{0,30}(disciplinary|decision|decision)\b', 'appeal 15 days prescription'),
+    (r'\b(heaviest|worst|most serious).{0,20}(demerit|offense|level)\b', 'third degree offense demerits'),
+    (r'\b(maximum fine|max fine|fine for|biggest (fine|amount)|money for the fine)\b', 'fine pesos demerit offense'),
+    # Disciplinary suspension vs class suspension — topic routing only
+    (r'\b(grounds? for|reasons? for).{0,25}(suspension|expulsion|dismissal)\b',
+     'suspension expulsion dismissal offense demerit disciplinary behavioral'),
+    (r'\b(fraternity|sorority)\b', 'fraternity sorority offense disciplinary'),
+    (r'\b(pregnant|pregnancy)\b', 'pregnancy pregnant admission student'),
     (r'\b(how many (degrees?|levels?) (of |are there )?(offense|offence)|'
      r'(offense|offence) (degrees?|levels?)|up to (what|how many) degree)\b',
      'first degree offense second degree offense third degree offense demerits'),
-    # Vague "just tell me something" style questions with no specific
-    # topic word — route these to a broad overview instead of failing
-    # outright, since the student clearly wants *some* general info about
-    # the school, not nothing.
+    (r'\b(appeal).{0,30}(disciplinary|decision)\b', 'appeal disciplinary prescription'),
     (r'\b(facts?|trivia|tell me (about|something about)|know about|'
      r'info(rmation)? about|general info|anything about|what.?s (up )?with)\b'
      r'.{0,25}\b(school|college|pac|institution|campus)\b',
      'vision mission history founded core values campuses philosophy logo hymn'),
+
 ]
 
 
@@ -104,16 +109,47 @@ def expand_query_for_retrieval(question: str) -> str:
 
 
 def is_handbook_question(question: str) -> bool:
+    """Topic-shaped detector only — no edition-specific facts.
+
+    Safe across handbook re-ingests: matches *kinds* of questions the
+    student manual covers, not particular years/names/numbers.
+    """
     q = question.lower()
     if any(kw in q for kw in HANDBOOK_KEYWORDS):
         return True
-    if re.search(r'\b(minimum|maximum|how many|how much).{0,50}(absent|absence|tardy|late|demerit|merit|point|day)\b', q):
+    if re.search(
+        r'\b(minimum|maximum|how many|how much).{0,50}'
+        r'(absent|absence|tardy|late|demerit|merit|point|day|fine)\b',
+        q,
+    ):
         return True
     if re.search(r'\b(dress|uniform|attire|clothing|jewelry)\s*(code|rule|policy)?\b', q):
         return True
     if re.search(r'\b(vision|mission|philosophy|motto|tagline|history|founded|logo|hymn)\b', q):
         return True
-    if re.search(r'\b(full name|name of the (school|college|university)|campuses|original name)\b', q):
+    if re.search(
+        r'\b(full name|name of the (school|college|university)|campuses|'
+        r'original name|other campuses|how many campuses)\b',
+        q,
+    ):
+        return True
+    # Disciplinary / conduct topics (NOT class-weather suspension)
+    if re.search(
+        r'\b(grounds? for (suspension|expulsion|dismissal)|'
+        r'(suspension|expulsion|dismissal).{0,25}(grounds?|offense|demerit|reason)|'
+        r'(first|second|third)[ -]?degree|'
+        r'demerit|merit points?|fraternity|sorority|'
+        r'pregnant|pregnancy|'
+        r'disciplinary (action|measure|committee)|'
+        r'code of conduct|student discipline|behavioral code)\b',
+        q, re.I,
+    ):
+        return True
+    if re.search(
+        r'\b(when (was|is) (pac|the school|the college) '
+        r'(built|founded|established)|who founded)\b',
+        q, re.I,
+    ):
         return True
     if any(re.search(p, q, re.I) for p, _ in _QUERY_EXPANSIONS):
         return True

@@ -450,11 +450,44 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
         )
         return result if return_topic else result[0]
 
-    if date_service.is_date_question(question, ctx=ctx):
-        dept_dis = date_service.check_department_disambiguation(question, detected_lang, ctx=ctx)
+    # ---- Multi-source gate (cheap retrieval, no triple LLM) ----
+    # Never lock onto the schedule path solely because a keyword matched.
+    # Pull handbook/FAQ relevance first; only answer as Schedule when the
+    # date intent is clear *and* other sources are not clearly stronger.
+    _looks_date = date_service.is_date_question(question, ctx=ctx)
+    _looks_hb = handbook_service.is_handbook_question(question)
+    _hb_score_early, _hb_chunks_early = (0.0, [])
+    _faq_score_early = 0.0
+    if _looks_date or _looks_hb:
+        try:
+            _hb_score_early, _hb_chunks_early = _handbook_best_score(question)
+        except Exception:
+            pass
+        try:
+            _faq_cands_early, _faq_score_early = _faq_candidates_and_score(
+                question, detected_lang
+            )
+        except Exception:
+            _faq_cands_early = []
+            _faq_score_early = 0.0
+
+    # Handbook wins when topic detector fires OR retrieval score is strong.
+    _hb_clearly_better = (
+        _looks_hb and _hb_score_early >= 0.12
+    ) or (
+        _hb_score_early >= 0.36 and _hb_score_early > (_faq_score_early + 0.05)
+    )
+
+    if _looks_date and not _hb_clearly_better:
+        dept_dis = date_service.check_department_disambiguation(
+            question, detected_lang, ctx=ctx
+        )
         if dept_dis:
             message, options = dept_dis
-            ctx.set_disambiguation('date', options, original_question=question, detected_lang=detected_lang)
+            ctx.set_disambiguation(
+                'date', options,
+                original_question=question, detected_lang=detected_lang,
+            )
             result = (message, 'Disambiguation', None, None, detected_lang)
             return result if return_topic else result[0]
 
@@ -462,7 +495,13 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             question, detected_lang, ctx=ctx
         )
         if date_ans:
-            signals = _cross_check_sources(question, detected_lang, ctx=ctx)
+            # Still allow a handbook/FAQ footnote when those scores are solid
+            signals = {
+                'hb_score': _hb_score_early,
+                'hb_chunks': _hb_chunks_early,
+                'faq_candidates': locals().get('_faq_cands_early') or [],
+                'faq_score': _faq_score_early,
+            }
             final_ans = date_ans
             if (signals['hb_score'] >= CROSS_CHECK_HANDBOOK_BAR
                     and signals['hb_chunks']
@@ -606,7 +645,9 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
 
         pure_handbook_topics = bool(re.search(
             r'\b(vision|mission|philosophy|core values|logo|hymn|founded|'
-            r'original name|brief history|want to become|envisions)\b',
+            r'original name|brief history|want to become|envisions|'
+            r'grounds? for (suspension|expulsion)|behavioral code|'
+            r'(first|second|third)[ -]?degree|fraternity|sorority)\b',
             question, re.I,
         ))
         combine_gap = 0.18

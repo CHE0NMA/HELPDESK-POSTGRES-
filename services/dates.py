@@ -66,8 +66,9 @@ DATE_KEYWORDS = [
     'walay klase', 'aduna bay klase', 'abli ba', 'sirado ba',
     'karong adlawa', 'ugmang adlaw', 'niining semanaha', 'sunod nga semana',
     'karon nga semana', 'karon nga week', 'ning semana', 'sunod nga week',
-    'holiday', 'holidays', 'no class day', 'no classes day', 'suspension',
-    'class suspended', 'walay pasok', 'pasok ba',
+    'holiday', 'holidays', 'no class day', 'no classes day',
+    'class suspended', 'classes suspended', 'class suspension',
+    'school suspension', 'walay pasok', 'pasok ba',
 ]
 
 OPEN_CLOSED_PATTERNS = [
@@ -124,7 +125,8 @@ def is_date_question(question: str, ctx=None) -> bool:
         or fuzzy_contains(q, sched.OFFICE_KEYWORDS)
         or any(kw in q for kw in (
             'open', 'closed', 'schedule', 'pasok', 'klase', 'holiday',
-            'suspension', 'office hours', 'may pasok', 'walang pasok',
+            'class suspension', 'school suspension', 'office hours',
+            'may pasok', 'walang pasok',
         ))
     )
     if has_weekday and schedule_context:
@@ -137,10 +139,31 @@ def is_date_question(question: str, ctx=None) -> bool:
     if re.search(r'\b(this|next)\s+(week|month)\b', q, re.I) and schedule_context:
         return True
 
+    # Class / weather suspension only — NOT disciplinary "grounds for suspension".
+    # Topic shape, not handbook facts: stays valid across handbook editions.
     if any(kw in q for kw in (
-        'holiday', 'holidays', 'no class day', 'no classes day', 'suspension'
+        'holiday', 'holidays', 'no class day', 'no classes day',
+        'class suspended', 'classes suspended', 'class suspension',
+        'school suspension', 'work suspension',
     )):
         return True
+
+    if 'suspension' in q or 'suspended' in q:
+        # weather / operations cues → schedule
+        if re.search(
+            r'\b(class|classes|school|work|office|weather|typhoon|storm|'
+            r'rain|flood|pasok|klase|holiday)\b',
+            q, re.I,
+        ):
+            return True
+        # disciplinary cues → not a date question (handbook owns these)
+        if re.search(
+            r'\b(grounds?|reason|cause|demerit|offense|offence|expulsion|'
+            r'dismissal|disciplinary|violation|fraternity|pregnant|'
+            r'behavioral|conduct)\b',
+            q, re.I,
+        ):
+            return False
 
     return False
 
