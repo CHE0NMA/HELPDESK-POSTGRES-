@@ -16,6 +16,7 @@ drift, and if it does drift anyway we just don't use it.
 """
 import logging
 from datetime import datetime
+from typing import Optional
 
 from ai_providers import ai_cache, circuit_breaker, llm_chat
 from services.grounding import answer_is_grounded
@@ -28,6 +29,53 @@ _LANG_NAMES = {
     'bisaya': 'Bisaya/Cebuano', 'mixed_be': 'a natural mix of Bisaya and English',
     'mixed_tb': 'a natural mix of Tagalog and Bisaya', 'english': 'English',
 }
+
+# Casual terms of address students actually use when texting a friend
+# ("bai naa ta klase ron?"). Detecting these lets the bot mirror the same
+# energy back instead of answering a playful message with a stiff,
+# formal-sounding reply — the FACTS stay exactly as accurate either way;
+# only the wrapping tone changes.
+_CASUAL_ADDRESS_TERMS = [
+    'bai', 'bro', 'sis', 'pre', 'day', 'uy', 'dawg', 'cuz', 'te', 'kuya', 'ate', 'jowa', 'mars',
+]
+
+
+def detect_casual_address(text: str) -> Optional[str]:
+    """Returns the first casual address term the student used (e.g. 'bai',
+    'bro'), or None if the message reads as neutral/formal."""
+    if not text:
+        return None
+    t = text.lower()
+    for term in _CASUAL_ADDRESS_TERMS:
+        if re.search(rf'\b{re.escape(term)}\b', t):
+            return term
+    return None
+
+
+def casual_tone_note(question: str) -> str:
+    """A short prompt addendum telling the model it's fine (encouraged,
+    even) to mirror a casual address term the student already used —
+    never invented if they didn't use one."""
+    term = detect_casual_address(question)
+    if not term:
+        return ""
+    return (
+        f'\nThe student greeted you casually with "{term}" — it\'s good to mirror '
+        f'that back naturally (e.g. start your reply with "{term}" too), the way a '
+        f'friend texting back would. Keep it playful and warm, but every fact in '
+        f'the reply must still be exactly correct.'
+    )
+
+
+STYLE_GUIDE = (
+    "Reply the way a warm, slightly playful friend would actually text back — natural, "
+    "casual, and a little fun when the moment allows it, never a formatted announcement "
+    "or a bulleted status report, no markdown headers. Match the student's own energy: "
+    "if they're casual (slang, 'bai'/'bro'/'sis', short texting style), be casual and "
+    "playful right back; if they're formal, stay a bit more polished. Whatever the tone, "
+    "the actual facts in the answer must always be exactly correct — only the wrapping "
+    "changes, never the content. 1-4 short sentences unless the student is asking for a list."
+)
 
 # Short, real examples of the tone/register wanted per language — shown
 # to the model as few-shot examples rather than just described in an
@@ -44,8 +92,8 @@ _FEW_SHOT_EXAMPLES = {
     ),
     'bisaya': (
         'Pananglitan:\n'
-        'Pangutana: "Naa bay klase ugma?"\n'
-        'Tubag: "Wala nay klase ugma — Foundation Day man gud, mao nga sirado pud '
+        'Pangutana: "Bai, naa bay klase ugma?"\n'
+        'Tubag: "Bai, wala nay klase ugma — Foundation Day man gud, mao nga sirado pud '
         'ang mga opisina. Sunod Lunes na sad ang klase!"'
     ),
     'mixed_te': (
@@ -56,8 +104,8 @@ _FEW_SHOT_EXAMPLES = {
     ),
     'mixed_be': (
         'Pananglitan:\n'
-        'Pangutana: "Naa bay office ugma?"\n'
-        'Tubag: "Wala nay office ugma kay Foundation Day man — closed pud ang '
+        'Pangutana: "Bai, naa bay office ugma?"\n'
+        'Tubag: "Bai, wala nay office ugma kay Foundation Day man — closed pud ang '
         'Registrar. Monday na sad!"'
     ),
     'mixed_tb': (
@@ -122,7 +170,7 @@ A student asked: "{question}"
 Here is the exact, factually-correct answer:
 "{canonical_text}"
 
-{extra_note}
+{extra_note}{casual_tone_note(question)}
 
 Rephrase the answer above so it reads naturally, in {lang_name(detected_lang)}. {STYLE_GUIDE}
 {("\n" + few_shot_example(detected_lang) + "\n") if detected_lang != 'english' else ""}

@@ -32,6 +32,24 @@ COMPOUND_SPLIT_RE = re.compile(
 CROSS_CHECK_HANDBOOK_BAR = 0.34
 CROSS_CHECK_FAQ_BAR = engine.FUZZY_MIN_SCORE + 0.05
 
+# Phrases that mean the follow-up LLM is hedging / admitting it doesn't
+# actually know, rather than giving a real answer. When we see one of
+# these we should NOT treat it as a final answer — we should fall
+# through to the real handbook/FAQ lookup instead, since the model is
+# only reasoning over the last few chat turns and has no idea whether
+# the handbook actually covers the topic.
+_NON_ANSWER_RE = re.compile(
+    r"\b(don'?t have (that|this|the) information|haven'?t (discussed|covered|talked about)|"
+    r"wasn'?t covered|(not|isn'?t) something we'?ve covered|i don'?t know|"
+    r"not sure (what|about)|no information (on|about)|not readily available|"
+    r"i('| a)m not able to find|i can'?t find (that|this))\b",
+    re.IGNORECASE,
+)
+
+
+def _looks_like_non_answer(text: str) -> bool:
+    return bool(_NON_ANSWER_RE.search(text or ''))
+
 
 def split_compound_question(question: str) -> List[str]:
     if len(question.split()) < 6:
@@ -422,7 +440,13 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             question, last_ex.get('user', ''), last_ex.get('bot', '')
         )
         word_count = len(question.split())
-        if not is_followup and word_count <= 5 and last_ex.get('bot'):
+        # Only fall back to this word-count guess when the short message
+        # doesn't already look like a fresh, specific handbook topic on
+        # its own (e.g. "dresscode", "logo or motto") — those should go
+        # straight to the real lookup below, not be guessed at from
+        # chat history alone.
+        if (not is_followup and word_count <= 5 and last_ex.get('bot')
+                and not handbook_service.is_handbook_question(question)):
             is_followup = True
 
         if is_followup:
@@ -434,7 +458,13 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 last_faq_answer=ctx.last_faq_answer,
                 last_faq_question=ctx.last_faq_question,
             )
-            if ai_followup:
+            # A hedging "I don't have that info" / "we haven't covered
+            # that" response is the model guessing blind from chat
+            # history — it has no way to know whether the handbook/FAQ
+            # actually has the answer. Treat that as no answer and fall
+            # through to the real lookup instead of returning a
+            # confabulated-sounding non-answer to the student.
+            if ai_followup and not _looks_like_non_answer(ai_followup):
                 ctx.update(user_msg=question, bot_response=ai_followup)
                 result = (ai_followup, 'Follow-up', None, None, detected_lang)
                 return result if return_topic else result[0]

@@ -163,6 +163,7 @@ def _extract_from_answer(user_question: str, best_text: str, answer: str,
         f"Reply in {nlg.lang_name(detected_lang)}." if detected_lang != 'english' else ""
     )
     few_shot = nlg.few_shot_example(detected_lang) if detected_lang != 'english' else ""
+    casual_note = nlg.casual_tone_note(user_question)
     prompt = f"""{nlg.now_context()}
 
     {bot_identity_line()}
@@ -178,7 +179,7 @@ def _extract_from_answer(user_question: str, best_text: str, answer: str,
     - If the student is asking for a list (e.g. "what scholarships are available", "what are the requirements"), enumerate everything relevant found in the FAQ answer - don't just give one item.
     - {nlg.STYLE_GUIDE}
     - {lang_instruction}
-    {few_shot}
+    {few_shot}{casual_note}
     - If the FAQ answer doesn't actually contain the information needed to answer the question, respond with exactly: CANNOT_ANSWER
 
     Answer:"""

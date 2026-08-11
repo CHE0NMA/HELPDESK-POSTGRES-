@@ -73,6 +73,14 @@ _QUERY_EXPANSIONS = [
     (r'\b(heaviest|worst|most serious).{0,20}(demerit|offense|level)\b', 'third degree offense 30 demerits'),
     (r'\b(maximum fine|max fine|fine for)\b', 'fine 1500 pesos demerit'),
     (r'\b(appeal).{0,30}(disciplinary|decision|decision)\b', 'appeal 15 days prescription'),
+    # Vague "just tell me something" style questions with no specific
+    # topic word — route these to a broad overview instead of failing
+    # outright, since the student clearly wants *some* general info about
+    # the school, not nothing.
+    (r'\b(facts?|trivia|tell me (about|something about)|know about|'
+     r'info(rmation)? about|general info|anything about|what.?s (up )?with)\b'
+     r'.{0,25}\b(school|college|pac|institution|campus)\b',
+     'vision mission history founded core values campuses philosophy logo hymn'),
 ]
 
 
@@ -473,6 +481,7 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
                 )
             context = "\n\n".join(context_parts)
 
+            casual_note = nlg.casual_tone_note(question)
             prompt = f"""{nlg.now_context()}
 
 You are a helpful student handbook assistant. Answer the student's question using ONLY the handbook excerpts below.
@@ -490,7 +499,7 @@ Instructions:
 - If the answer involves numbers (demerits, points, days, fines), state them clearly.
 - If it is a yes/no rule, state the rule clearly.
 - Cite the section title and page when helpful.
-- {nlg.STYLE_GUIDE}
+- {nlg.STYLE_GUIDE}{casual_note}
 
 Answer:"""
 
