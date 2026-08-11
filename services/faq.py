@@ -43,11 +43,14 @@ _NON_ANSWER_RE = re.compile(
     r"(?:information|details|data|specifics|answer)|"
     r"didn'?t have (?:the |complete |full )*(?:information|details|data)|"
     r"haven'?t (discussed|covered|talked about)|"
+    r"didn'?t (cover|discuss|talk about)|"
     r"wasn'?t covered|(not|isn'?t) something we'?ve covered|i don'?t know|"
     r"not sure (what|about)|no information (on|about)|not readily available|"
     r"i('| a)m not able to find|i can'?t find (that|this)|"
     r"i (only|just) (mentioned|found|got to|had)\b|"
-    r"let me try to find|i'?d be happy to (try and )?find|"
+    r"let me try to find|let me look that up|i'?d be happy to (try and )?find|"
+    r"i'?d need to check (the handbook|that|this)|need to check the handbook|"
+    r"give me a (moment|sec|second|minute)|"
     r"check(ing)? page \d+ (of|for) the relevant section|"
     r"couldn'?t find any specific information)\b",
     re.IGNORECASE,
@@ -64,6 +67,46 @@ def split_compound_question(question: str) -> List[str]:
     parts = COMPOUND_SPLIT_RE.split(question)
     parts = [p.strip(' ?.,') for p in parts if p and p.strip(' ?.,')]
     return parts if len(parts) > 1 else [question]
+
+
+def _answer_followup_via_search(question: str, ctx, detected_lang: str):
+    """A follow-up like "how many demerits is a first degree offense" after
+    talking about third-degree offenses isn't answerable from chat history
+    alone — the bot needs to actually go look up "first degree offense" in
+    the handbook, the same as it would for a brand new question. This
+    resolves the (possibly pronoun-y / elliptical) follow-up into a
+    standalone question using the conversation so far, then runs THAT
+    through the normal handbook/FAQ search — not just a second glance at
+    whatever chunks the previous turn already used.
+
+    Returns (answer, topic, intent) — all None if nothing was found, in
+    which case the caller should fall back to answer_followup_with_ai.
+    """
+    from services.conversation import build_context_snapshot
+
+    context_snapshot = build_context_snapshot(ctx)
+    resolved_q = question
+    if context_snapshot and not circuit_breaker.is_open():
+        resolved_q = _resolve_standalone_question(question, context_snapshot)
+
+    # Check both the resolved and original phrasing — the rewrite usually
+    # helps ("it" -> "a second-degree offense"), but shouldn't be trusted
+    # blindly if it drifted off-topic.
+    looks_handbooky = (
+        handbook_service.is_handbook_question(resolved_q)
+        or handbook_service.is_handbook_question(question)
+    )
+    if looks_handbooky:
+        hb_ans = handbook_service.answer_handbook_question(resolved_q, detected_lang, ctx=ctx)
+        if hb_ans:
+            return hb_ans, 'Handbook', 'handbook_query'
+
+    faq_result = _lookup_faq_answer(resolved_q, detected_lang)
+    if faq_result and faq_result[0]:
+        answer, topic, intent = faq_result
+        return answer, (topic or 'General'), intent
+
+    return None, None, None
 
 
 def answer_followup_with_ai(user_question: str, context_summary: str = "",
@@ -457,6 +500,18 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             is_followup = True
 
         if is_followup:
+            search_ans, search_topic, search_intent = _answer_followup_via_search(
+                question, ctx, detected_lang
+            )
+            if search_ans:
+                ctx.update(
+                    topic=search_topic, intent=search_intent,
+                    user_msg=question, bot_response=search_ans,
+                    faq_answer=search_ans, faq_question=question,
+                )
+                result = (search_ans, search_topic or 'Handbook', None, search_intent, detected_lang)
+                return result if return_topic else result[0]
+
             ai_followup = answer_followup_with_ai(
                 user_question=question,
                 context_summary=ctx.get_context_summary(),

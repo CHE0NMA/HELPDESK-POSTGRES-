@@ -73,6 +73,9 @@ _QUERY_EXPANSIONS = [
     (r'\b(heaviest|worst|most serious).{0,20}(demerit|offense|level)\b', 'third degree offense 30 demerits'),
     (r'\b(maximum fine|max fine|fine for)\b', 'fine 1500 pesos demerit'),
     (r'\b(appeal).{0,30}(disciplinary|decision|decision)\b', 'appeal 15 days prescription'),
+    (r'\b(how many (degrees?|levels?) (of |are there )?(offense|offence)|'
+     r'(offense|offence) (degrees?|levels?)|up to (what|how many) degree)\b',
+     'first degree offense second degree offense third degree offense demerits'),
     # Vague "just tell me something" style questions with no specific
     # topic word — route these to a broad overview instead of failing
     # outright, since the student clearly wants *some* general info about
