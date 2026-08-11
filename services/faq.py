@@ -697,18 +697,70 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
         # questions (dress, demerits, strands, RA laws), require an even
         # larger gap so a loosely matched FAQ (e.g. office hours, scholarships)
         # cannot steal the answer.
-        faq_margin = 0.22 if is_hb else 0.10
+        # Filter FAQ candidates: reject if the FAQ *question text* does not
+        # share distinctive words with the user question. Stops office-hours /
+        # scholarship / enrollment FAQs from matching dress / vision / demerits.
+        def _faq_text_relevant(user_q: str, cand: dict) -> bool:
+            try:
+                row = cand.get('faq') or cand.get('row')
+                faq_q = ''
+                if row is not None:
+                    # faq tuple: answer, question, id, ...
+                    faq_q = (row[1] if len(row) > 1 else '') or ''
+                faq_q = faq_q or cand.get('best_q_text') or cand.get('question') or ''
+                u = set(w for w in re.findall(r"[a-z0-9']{4,}", user_q.lower())
+                        if w not in ('this', 'that', 'what', 'when', 'where',
+                                     'does', 'have', 'with', 'from', 'about',
+                                     'school', 'college', 'student', 'students'))
+                f = set(re.findall(r"[a-z0-9']{4,}", faq_q.lower()))
+                if not u:
+                    return True
+                overlap = len(u & f)
+                # Handbook-shaped questions: require stronger topical overlap
+                # so office-hours / enrollment / scholarship FAQs cannot steal
+                # dress / demerit / vision / dorm / strands answers.
+                if is_hb:
+                    topical = (
+                        'dress', 'demerit', 'offense', 'vision', 'mission',
+                        'core', 'value', 'dorm', 'bullying', 'spaces',
+                        'strand', 'senior', 'appeal', 'fine', 'chaperone',
+                        'hike', 'cook', 'cafeteria', 'jewelry', 'philosophy',
+                        'logo', 'hymn', 'founded', 'history',
+                    )
+                    faq_has_topic = any(t in faq_q.lower() for t in topical)
+                    return overlap >= 2 or (overlap >= 1 and faq_has_topic)
+                return overlap >= 1
+            except Exception:
+                return True
+
+        if candidates:
+            filtered = [c for c in candidates if _faq_text_relevant(question, c)]
+            if filtered:
+                candidates = filtered
+                faq_best_score = candidates[0].get('combined', 0.0)
+            else:
+                # No FAQ is actually about this question
+                candidates = []
+                faq_best_score = 0.0
+
+        # Handbook-shaped questions: handbook leads unless FAQ is a clear
+        # topical match (after the filter above) with a strong score gap.
+        faq_margin = 0.28 if is_hb else 0.10
         faq_clearly_better = (
-            candidates
+            (not is_hb)
+            and candidates
             and faq_best_score >= engine.FUZZY_MIN_SCORE + 0.12
             and faq_best_score >= (hb_score + faq_margin)
         )
+        # For is_hb: never let FAQ "clearly better" — try handbook first.
+        if is_hb:
+            faq_clearly_better = False
 
         handbook_should_lead = (
             hb_chunks
             and not faq_clearly_better
             and (
-                (is_hb and hb_score >= hb_threshold)
+                (is_hb and hb_score >= 0.08)  # low bar when detector fired
                 or (hb_score >= hb_threshold and hb_score >= faq_best_score)
             )
         )
@@ -717,12 +769,18 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             r'\b(vision|mission|philosophy|core values|logo|hymn|founded|'
             r'original name|brief history|want to become|envisions|'
             r'grounds? for (suspension|expulsion)|behavioral code|'
-            r'(first|second|third)[ -]?degree|fraternity|sorority)\b',
+            r'(first|second|third)[ -]?degree|fraternity|sorority|'
+            r'demerit|merit points?|max(imum)?\s*fine|appeal|'
+            r'unchaperoned|chaperone|cook(ing)? (in|inside)|visit other dorms|'
+            r'anti.?bullying|safe spaces|ra.?11?3?13|senior high strands?|'
+            r'heaviest demerit|food .{0,20}(cafeteria|not allowed))\b',
             question, re.I,
         ))
         combine_gap = 0.22
+        # Never force-combine a weak/unrelated FAQ into a handbook answer
         both_solid = (
-            hb_chunks and hb_score >= 0.28
+            (not is_hb)
+            and hb_chunks and hb_score >= 0.28
             and candidates and faq_best_score >= engine.FUZZY_MIN_SCORE
             and abs(hb_score - faq_best_score) < combine_gap
         )
@@ -751,15 +809,17 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 faq_cache.set(cache_key, result_data)
                 return result_data
 
-        if handbook_should_lead:
+        if handbook_should_lead or is_hb:
             hb_ans = handbook_service.answer_handbook_question(
                 question, detected_lang,
                 min_score_to_answer=(None if is_hb else hb_threshold),
                 ctx=ctx,
             )
             if hb_ans:
-                # Merge FAQ only when it is competitive and not a weak steal
-                if (faq_best_score >= CROSS_CHECK_FAQ_BAR
+                # Only merge FAQ into handbook answers when FAQ is topical
+                # (already filtered) AND close in score — never for weak steals
+                if (not is_hb
+                        and faq_best_score >= CROSS_CHECK_FAQ_BAR
                         and faq_best_score >= hb_score - 0.05
                         and candidates and not circuit_breaker.is_open()):
                     hb_ans = _merge_with_faq(
@@ -775,8 +835,8 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                     )
                 result = (hb_ans, 'Handbook', None, 'handbook_query', detected_lang)
                 return result if return_topic else result[0]
-            # Handbook topic but generation failed / too vague → fall through
-            # to FAQ instead of "I don't have a confirmed answer".
+            # is_hb but handbook returned None → fall through to FAQ only
+            # after the relevance filter (candidates may already be empty).
 
         # REMOVED: early "unanswered" exit for pure_handbook_topics.
         # If handbook is thin, FAQs are the compensation layer.
