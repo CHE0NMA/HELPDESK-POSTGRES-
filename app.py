@@ -45,7 +45,6 @@ def create_app():
     app.start_time = time.time()
     app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 
-    # ---------- Fix Vercel rewrite path ----------
     class FixVercelPath:
         def __init__(self, app):
             self.app = app
@@ -67,7 +66,6 @@ def create_app():
             return self.app(environ, start_response)
 
     app.wsgi_app = FixVercelPath(app.wsgi_app)
-    # ---------- end fix ----------
 
     fmt = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     console = logging.StreamHandler()
