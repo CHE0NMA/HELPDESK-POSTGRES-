@@ -20,3 +20,5 @@ requests
 numpy
 groq
 google-generativeai
+python-dotenv
+APScheduler
