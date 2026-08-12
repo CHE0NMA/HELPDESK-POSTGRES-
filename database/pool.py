@@ -1,36 +1,5 @@
-"""Connection pool. Kept tiny and dependency-free (no Flask import) so any
-module can `from database import get_db` without pulling in app.py.
-
-Usage pattern used everywhere else in the codebase (kept as-is on purpose,
-since switching every call site to a context manager is a bigger, separate
-refactor):
-
-    conn = get_db()
-    cur = conn.cursor()
-    try:
-        ...
-    finally:
-        cur.close()
-        conn.close()
-
-For NEW code, prefer the `db_cursor()` context manager below — it closes
-the cursor/connection automatically even on exception, which was one of
-the "connection leak on error paths" issues raised in review.
-
---- Postgres migration notes ---
-- pymysql -> psycopg2. `db=` kwarg becomes `database=`.
-- No `cursorclass=pymysql.cursors.Cursor` equivalent needed: psycopg2's
-  default cursor already returns plain tuples (same row[0]-style access
-  used throughout the codebase), so nothing else had to change in the
-  many `cur.fetchall()` call sites.
-- `conn.rollback()` behavior is the same; psycopg2 also requires an
-  explicit rollback after a failed statement before the connection can be
-  reused for a new query (a transaction that hit an error is left in an
-  aborted state) — the try/except/rollback in db_cursor() already does
-  this, but be aware if you add new bare `cur.execute()` calls elsewhere
-  outside this helper, wrap them the same way.
-"""
 from contextlib import contextmanager
+import os
 
 import psycopg2
 import psycopg2.extensions
@@ -48,8 +17,8 @@ def init_pool():
 
     kwargs = {
         "creator": psycopg2,
-        "maxconnections": 10,   # lower on serverless
-        "mincached": 0,         # don't open connections at import time
+        "maxconnections": 10,
+        "mincached": 0,
         "maxcached": 5,
         "maxshared": 0,
         "blocking": True,
@@ -60,45 +29,9 @@ def init_pool():
         "port": DATABASE_CONFIG["port"],
     }
 
-    # Render external Postgres requires SSL from Vercel
     sslmode = DATABASE_CONFIG.get("sslmode") or os.environ.get("DB_SSLMODE", "require")
     if sslmode:
         kwargs["sslmode"] = sslmode
 
     _pool = PooledDB(**kwargs)
     return _pool
-
-def get_db():
-    if _pool is None:
-        init_pool()
-    conn = _pool.connection()
-    conn.autocommit = False
-    return conn
-
-
-@contextmanager
-def db_cursor(commit: bool = False):
-    """with db_cursor() as cur: ...  — connection+cursor always closed,
-    optionally auto-commits on clean exit."""
-    conn = get_db()
-    cur = conn.cursor()
-    try:
-        yield cur
-        if commit:
-            conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        cur.close()
-        conn.close()
-
-
-def pool_stats() -> dict:
-    if _pool is None:
-        return {}
-    return {
-        'max_connections': _pool._maxconnections,
-        'min_cached': _pool._mincached,
-        'max_cached': _pool._maxcached,
-    }
