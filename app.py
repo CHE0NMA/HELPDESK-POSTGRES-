@@ -30,7 +30,6 @@ from routes.pages import bp as pages_bp
 from routes.cron import bp as cron_bp
 
 
-
 def _is_vercel() -> bool:
     return bool(os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"))
 
@@ -52,18 +51,28 @@ def create_app():
 
         def __call__(self, environ, start_response):
             path = environ.get("PATH_INFO", "") or ""
-            if path == "/app.py" or path.endswith("/app.py"):
-                original = (
-                    environ.get("HTTP_X_VERCEL_FORWARD_PATH")
-                    or environ.get("HTTP_X_ORIGINAL_URL")
-                    or environ.get("REQUEST_URI")
-                    or "/"
-                )
-                if "?" in original:
-                    original = original.split("?", 1)[0]
-                if not original or original == "/app.py":
-                    original = "/"
-                environ["PATH_INFO"] = original
+
+            candidates = [
+                environ.get("HTTP_X_VERCEL_FORWARD_PATH"),
+                environ.get("HTTP_X_ORIGINAL_URL"),
+                environ.get("HTTP_X_FORWARDED_URI"),
+                environ.get("HTTP_X_REWRITE_URL"),
+                environ.get("REQUEST_URI"),
+                environ.get("RAW_URI"),
+            ]
+
+            original = None
+            for c in candidates:
+                if not c:
+                    continue
+                c = c.split("?", 1)[0]
+                if c and c not in ("/app.py", "app.py"):
+                    original = c if c.startswith("/") else "/" + c
+                    break
+
+            if path in ("/app.py", "app.py") or path.endswith("/app.py"):
+                environ["PATH_INFO"] = original or "/"
+
             return self.app(environ, start_response)
 
     app.wsgi_app = FixVercelPath(app.wsgi_app)
@@ -135,6 +144,20 @@ def create_app():
     app.register_blueprint(api_bp)
     app.register_blueprint(pages_bp)
     app.register_blueprint(cron_bp)
+
+    @app.route("/__debug_path")
+    def __debug_path():
+        from flask import request
+        return {
+            "path": request.path,
+            "url": request.url,
+            "environ_PATH_INFO": request.environ.get("PATH_INFO"),
+            "REQUEST_URI": request.environ.get("REQUEST_URI"),
+            "X_ORIGINAL_URL": request.environ.get("HTTP_X_ORIGINAL_URL"),
+            "X_VERCEL_FORWARD_PATH": request.environ.get("HTTP_X_VERCEL_FORWARD_PATH"),
+            "X_FORWARDED_URI": request.environ.get("HTTP_X_FORWARDED_URI"),
+            "rules": [str(r) for r in app.url_map.iter_rules()][:40],
+        }
 
     init_pool()
     ensure_core_tables()
