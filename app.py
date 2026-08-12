@@ -45,6 +45,32 @@ def create_app():
     app.start_time = time.time()
     app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 
+    # ---------- Fix Vercel rewrite path ----------
+    # Vercel rewrite sends PATH_INFO=/app.py for every request.
+    # Restore a usable path so Flask routes can match.
+    class FixVercelPath:
+        def __init__(self, app):
+            self.app = app
+
+        def __call__(self, environ, start_response):
+            path = environ.get("PATH_INFO", "") or ""
+            if path == "/app.py" or path.endswith("/app.py"):
+                original = (
+                    environ.get("HTTP_X_VERCEL_FORWARD_PATH")
+                    or environ.get("HTTP_X_ORIGINAL_URL")
+                    or environ.get("REQUEST_URI")
+                    or "/"
+                )
+                if "?" in original:
+                    original = original.split("?", 1)[0]
+                if not original or original == "/app.py":
+                    original = "/"
+                environ["PATH_INFO"] = original
+            return self.app(environ, start_response)
+
+    app.wsgi_app = FixVercelPath(app.wsgi_app)
+    # ---------- end fix ----------
+
     # Logging: console only on Vercel (no persistent disk)
     fmt = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     console = logging.StreamHandler()
@@ -161,7 +187,6 @@ def create_app():
             app.logger.warning(f"Scheduler not started: {e}")
 
     return app
-
 
 # Vercel + local entrypoint: must expose top-level `app`
 app = create_app()

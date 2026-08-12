@@ -12,6 +12,9 @@ from utils.security import admin_required
 logger = logging.getLogger("pac_helpdesk.routes.api")
 bp = Blueprint('api', __name__)
 
+@bp.route("/ping")
+def ping():
+    return "pong", 200
 
 @bp.route('/health')
 def health_check():
