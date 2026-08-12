@@ -572,9 +572,31 @@ def ensure_admin_exists():
             )
             conn.commit()
             logger.info("Admin user created")
+    except Exception as e:
+        err = str(e).lower()
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        if "tuple concurrently updated" in err or "deadlock detected" in err:
+            logger.warning(f"ensure_admin_exists: concurrent DDL, skipping: {e}")
+        elif "does not exist" in err or "undefinedtable" in err.replace(" ", ""):
+            # admin_users wasn't created yet on this connection (e.g. a
+            # sibling cold-start instance rolled back ensure_core_tables'
+            # transaction due to a concurrent-DDL race). Non-fatal: a
+            # later boot will retry and succeed once the table exists.
+            logger.warning(f"ensure_admin_exists: admin_users not ready yet, skipping: {e}")
+        else:
+            logger.error(f"ensure_admin_exists error: {e}")
     finally:
-        cur.close()
-        conn.close()
+        try:
+            cur.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 def ensure_schedule_schema():
