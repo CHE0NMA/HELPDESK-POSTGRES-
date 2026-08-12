@@ -35,3 +35,36 @@ def init_pool():
 
     _pool = PooledDB(**kwargs)
     return _pool
+
+
+def get_db():
+    """Return a connection from the pool. Caller must close it."""
+    if _pool is None:
+        init_pool()
+    return _pool.connection()
+
+
+@contextmanager
+def get_db_cursor(commit=False):
+    """Optional convenience context manager (used by some services)."""
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        try:
+            yield cur
+            if commit:
+                conn.commit()
+        finally:
+            cur.close()
+    finally:
+        conn.close()
+
+
+def pool_stats():
+    """Simple diagnostics (optional, used by health checks / admin)."""
+    if _pool is None:
+        return {"status": "not_initialized"}
+    return {
+        "status": "ok",
+        "maxconnections": getattr(_pool, "_maxconnections", None),
+    }
