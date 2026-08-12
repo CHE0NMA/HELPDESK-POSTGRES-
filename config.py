@@ -29,6 +29,7 @@ DATABASE_CONFIG = {
     'password': os.environ.get('DB_PASSWORD', ''),
     'database': os.environ.get('DB_NAME', 'school_chatbot'),
     'port': int(os.environ.get('DB_PORT', 5432)),
+'sslmode': os.environ.get('DB_SSLMODE', 'require'),
 }
 
 # ---------------------------------------------------------------------

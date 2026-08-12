@@ -45,23 +45,28 @@ def init_pool():
     global _pool
     if _pool is not None:
         return _pool
-    _pool = PooledDB(
-        creator=psycopg2,
-        maxconnections=20,
-        mincached=2,
-        maxcached=10,
-        maxshared=0,
-        blocking=True,
-        host=DATABASE_CONFIG['host'],
-        user=DATABASE_CONFIG['user'],
-        password=DATABASE_CONFIG['password'],
-        database=DATABASE_CONFIG['database'],
-        port=DATABASE_CONFIG['port'],
-        # psycopg2 connections default to autocommit=False already, but
-        # being explicit here matches the old pymysql config intent.
-    )
-    return _pool
 
+    kwargs = {
+        "creator": psycopg2,
+        "maxconnections": 10,   # lower on serverless
+        "mincached": 0,         # don't open connections at import time
+        "maxcached": 5,
+        "maxshared": 0,
+        "blocking": True,
+        "host": DATABASE_CONFIG["host"],
+        "user": DATABASE_CONFIG["user"],
+        "password": DATABASE_CONFIG["password"],
+        "database": DATABASE_CONFIG["database"],
+        "port": DATABASE_CONFIG["port"],
+    }
+
+    # Render external Postgres requires SSL from Vercel
+    sslmode = DATABASE_CONFIG.get("sslmode") or os.environ.get("DB_SSLMODE", "require")
+    if sslmode:
+        kwargs["sslmode"] = sslmode
+
+    _pool = PooledDB(**kwargs)
+    return _pool
 
 def get_db():
     if _pool is None:
