@@ -482,12 +482,28 @@ def ensure_core_tables():
         conn.commit()
         logger.info("Core tables ensured (full set)")
     except Exception as e:
-        logger.error(f"ensure_core_tables error: {e}")
-        conn.rollback()
+        err = str(e).lower()
+        if "tuple concurrently updated" in err or "deadlock detected" in err:
+            logger.warning(f"ensure_core_tables: concurrent DDL, skipping: {e}")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        else:
+            logger.error(f"ensure_core_tables error: {e}")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
     finally:
-        cur.close()
-        conn.close()
-
+        try:
+            cur.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 def _table_exists(cur, table_name: str) -> bool:
     cur.execute("SELECT to_regclass(%s)", (f"public.{table_name}",))
@@ -504,11 +520,7 @@ def _column_exists(cur, table_name: str, column_name: str) -> bool:
 
 def ensure_updated_at_trigger_fn():
     """Creates (once) the trigger function that stands in for MySQL's
-    `ON UPDATE CURRENT_TIMESTAMP`. Any table wanting that behavior adds:
-
-        CREATE TRIGGER trg_<table>_updated_at
-        BEFORE UPDATE ON <table>
-        FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+    `ON UPDATE CURRENT_TIMESTAMP`.
     """
     conn = get_db()
     cur = conn.cursor()
@@ -524,12 +536,28 @@ def ensure_updated_at_trigger_fn():
         """)
         conn.commit()
     except Exception as e:
-        logger.error(f"ensure_updated_at_trigger_fn error: {e}")
-        conn.rollback()
+        err = str(e).lower()
+        if "tuple concurrently updated" in err or "deadlock detected" in err:
+            logger.warning(f"ensure_updated_at_trigger_fn: concurrent DDL, skipping: {e}")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        else:
+            logger.error(f"ensure_updated_at_trigger_fn error: {e}")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
     finally:
-        cur.close()
-        conn.close()
-
+        try:
+            cur.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 def ensure_admin_exists():
     conn = get_db()
@@ -547,7 +575,6 @@ def ensure_admin_exists():
     finally:
         cur.close()
         conn.close()
-
 
 
 def ensure_schedule_schema():
@@ -594,12 +621,28 @@ def ensure_schedule_schema():
             if cur.fetchone()[0] == 0:
                 _seed_default_schedules(cur, conn)
     except Exception as e:
-        logger.error(f"ensure_schedule_schema error: {e}")
-        conn.rollback()
+        err = str(e).lower()
+        if "tuple concurrently updated" in err or "deadlock detected" in err:
+            logger.warning(f"ensure_schedule_schema: concurrent DDL, skipping: {e}")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        else:
+            logger.error(f"ensure_schedule_schema error: {e}")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
     finally:
-        cur.close()
-        conn.close()
-
+        try:
+            cur.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 def _seed_default_schedules(cur, conn):
     # day_of_week here MUST match Python's date.weekday(): Monday=0,
@@ -684,8 +727,6 @@ def migrate_create_chat_sessions():
         cur.execute("""
             DROP TRIGGER IF EXISTS trg_chat_sessions_last_activity ON chat_sessions;
         """)
-        # last_activity plays the "ON UPDATE CURRENT_TIMESTAMP" role here,
-        # not updated_at, so it needs its own tiny trigger function.
         cur.execute("""
             CREATE OR REPLACE FUNCTION set_last_activity()
             RETURNS TRIGGER AS $$
@@ -702,12 +743,28 @@ def migrate_create_chat_sessions():
         """)
         conn.commit()
     except Exception as e:
-        logger.error(f"migrate_create_chat_sessions error: {e}")
-        conn.rollback()
+        err = str(e).lower()
+        if "tuple concurrently updated" in err or "deadlock detected" in err:
+            logger.warning(f"migrate_create_chat_sessions: concurrent DDL, skipping: {e}")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        else:
+            logger.error(f"migrate_create_chat_sessions error: {e}")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
     finally:
-        cur.close()
-        conn.close()
-
+        try:
+            cur.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 def migrate_add_uuid_to_faq():
     import uuid
@@ -724,19 +781,31 @@ def migrate_add_uuid_to_faq():
             conn.commit()
             logger.info(f"Populated UUIDs for {len(rows)} existing FAQs")
     except Exception as e:
-        logger.error(f"migrate_add_uuid_to_faq error: {e}")
-        conn.rollback()
+        err = str(e).lower()
+        if "tuple concurrently updated" in err or "deadlock detected" in err:
+            logger.warning(f"migrate_add_uuid_to_faq: concurrent DDL, skipping: {e}")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        else:
+            logger.error(f"migrate_add_uuid_to_faq error: {e}")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
     finally:
-        cur.close()
-        conn.close()
-
+        try:
+            cur.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 def ensure_faq_embedding_column():
-    """Adds faq.embedding (JSONB) if it's not already there — needed for
-    semantic FAQ matching (services/embeddings.py). Safe to call every
-    boot; already present in full_schema.sql for fresh databases, this
-    only matters for databases created before that feature existed.
-    """
+    """Adds faq.embedding (JSONB) if it's not already there."""
     conn = get_db()
     cur = conn.cursor()
     try:
@@ -745,30 +814,38 @@ def ensure_faq_embedding_column():
             conn.commit()
             logger.info("faq.embedding column added")
     except Exception as e:
-        logger.error(f"ensure_faq_embedding_column error: {e}")
-        conn.rollback()
+        err = str(e).lower()
+        if "tuple concurrently updated" in err or "deadlock detected" in err:
+            logger.warning(f"ensure_faq_embedding_column: concurrent DDL, skipping: {e}")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        else:
+            logger.error(f"ensure_faq_embedding_column error: {e}")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
     finally:
-        cur.close()
-        conn.close()
-
+        try:
+            cur.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 def ensure_handbook_fulltext_search():
-    """Postgres has no MySQL-style MATCH()...AGAINST() — full-text search
-    here is done with a generated tsvector column + GIN index instead.
-    services/handbook.py's get_top_handbook_chunks() query was rewritten
-    to match (see that file's docstring note).
-
-    Safe to call every boot: ADD COLUMN IF NOT EXISTS / CREATE INDEX IF
-    NOT EXISTS are both no-ops once the column/index already exist.
-    """
+    """Postgres full-text search column + GIN index."""
     conn = get_db()
     cur = conn.cursor()
     try:
         if not _table_exists(cur, 'handbook_chunks'):
             logger.warning(
                 "handbook_chunks table doesn't exist yet — skipping "
-                "full-text search column setup. Run this again after the "
-                "table has been created by the ported fix_schema()."
+                "full-text search column setup."
             )
             return
         cur.execute("""
@@ -787,11 +864,28 @@ def ensure_handbook_fulltext_search():
         conn.commit()
         logger.info("handbook_chunks full-text search column/index ensured")
     except Exception as e:
-        logger.error(f"ensure_handbook_fulltext_search error: {e}")
-        conn.rollback()
+        err = str(e).lower()
+        if "tuple concurrently updated" in err or "deadlock detected" in err:
+            logger.warning(f"ensure_handbook_fulltext_search: concurrent DDL, skipping: {e}")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        else:
+            logger.error(f"ensure_handbook_fulltext_search error: {e}")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
     finally:
-        cur.close()
-        conn.close()
+        try:
+            cur.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 def ensure_learning_layer():
     """Topic aliases + answer memory tables. Delegates to services.topic_aliases
