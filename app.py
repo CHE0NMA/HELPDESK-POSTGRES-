@@ -27,7 +27,7 @@ from routes.admin import bp as admin_bp
 from routes.schedules import bp as schedules_bp
 from routes.api import bp as api_bp
 from routes.pages import bp as pages_bp
-from routes.cron import bp as cron_bp  # NEW
+from routes.cron import bp as cron_bp
 
 
 def _is_vercel() -> bool:
@@ -187,6 +187,7 @@ def create_app():
             app.logger.warning(f"Scheduler not started: {e}")
 
     return app
+
 
 # Vercel + local entrypoint: must expose top-level `app`
 app = create_app()
