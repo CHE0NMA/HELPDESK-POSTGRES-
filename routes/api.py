@@ -107,14 +107,6 @@ def check_admin():
     return jsonify({'is_admin': admin_required()})
 
 
-@bp.route('/api/ping')
-def ping():
-    from flask import session
-    return jsonify({
-        'authenticated': session.get('admin', False),
-        'session_id': session.get('persistent_session_id')
-    })
-
 
 @bp.route('/api/analytics/chart_data')
 def analytics_chart_data():
