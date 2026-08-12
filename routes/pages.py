@@ -34,10 +34,10 @@ def _session_expired() -> bool:
 
 
 def _reset_session_for_new_chat():
-    from services.conversation import conversation_contexts
+    from services.conversation import delete_ctx
     sid = session.get('persistent_session_id')
-    if sid and sid in conversation_contexts:
-        del conversation_contexts[sid]
+    if sid:
+        delete_ctx(sid)  # wipes in-memory AND the durable DB row (see conversation.py)
     for k in ['last_topic', 'last_intent', 'last_category', 'conversation_turn',
               'persistent_session_id', 'chat_session', 'current_chat_uuid', 'last_activity']:
         session.pop(k, None)
@@ -108,13 +108,13 @@ def chat_ui():
 @bp.route('/new_chat')
 def new_chat():
     import uuid
-    from services.conversation import conversation_contexts
+    from services.conversation import delete_ctx
 
     qs = _prefill_query_string()
 
     sid = session.get('persistent_session_id')
-    if sid and sid in conversation_contexts:
-        del conversation_contexts[sid]
+    if sid:
+        delete_ctx(sid)  # wipes in-memory AND the durable DB row (see conversation.py)
     for k in ['last_topic', 'last_intent', 'last_category', 'conversation_turn']:
         session.pop(k, None)
 
@@ -188,6 +188,20 @@ def chat_with_uuid(chat_uuid):
             chats=chats,
             chat_uuid=chat_uuid,
             prefill=qs_prefill,
+            # BUG FIX: this was never passed before, so chat.html's JS had
+            # no way to know which session_id the server/DB actually use
+            # for THIS chat_uuid — it fell back to a client-only
+            # localStorage id that was never synced with the server and
+            # (worse) shared across every chat thread in the browser
+            # instead of being scoped per chat_uuid. That meant messages
+            # got sent/saved under a DIFFERENT id than the one this page
+            # just used to load `chats` above, so conversation memory
+            # (services.conversation.get_conversation_context) and the
+            # visible history could silently diverge — vague/follow-up
+            # questions would sometimes answer against the wrong (or
+            # empty) context. The server's session_id is now authoritative;
+            # see chat.html for the corresponding JS change needed.
+            session_id=session_id,
         )
     except Exception as e:
         logger.error(f"chat_with_uuid error: {e}", exc_info=True)

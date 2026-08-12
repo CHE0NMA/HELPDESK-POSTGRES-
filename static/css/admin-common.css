@@ -1,0 +1,42 @@
+.nav-badge.pulse { animation: badgePulse 0.55s cubic-bezier(0.22,1,0.36,1); }
+@keyframes badgePulse {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+.main { animation: pageIn 0.4s cubic-bezier(0.22,1,0.36,1) both; }
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.spinner {
+  display: inline-block; width: 18px; height: 18px;
+  border: 2.5px solid rgba(77,171,247,.25);
+  border-top-color: var(--accent, #00e5ff);
+  border-radius: 50%;
+  animation: spin .65s linear infinite;
+  vertical-align: middle; margin-right: 6px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.soft-load {
+  display: flex; align-items: center; justify-content: center;
+  gap: .5rem; padding: 2.25rem 1.5rem; color: var(--muted); font-size: .88rem;
+}
+.fade-in { animation: fadeIn .35s cubic-bezier(0.22,1,0.36,1) both; }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.stat-card, .card, .table-card {
+  transition: border-color .25s ease, transform .25s cubic-bezier(0.22,1,0.36,1);
+}
+.stat-card:hover, .card:hover {
+  border-color: var(--border2);
+  transform: translateY(-2px);
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -526,7 +526,14 @@ def gather_range_facts(query_date, date_type: str, dept: str = 'all') -> Dict:
     if date_type in ('this_month', 'next_month'):
         first = query_date.replace(day=1)
         last = (first + timedelta(days=32)).replace(day=1) - timedelta(days=1)
-        events = sched.get_events_for_week(first, 'english', dept)
+        # BUG FIX: get_events_for_week() previously always used
+        # start_date + 6 days internally, so a "this month"/"next month"
+        # query only ever saw the FIRST WEEK of the month's events —
+        # "do we have holidays this month" on, say, the 20th of the
+        # month would silently miss anything after day 7. Pass the real
+        # month-end explicitly now that get_events_for_week() accepts
+        # end_date.
+        events = sched.get_events_for_week(first, 'english', dept, end_date=last)
         events = [e for e in events if first <= e['start_date'] <= last]
         label = first.strftime('%B %Y')
     else:

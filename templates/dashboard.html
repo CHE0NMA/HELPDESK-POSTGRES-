@@ -1,9 +1,7 @@
 <!DOCTYPE html>
 <html lang="en" data-bs-theme="dark">
 <head>
-  <script>
-  document.documentElement.setAttribute('data-bs-theme', localStorage.getItem('theme') || 'dark');
-</script>
+  <script>document.documentElement.setAttribute('data-bs-theme', localStorage.getItem('theme') || 'dark');</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -13,416 +11,137 @@
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/admin-common.css">
 <style>
 * { box-sizing: border-box; }
-
 :root {
-  --bg: #0a1628;
-  --bg2: #0f1f3a;
-  --bg3: #162a4a;
-  --brand: #1a73e8;
-  --brand2: #4dabf7;
-  --accent: #00e5ff;
-  --accent2: #66d9f7;
-  --text: #e8f0f8;
-  --text-dim: #a8c8e8;
-  --muted: #8ba9cc;
-  --card: rgba(15, 31, 58, 0.85);
-  --border: rgba(77, 171, 247, 0.15);
-  --border2: rgba(77, 171, 247, 0.25);
-  --sidebar: 260px;
-  --success: #51cf66;
-  --warning: #fcc419;
-  --danger: #ff6b6b;
-  --scrollbar-track: rgba(255,255,255,0.05);
-  --scrollbar-thumb: rgba(255,255,255,0.15);
-  --modal-bg: rgba(15, 31, 58, 0.95);
-  --row-hover: rgba(26,115,232,.06);
+  --bg:#0a1628; --bg2:#0f1f3a; --bg3:#162a4a; --brand:#1a73e8; --brand2:#4dabf7;
+  --accent:#00e5ff; --accent2:#66d9f7; --text:#e8f0f8; --text-dim:#a8c8e8; --muted:#8ba9cc;
+  --card:rgba(15,31,58,.85); --border:rgba(77,171,247,.15); --border2:rgba(77,171,247,.25);
+  --sidebar:260px; --success:#51cf66; --warning:#fcc419; --danger:#ff6b6b;
+  --modal-bg:rgba(15,31,58,.95); --row-hover:rgba(26,115,232,.06);
 }
-
 [data-bs-theme="light"] {
-  --bg: #f0f4f8;
-  --bg2: #e8edf4;
-  --bg3: #d5dde8;
-  --text: #1a2a3a;
-  --text-dim: #4a6a8a;
-  --muted: #6a8aaa;
-  --card: rgba(255, 255, 255, 0.92);
-  --border: rgba(26, 115, 232, 0.15);
-  --border2: rgba(26, 115, 232, 0.25);
-  --scrollbar-track: rgba(0,0,0,0.05);
-  --scrollbar-thumb: rgba(0,0,0,0.15);
-  --modal-bg: rgba(255, 255, 255, 0.95);
-  --row-hover: rgba(26,115,232,.04);
+  --bg:#f0f4f8; --bg2:#e8edf4; --bg3:#d5dde8; --text:#1a2a3a; --text-dim:#4a6a8a; --muted:#6a8aaa;
+  --card:rgba(255,255,255,.92); --border:rgba(26,115,232,.15); --border2:rgba(26,115,232,.25);
+  --modal-bg:rgba(255,255,255,.95); --row-hover:rgba(26,115,232,.04);
 }
-
-body {
-  font-family:'DM Sans',sans-serif;
-  background:var(--bg);
-  color:var(--text);
-  margin:0;
-  min-height:100vh;
-  transition: background 0.3s ease, color 0.3s ease;
-}
-
+body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); margin:0; min-height:100vh; }
 ::-webkit-scrollbar { width:6px; height:6px; }
-::-webkit-scrollbar-track { background:var(--scrollbar-track); border-radius:3px; }
-::-webkit-scrollbar-thumb { background:var(--scrollbar-thumb); border-radius:3px; }
-
-.bg-mesh {
-  position:fixed; inset:0; pointer-events:none; z-index:0;
+::-webkit-scrollbar-track { background:rgba(255,255,255,.05); border-radius:3px; }
+::-webkit-scrollbar-thumb { background:rgba(255,255,255,.15); border-radius:3px; }
+.bg-mesh { position:fixed; inset:0; pointer-events:none; z-index:0;
   background:radial-gradient(ellipse 60% 50% at 5% 0%,rgba(26,115,232,.15) 0%,transparent 55%),
-             radial-gradient(ellipse 40% 40% at 95% 100%,rgba(0,229,255,.06) 0%,transparent 50%);
-  transition: opacity 0.3s ease;
-}
-[data-bs-theme="light"] .bg-mesh { opacity: 0.3; }
-
-.bg-grid {
-  position:fixed; inset:0; pointer-events:none; z-index:0;
-  background-image:linear-gradient(rgba(77,171,247,.03) 1px,transparent 1px),
-                   linear-gradient(90deg,rgba(77,171,247,.03) 1px,transparent 1px);
-  background-size:44px 44px;
-}
-[data-bs-theme="light"] .bg-grid {
-  background-image:linear-gradient(rgba(26,115,232,.05) 1px,transparent 1px),
-                   linear-gradient(90deg,rgba(26,115,232,.05) 1px,transparent 1px);
-}
-
-/* ===== SIDEBAR ===== */
-.sidebar {
-  position:fixed; top:0; left:0; bottom:0; width:var(--sidebar); z-index:200;
-  background:rgba(8,16,32,.97); backdrop-filter:blur(20px);
-  border-right:1px solid var(--border);
-  display:flex; flex-direction:column;
-  transition: transform 0.28s ease, background 0.3s ease;
-}
+             radial-gradient(ellipse 40% 40% at 95% 100%,rgba(0,229,255,.06) 0%,transparent 50%); }
+[data-bs-theme="light"] .bg-mesh { opacity:.25; }
+.bg-grid { position:fixed; inset:0; pointer-events:none; z-index:0;
+  background-image:linear-gradient(rgba(77,171,247,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(77,171,247,.03) 1px,transparent 1px);
+  background-size:44px 44px; }
+.sidebar { position:fixed; top:0; left:0; bottom:0; width:var(--sidebar); z-index:200;
+  background:rgba(8,16,32,.97); backdrop-filter:blur(20px); border-right:1px solid var(--border);
+  display:flex; flex-direction:column; transition:transform .28s ease; }
 [data-bs-theme="light"] .sidebar { background:rgba(255,255,255,.95); }
-
-.sidebar-overlay {
-  display:none; position:fixed; inset:0;
-  background:rgba(0,0,0,.45); z-index:150; backdrop-filter:blur(2px);
-}
+.sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:150; }
 .sidebar-overlay.show { display:block; }
-
-.sidebar-toggle {
-  display:none;
-  background:rgba(10,30,50,.8);
-  border:1.5px solid var(--border);
-  border-radius:11px;
-  padding:.4rem .6rem;
-  color:var(--text-dim);
-  font-size:1.15rem;
-  cursor:pointer;
-  transition:all .2s;
-  align-items:center;
-  justify-content:center;
-}
+.sidebar-toggle { display:none; background:rgba(10,30,50,.8); border:1.5px solid var(--border); border-radius:11px;
+  padding:.4rem .6rem; color:var(--text-dim); font-size:1.15rem; cursor:pointer; }
 .sidebar-toggle:hover { border-color:var(--accent); color:var(--text); }
-[data-bs-theme="light"] .sidebar-toggle { background:rgba(0,0,0,.05); }
-
-.sidebar-brand {
-  padding:1.5rem 1.35rem 1.25rem;
-  border-bottom:1px solid var(--border);
-  display:flex; align-items:center; gap:.75rem;
-}
-.brand-orb {
-  width:38px; height:38px; border-radius:50%; flex-shrink:0; overflow:hidden;
-  box-shadow:0 0 0 2px rgba(0,229,255,.3),0 0 14px rgba(0,229,255,.2);
-}
-.brand-orb img { width:100%; height:100%; object-fit:cover; display:block; }
-.brand-text { font-family:'Sora',sans-serif; font-weight:800; font-size:.95rem; color:var(--text); }
-.brand-sub { font-size:.7rem; color:var(--text-dim); margin-top:.05rem; }
-
+.theme-toggle-sidebar { display:flex; align-items:center; justify-content:space-between; gap:.65rem;
+  padding:.6rem .85rem; border-radius:11px; color:var(--text-dim); font-size:.85rem; cursor:pointer;
+  background:none; border:1px solid transparent; width:100%; margin-bottom:.4rem; }
+.theme-toggle-sidebar:hover { background:rgba(26,115,232,.12); color:var(--text); }
+.theme-toggle-sidebar .theme-switch-label { display:flex; align-items:center; gap:.65rem; }
+.sidebar-brand { padding:1.5rem 1.35rem 1.25rem; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:.75rem; }
+.brand-orb { width:38px; height:38px; border-radius:50%; overflow:hidden; flex-shrink:0;
+  box-shadow:0 0 0 2px rgba(0,229,255,.3),0 0 14px rgba(0,229,255,.2); }
+.brand-orb img { width:100%; height:100%; object-fit:cover; }
+.brand-text { font-family:'Sora',sans-serif; font-weight:800; font-size:.95rem; }
+.brand-sub { font-size:.7rem; color:var(--text-dim); }
 .sidebar-nav { flex:1; padding:1rem .75rem; overflow-y:auto; }
-.nav-section {
-  font-size:.67rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
-  color:var(--muted); padding:.35rem .6rem; margin-bottom:.35rem; margin-top:.85rem;
-}
+.nav-section { font-size:.67rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); padding:.35rem .6rem; margin:.85rem 0 .35rem; }
 .nav-section:first-child { margin-top:0; }
-
-.nav-link {
-  display:flex; align-items:center; gap:.7rem; padding:.65rem .85rem; border-radius:11px;
-  color:var(--text-dim); text-decoration:none; font-size:.88rem; font-weight:500;
-  transition:all .2s; margin-bottom:.2rem; border:1px solid transparent;
-}
-.nav-link i { font-size:1rem; width:20px; text-align:center; flex-shrink:0; }
-.nav-link:hover {
-  background:rgba(26,115,232,.18); border-color:rgba(77,171,247,.15); color:var(--text);
-}
-.nav-link.active {
-  background:linear-gradient(135deg,rgba(26,115,232,.35),rgba(77,171,247,.2));
-  border-color:rgba(77,171,247,.3); color:#fff;
-}
-[data-bs-theme="light"] .nav-link.active {
-  background:linear-gradient(135deg,rgba(26,115,232,.15),rgba(77,171,247,.1));
-  border-color:rgba(26,115,232,.3); color:var(--brand);
-}
-.nav-link .nav-badge {
-  margin-left:auto; padding:.2rem .55rem; border-radius:20px;
-  font-size:.7rem; font-weight:700; min-width:22px; text-align:center;
-}
+.nav-link { display:flex; align-items:center; gap:.7rem; padding:.65rem .85rem; border-radius:11px; color:var(--text-dim);
+  text-decoration:none; font-size:.88rem; font-weight:500; margin-bottom:.2rem; border:1px solid transparent; transition:all .2s; }
+.nav-link i { width:20px; text-align:center; }
+.nav-link:hover { background:rgba(26,115,232,.18); color:var(--text); }
+.nav-link.active { background:linear-gradient(135deg,rgba(26,115,232,.35),rgba(77,171,247,.2)); border-color:rgba(77,171,247,.3); color:#fff; }
+[data-bs-theme="light"] .nav-link.active { background:linear-gradient(135deg,rgba(26,115,232,.15),rgba(77,171,247,.1)); color:var(--brand); }
+.nav-badge { margin-left:auto; padding:.2rem .55rem; border-radius:20px; font-size:.7rem; font-weight:700; }
 .badge-red { background:rgba(255,82,82,.2); color:var(--danger); border:1px solid rgba(255,82,82,.3); }
 .badge-yellow { background:rgba(255,202,40,.15); color:var(--warning); border:1px solid rgba(255,202,40,.3); }
-
 .sidebar-footer { padding:1rem .75rem 1.25rem; border-top:1px solid var(--border); }
-.logout-btn {
-  display:flex; align-items:center; gap:.65rem; padding:.6rem .85rem; border-radius:11px;
-  color:var(--text-dim); text-decoration:none; font-size:.85rem; transition:all .2s;
-  cursor:pointer; background:none; border:1px solid transparent; width:100%; margin-bottom:.4rem;
-}
-.logout-btn:hover { background:rgba(255,82,82,.1); border-color:rgba(255,82,82,.2); color:#ff6b6b; }
-
-.theme-toggle-sidebar {
-  display:flex; align-items:center; justify-content:space-between; gap:.65rem;
-  padding:.6rem .85rem; border-radius:11px; color:var(--text-dim); font-size:.85rem;
-  transition:all .2s; cursor:pointer; background:none; border:1px solid transparent;
-  width:100%; margin-bottom:.4rem;
-}
-.theme-toggle-sidebar:hover {
-  background:rgba(26,115,232,.12); border-color:rgba(77,171,247,.15); color:var(--text);
-}
-.theme-toggle-sidebar .theme-switch-label {
-  display:flex; align-items:center; gap:.65rem;
-}
-
-/* ===== MAIN ===== */
+.logout-btn { display:flex; align-items:center; gap:.65rem; padding:.6rem .85rem; border-radius:11px; color:var(--text-dim);
+  text-decoration:none; font-size:.85rem; background:none; border:1px solid transparent; width:100%; margin-bottom:.4rem; cursor:pointer; }
+.logout-btn:hover { background:rgba(255,82,82,.1); color:#ff6b6b; }
 .main { margin-left:var(--sidebar); min-height:100vh; position:relative; z-index:1; }
-
-.topbar {
-  height:58px; display:flex; align-items:center; justify-content:space-between;
-  padding:0 1.75rem; background:rgba(8,16,32,.88); backdrop-filter:blur(18px);
-  border-bottom:1px solid var(--border); position:sticky; top:0; z-index:50;
-  transition: background 0.3s ease;
-}
+.topbar { height:58px; display:flex; align-items:center; justify-content:space-between; padding:0 1.75rem;
+  background:rgba(8,16,32,.88); backdrop-filter:blur(18px); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:50; }
 [data-bs-theme="light"] .topbar { background:rgba(255,255,255,.9); }
-.topbar-title {
-  font-family:'Sora',sans-serif; font-weight:700; font-size:1rem;
-  display:flex; align-items:center; gap:.6rem;
-}
-.topbar-right { display:flex; align-items:center; gap:1rem; }
-
-.theme-toggle {
-  background:rgba(10,30,50,.8); border:1.5px solid var(--border); border-radius:11px;
-  padding:.45rem .65rem; color:var(--text-dim); font-size:.9rem; cursor:pointer;
-  transition:all .2s; display:flex; align-items:center; gap:.4rem;
-}
-.theme-toggle:hover { border-color:var(--accent); color:var(--text); }
-[data-bs-theme="light"] .theme-toggle { background:rgba(0,0,0,.05); }
-
-.topbar-search { position:relative; display:flex; align-items:center; }
-.topbar-search i { position:absolute; left:12px; color:var(--muted); }
-.topbar-search input {
-  background:rgba(10,30,50,.8); border:1.5px solid var(--border); border-radius:11px;
-  padding:.5rem 1rem .5rem 2.2rem; color:var(--text); font-size:.82rem; width:220px; transition:all .2s;
-}
-.topbar-search input:focus {
-  border-color:var(--accent); box-shadow:0 0 0 3px rgba(0,229,255,.1); outline:none;
-}
-[data-bs-theme="light"] .topbar-search input { background:rgba(255,255,255,.8); }
-
-.btn-export {
-  background:rgba(26,115,232,.15); border:1.5px solid var(--border2); border-radius:11px;
-  padding:.5rem 1.1rem; color:var(--accent2); font-size:.8rem; font-weight:600;
-  cursor:pointer; transition:all .2s; display:inline-flex; align-items:center; gap:.5rem;
-}
-.btn-export:hover { background:var(--brand); color:#fff; border-color:var(--brand); }
-
+.topbar-title { font-family:'Sora',sans-serif; font-weight:700; font-size:1rem; display:flex; align-items:center; gap:.55rem; }
 .page-body { padding:1.75rem; }
-
-/* ===== STATS ===== */
-.stats-row {
-  display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
-  gap:1rem;
-  margin-bottom:1.5rem;
-}
-.stat-card {
-  background:var(--card); border:1px solid var(--border); border-radius:16px;
-  padding:1.2rem; position:relative; overflow:hidden; transition:all .2s;
-}
-.stat-card:hover { border-color:var(--border2); transform:translateY(-2px); }
-.stat-val { font-family:'Sora',sans-serif; font-weight:800; font-size:1.8rem; color:var(--sc); }
-.stat-lbl {
-  font-size:.7rem; text-transform:uppercase; letter-spacing:.06em;
-  color:var(--text-dim); margin-top:.2rem;
-}
-.stat-ico { position:absolute; right:1rem; top:1rem; font-size:1.6rem; opacity:.15; color:var(--sc); }
-
-/* ===== TOOLBAR ===== */
-.toolbar {
-  display:flex; justify-content:space-between; align-items:center;
-  flex-wrap:wrap; gap:.8rem; margin-bottom:1.25rem;
-}
+.btn-refresh { display:inline-flex; align-items:center; gap:.4rem; padding:.45rem .7rem; border-radius:11px;
+  background:rgba(26,115,232,.15); border:1.5px solid var(--border2); color:var(--accent2); font-weight:600; font-size:.82rem; cursor:pointer; }
+.btn-refresh:hover { background:var(--brand); color:#fff; border-color:var(--brand); }
+.stats-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1rem; margin-bottom:1.5rem; }
+.stat-card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:1.15rem; position:relative; overflow:hidden; transition:transform .25s; }
+.stat-card:hover { transform:translateY(-2px); }
+.stat-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,var(--sc,var(--brand)),transparent); }
+.stat-val { font-family:'Sora',sans-serif; font-weight:800; font-size:1.7rem; color:var(--sc,var(--accent2)); line-height:1; }
+.stat-lbl { font-size:.75rem; color:var(--text-dim); margin-top:.3rem; }
+.stat-ico { position:absolute; right:1rem; top:1rem; font-size:1.5rem; opacity:.2; }
+.toolbar { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:.8rem; margin-bottom:1.25rem; }
 .toolbar-left { display:flex; align-items:center; gap:.8rem; flex-wrap:wrap; }
-.page-title { font-family:'Sora',sans-serif; font-weight:700; font-size:.95rem; color:var(--text); }
-
-.filter-select {
-  background:rgba(10,30,50,.8); border:1.5px solid var(--border); border-radius:11px;
-  padding:.45rem 1rem; color:var(--text); font-size:.78rem; cursor:pointer; transition:all .2s;
-}
-.filter-select:focus {
-  border-color:var(--accent); outline:none; box-shadow:0 0 0 3px rgba(0,229,255,.1);
-}
-.filter-select option { background:#0a1c38; }
-[data-bs-theme="light"] .filter-select { background:rgba(255,255,255,.8); }
-[data-bs-theme="light"] .filter-select option { background:#fff; }
-
-.btn-add {
-  background:linear-gradient(135deg,var(--brand),var(--brand2));
-  border:none; border-radius:12px; padding:.55rem 1.3rem; color:#fff;
-  font-weight:600; font-size:.82rem; cursor:pointer; transition:all .2s;
-  display:inline-flex; align-items:center; gap:.5rem;
-}
+.page-title { font-family:'Sora',sans-serif; font-weight:700; font-size:.95rem; }
+.filter-select,.filter-input { background:rgba(10,30,50,.8); border:1.5px solid var(--border); border-radius:11px;
+  padding:.45rem 1rem; color:var(--text); font-size:.78rem; }
+.filter-select:focus,.filter-input:focus { border-color:var(--accent); outline:none; }
+[data-bs-theme="light"] .filter-select,[data-bs-theme="light"] .filter-input { background:rgba(255,255,255,.8); color:#1a2a3a; }
+.btn-add { background:linear-gradient(135deg,var(--brand),var(--brand2)); border:none; border-radius:12px;
+  padding:.55rem 1.3rem; color:#fff; font-weight:600; font-size:.82rem; cursor:pointer; display:inline-flex; align-items:center; gap:.5rem; }
 .btn-add:hover { transform:translateY(-1px); box-shadow:0 4px 14px rgba(26,115,232,.4); color:#fff; }
-
-/* ===== SOFT TABLE ===== */
-.table-card {
-  background:var(--card); border:1px solid var(--border); border-radius:18px; overflow:hidden;
-}
+.table-card { background:var(--card); border:1px solid var(--border); border-radius:18px; overflow:hidden; }
 .tbl { width:100%; border-collapse:collapse; font-size:.82rem; }
 .tbl thead { background:rgba(20,40,70,.3); }
 [data-bs-theme="light"] .tbl thead { background:rgba(200,210,224,.3); }
-.tbl th {
-  padding:.85rem 1rem; font-size:.68rem; text-transform:uppercase; letter-spacing:.06em;
-  color:var(--text-dim); border-bottom:1px solid var(--border); font-family:'Sora',sans-serif;
-  text-align:left; white-space:nowrap; cursor:pointer; font-weight:700;
-}
+.tbl th { padding:.85rem 1rem; font-size:.68rem; text-transform:uppercase; letter-spacing:.06em; color:var(--text-dim);
+  border-bottom:1px solid var(--border); font-family:'Sora',sans-serif; text-align:left; white-space:nowrap; cursor:pointer; font-weight:700; }
 .tbl th.sortable:hover { color:var(--accent2); }
-.tbl td {
-  padding:.8rem 1rem; color:var(--text-dim);
-  border-bottom:1px solid rgba(77,171,247,.06); vertical-align:middle;
-}
-.tbl tbody tr { transition:background .15s ease; }
+.tbl td { padding:.8rem 1rem; color:var(--text-dim); border-bottom:1px solid rgba(77,171,247,.06); vertical-align:middle; }
+.tbl tbody tr:hover td { background:var(--row-hover); color:var(--text); }
 .tbl tbody tr:last-child td { border-bottom:none; }
-.tbl tr:hover td { background:var(--row-hover); color:var(--text); }
-.tbl .empty-state { text-align:center; padding:2.5rem; color:var(--muted); }
-.tbl .empty-state i { font-size:2rem; display:block; margin-bottom:.6rem; }
-
-.topic-pill {
-  background:rgba(26,115,232,.12); color:var(--accent2);
-  border:1px solid rgba(26,115,232,.2);
-  padding:.2rem .7rem; border-radius:14px; font-size:.72rem; font-weight:600; white-space:nowrap;
-}
-[data-bs-theme="light"] .topic-pill {
-  background:rgba(26,115,232,.08); color:var(--brand); border-color:rgba(26,115,232,.15);
-}
-
-/* Soft priority badges */
-.priority-high {
-  color:#ff8a80; font-weight:700;
-  background:rgba(255,82,82,.12); border:1px solid rgba(255,82,82,.22);
-  padding:.18rem .6rem; border-radius:12px; font-size:.72rem;
-}
-.priority-med {
-  color:#ffd43b; font-weight:600;
-  background:rgba(255,202,40,.12); border:1px solid rgba(255,202,40,.22);
-  padding:.18rem .6rem; border-radius:12px; font-size:.72rem;
-}
-.priority-low {
-  color:#8ce99a;
-  background:rgba(81,207,102,.1); border:1px solid rgba(81,207,102,.2);
-  padding:.18rem .6rem; border-radius:12px; font-size:.72rem;
-}
-
-.tbl-actions { display:flex; gap:.3rem; }
-.act-btn {
-  background:rgba(26,115,232,.15); border:none; border-radius:8px;
-  color:var(--text-dim); padding:.28rem .5rem; cursor:pointer; transition:all .15s; font-size:.8rem;
-}
-.act-btn:hover { background:var(--brand); color:#fff; }
-.act-btn.del:hover { background:rgba(255,82,82,.25); color:#ff8a80; }
-
-/* ===== MODALS ===== */
-.modal-content {
-  background:var(--modal-bg); border:1px solid var(--border2);
-  backdrop-filter:blur(20px); color:var(--text); border-radius:18px;
-}
-.modal-header {
-  border-bottom:1px solid var(--border); padding:1rem 1.25rem;
-  display:flex; align-items:center; justify-content:space-between; gap:1rem;
-}
+.act-btn { width:30px; height:30px; border-radius:8px; border:1px solid var(--border); display:inline-flex; align-items:center;
+  justify-content:center; font-size:.82rem; cursor:pointer; background:rgba(255,255,255,.04); color:var(--text-dim); margin:0 2px; }
+.act-btn.edit:hover { background:rgba(0,229,255,.12); color:var(--accent); }
+.act-btn.del:hover { background:rgba(255,82,82,.15); color:#ff8a80; }
+.priority-high { color:var(--danger); font-weight:700; }
+.priority-med { color:var(--warning); font-weight:600; }
+.priority-low { color:var(--muted); }
+.modal-content { background:var(--modal-bg); border:1px solid var(--border2); border-radius:18px; color:var(--text); }
+.modal-header { border-bottom:1px solid var(--border); padding:1rem 1.25rem; }
 .modal-footer { border-top:1px solid var(--border); padding:1rem 1.25rem; }
-.modal-title {
-  font-family:'Sora',sans-serif; font-weight:700; color:var(--text);
-  display:flex; align-items:center; gap:.5rem; font-size:.95rem; margin:0;
-}
-.modal .form-control {
-  background:rgba(10,30,50,.8); border:1.5px solid var(--border);
-  color:var(--text); border-radius:11px; padding:.55rem .9rem;
-}
-.modal .form-control:focus {
-  border-color:var(--accent); box-shadow:0 0 0 3px rgba(0,229,255,.1);
-}
-.modal .form-label {
-  font-size:.75rem; font-weight:600; color:var(--text-dim); margin-bottom:.3rem;
-}
-[data-bs-theme="light"] .modal .form-control {
-  background:rgba(255,255,255,.9); color:#1a2a3a;
-}
-
-.btn-cancel {
-  background:rgba(255,255,255,.06); border:1.5px solid var(--border);
-  border-radius:11px; padding:.5rem 1.2rem; color:var(--text-dim);
-  cursor:pointer; font-size:.8rem; transition:all .2s;
-}
-.btn-cancel:hover { background:rgba(255,255,255,.1); color:var(--text); }
-.btn-save {
-  background:linear-gradient(135deg,var(--brand),var(--brand2));
-  border:none; border-radius:11px; padding:.5rem 1.5rem; color:#fff;
-  font-weight:600; font-size:.8rem; cursor:pointer; transition:all .2s;
-}
-.btn-save:hover { transform:translateY(-1px); box-shadow:0 4px 14px rgba(26,115,232,.4); }
-
-/* Soft delete modal */
-.modal-delete .modal-header { background:transparent; }
-.modal-delete .modal-title i { color:#ff8a80; }
-.modal-delete .btn-close {
-  opacity:.65; margin:0; padding:.4rem; border-radius:8px;
-}
-[data-bs-theme="dark"] .modal-delete .btn-close {
-  filter:invert(1) grayscale(100%) brightness(200%);
-}
-.modal-delete .btn-close:hover { opacity:1; background:rgba(255,255,255,.08); }
-.modal-delete .modal-body {
-  color:var(--text-dim); padding:1.35rem 1.25rem; font-size:.9rem; line-height:1.5;
-}
-.btn-del-confirm {
-  background:rgba(255,82,82,.15); border:1.5px solid rgba(255,82,82,.35);
-  border-radius:11px; padding:.5rem 1.5rem; color:#ff8a80;
-  font-weight:600; font-size:.8rem; cursor:pointer; transition:all .2s;
-  display:inline-flex; align-items:center; gap:.4rem;
-}
-.btn-del-confirm:hover {
-  background:rgba(255,82,82,.25); color:#fff; border-color:rgba(255,82,82,.5);
-}
-
-.duplicate-warning {
-  display:none; background:rgba(255,202,40,.1); border:1px solid rgba(255,202,40,.25);
-  border-radius:10px; padding:.6rem .9rem; color:#ffdd7a; font-size:.8rem; margin-bottom:.8rem;
-}
-
-/* ===== TOAST ===== */
-.toast-wrap {
-  position:fixed; bottom:20px; right:20px; z-index:9999;
-  display:flex; flex-direction:column; gap:.5rem;
-}
-.toast-item {
-  background:rgba(10,28,56,.97); border:1px solid var(--border2);
-  backdrop-filter:blur(16px); padding:.6rem 1.1rem; border-radius:11px;
-  font-size:.82rem; display:flex; align-items:center; gap:.5rem;
-  animation:toastIn .25s ease; box-shadow:0 8px 28px rgba(0,0,0,.4);
-}
-[data-bs-theme="light"] .toast-item { background:rgba(255,255,255,.97); }
+.modal-title { font-family:'Sora',sans-serif; font-weight:700; font-size:.95rem; margin:0; display:flex; align-items:center; gap:.5rem; }
+.modal-body { padding:1.25rem; }
+.form-label { font-size:.75rem; font-weight:700; color:var(--text-dim); letter-spacing:.04em; text-transform:uppercase; margin-bottom:.4rem; }
+.form-control,.form-select { background:rgba(14,32,64,.8); color:var(--text); border:1.5px solid var(--border); border-radius:10px; font-size:.88rem; padding:.62rem .9rem; }
+.form-control:focus,.form-select:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(26,115,232,.15); outline:none; color:var(--text); }
+[data-bs-theme="light"] .form-control,[data-bs-theme="light"] .form-select { background:rgba(255,255,255,.9); color:#1a2a3a; }
+textarea.form-control { resize:vertical; min-height:80px; }
+.btn-save { padding:.65rem 1.4rem; border-radius:11px; background:linear-gradient(135deg,var(--brand),var(--brand2)); border:none; color:#fff; font-family:'Sora',sans-serif; font-weight:700; font-size:.85rem; cursor:pointer; }
+.btn-cancel { padding:.6rem 1.2rem; border-radius:11px; background:rgba(255,255,255,.05); border:1px solid var(--border); color:var(--text-dim); font-weight:600; font-size:.85rem; cursor:pointer; }
+.btn-del-confirm { padding:.6rem 1.2rem; border-radius:11px; background:rgba(255,82,82,.15); border:1.5px solid rgba(255,82,82,.35); color:#ff8a80; font-weight:600; font-size:.85rem; cursor:pointer; }
+.btn-del-confirm:hover { background:rgba(255,82,82,.25); color:#fff; }
+[data-bs-theme="dark"] .modal-header .btn-close { filter:invert(1) grayscale(100%) brightness(200%); }
+.toast-wrap { position:fixed; bottom:20px; right:20px; z-index:9999; display:flex; flex-direction:column; gap:.5rem; }
+.toast-item { background:rgba(10,28,56,.97); border:1px solid var(--border2); padding:.6rem 1.1rem; border-radius:11px; font-size:.82rem;
+  display:flex; align-items:center; gap:.5rem; box-shadow:0 8px 28px rgba(0,0,0,.4); color:var(--text); animation:toastIn .25s ease; }
+[data-bs-theme="light"] .toast-item { background:rgba(255,255,255,.97); color:#1a2a3a; }
+@keyframes toastIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
 .toast-item.success { border-left:3px solid var(--success); }
 .toast-item.danger { border-left:3px solid var(--danger); }
-.toast-item.warning { border-left:3px solid var(--warning); }
 .toast-item.info { border-left:3px solid var(--accent); }
-@keyframes toastIn {
-  from{opacity:0;transform:translateY(10px)}
-  to{opacity:1;transform:translateY(0)}
-}
-
-/* ===== RESPONSIVE ===== */
+.empty-state { text-align:center; padding:2.5rem; color:var(--muted); }
+.empty-state i { font-size:2rem; display:block; margin-bottom:.6rem; }
+.duplicate-warning { display:none; background:rgba(255,202,40,.1); border:1px solid rgba(255,202,40,.25); border-radius:10px; padding:.6rem .9rem; color:#ffdd7a; font-size:.8rem; margin-bottom:.8rem; }
 @media (max-width:900px) {
   .sidebar { transform:translateX(-100%); }
   .sidebar.open { transform:translateX(0); box-shadow:8px 0 32px rgba(0,0,0,.35); }
@@ -430,28 +149,16 @@ body {
   .sidebar-toggle { display:inline-flex; }
   .page-body { padding:1.1rem; }
   .topbar { padding:0 1rem; }
-  .topbar-search input { width:150px; }
-}
-@media (max-width:768px) {
-  .topbar-search { display:none; }
-  .stats-row { grid-template-columns:repeat(2,1fr); }
-  .toolbar { flex-direction:column; align-items:stretch; }
-  .toolbar-left { flex-direction:column; align-items:stretch; }
-  .filter-select { width:100%; }
-  .btn-add { width:100%; justify-content:center; }
+  .stats-row { grid-template-columns:1fr 1fr; }
   .table-card { overflow-x:auto; }
   .tbl { min-width:600px; }
 }
-@media (max-width:480px) {
-  .stats-row { grid-template-columns:1fr; }
-}
 </style>
 </head>
-<body>
+<body data-admin-page="dashboard">
 <div class="bg-mesh"></div>
 <div class="bg-grid"></div>
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
-
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-brand">
     <div class="brand-orb"><img src="/static/logo.png" alt="PAC" onerror="this.parentElement.innerHTML='🎓'"></div>
@@ -476,7 +183,7 @@ body {
     <a href="/alert_log" class="nav-link"><i class="bi bi-bell"></i> Alert Log</a>
   </nav>
   <div class="sidebar-footer">
-    <button type="button" class="theme-toggle-sidebar" id="themeToggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">
+    <button type="button" class="theme-toggle-sidebar" id="themeToggle" onclick="toggleTheme()" title="Toggle theme">
       <span class="theme-switch-label">
         <i class="bi bi-moon-fill" id="themeIcon"></i>
         <span id="themeLabel">Dark mode</span>
@@ -491,20 +198,16 @@ body {
 <div class="main">
   <div class="topbar">
     <div style="display:flex;align-items:center;gap:.75rem;min-width:0">
-      <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Open menu">
-        <i class="bi bi-list"></i>
-      </button>
-      <span class="topbar-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">FAQ Management</span>
+      <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Open menu"><i class="bi bi-list"></i></button>
+      <span class="topbar-title">FAQ Management</span>
     </div>
-    <div class="topbar-right">
-      <div class="topbar-search">
-        <i class="bi bi-search"></i>
-        <input type="text" id="searchInput" placeholder="Search FAQs…" oninput="filterTableFull()">
-      </div>
+    <div style="display:flex;align-items:center;gap:.6rem">
+      <input type="text" class="filter-input" id="searchInput" placeholder="Search FAQs…" oninput="filterTableFull()" style="width:200px">
+      <button class="btn-refresh" onclick="location.reload()" title="Refresh"><i class="bi bi-arrow-clockwise"></i></button>
     </div>
   </div>
 
-  <div class="page-body">
+  <div class="page-body fade-in">
     <div class="stats-row" id="statsRow">
       <div class="stat-card" style="--sc:var(--accent)"><div class="stat-val" id="statTotal">—</div><div class="stat-lbl">Total FAQs</div><i class="bi bi-collection stat-ico"></i></div>
       <div class="stat-card" style="--sc:var(--success)"><div class="stat-val" id="statHigh">—</div><div class="stat-lbl">High Priority</div><i class="bi bi-arrow-up-circle stat-ico"></i></div>
@@ -518,7 +221,7 @@ body {
         <select id="topicFilter" class="filter-select" onchange="filterTopic()">
           <option value="">All Topics</option>
           {% for topic in topics %}
-          <option value="{{topic}}">{{topic}}</option>
+          <option value="{{ topic }}">{{ topic }}</option>
           {% endfor %}
         </select>
         <select id="priorityFilter" class="filter-select" onchange="filterTopic()">
@@ -537,30 +240,28 @@ body {
       <table class="tbl">
         <thead>
           <tr>
-            <th class="sortable" onclick="sortTable(0)">Topic <i class="bi bi-arrow-down-up"></i></th>
+            <th class="sortable" onclick="sortTable(0)">Topic</th>
             <th>Question</th>
             <th>Category</th>
-            <th class="sortable" onclick="sortTable(3)">Priority <i class="bi bi-arrow-down-up"></i></th>
+            <th class="sortable" onclick="sortTable(3)">Priority</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody id="faqTableBody">
           {% for f in faqs %}
           <tr data-topic="{{ f[1] }}" data-priority="{{ f[14] }}" data-uuid="{{ f[16] }}">
-            <td><span class="topic-pill">{{ f[1] }}</span></td>
+            <td>{{ f[1] }}</td>
             <td title="{{ f[3] }}" style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f[3] }}</td>
-            <td style="font-size:.82rem;color:var(--text-dim)">{{ f[13] or '—' }}</td>
+            <td style="font-size:.82rem">{{ f[13] or '—' }}</td>
             <td>
               {% set priority_val = f[14]|int %}
-              {% if priority_val > 7 %}<span class="priority-high">▲ {{priority_val}}</span>
-              {% elif priority_val > 3 %}<span class="priority-med">● {{priority_val}}</span>
-              {% else %}<span class="priority-low">▼ {{priority_val}}</span>{% endif %}
+              {% if priority_val > 7 %}<span class="priority-high">▲ {{ priority_val }}</span>
+              {% elif priority_val > 3 %}<span class="priority-med">● {{ priority_val }}</span>
+              {% else %}<span class="priority-low">▼ {{ priority_val }}</span>{% endif %}
             </td>
             <td>
-              <div class="tbl-actions">
-                <button class="act-btn edit" title="Edit" onclick='openUpdateModal({{ f|tojson }})'><i class="bi bi-pencil"></i></button>
-                <button class="act-btn del" title="Delete" onclick="deleteFAQ('{{ f[16] }}')"><i class="bi bi-trash"></i></button>
-              </div>
+              <button class="act-btn edit" title="Edit" onclick='openUpdateModal({{ f|tojson }})'><i class="bi bi-pencil"></i></button>
+              <button class="act-btn del" title="Delete" onclick="deleteFAQ('{{ f[16] }}')"><i class="bi bi-trash"></i></button>
             </td>
           </tr>
           {% endfor %}
@@ -573,37 +274,32 @@ body {
   </div>
 </div>
 
-<!-- FAQ MODAL -->
 <div class="modal fade" id="faqModal" tabindex="-1">
   <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content">
       <form id="faqForm" enctype="multipart/form-data">
         <div class="modal-header">
           <h5 class="modal-title" id="faqModalLabel"><i class="bi bi-plus-circle"></i> Add FAQ</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
           <div id="duplicateWarning" class="duplicate-warning"></div>
           <input type="hidden" name="faq_uuid" id="faq_uuid">
           <input type="hidden" name="faq_id" id="faq_id">
-
           <div class="row g-2 mb-3">
-            <div class="col-md-3"><label class="form-label">Topic *</label><input name="topic" id="topic" class="form-control" placeholder="e.g. Enrollment" required></div>
-            <div class="col-md-3"><label class="form-label">Intent</label><input type="text" name="intent" id="intent" class="form-control" placeholder="e.g. tuition_fee"></div>
-            <div class="col-md-3"><label class="form-label">Language</label><input name="language" id="language" class="form-control" placeholder="en/tl/ceb" value="en"></div>
-            <div class="col-md-3"><label class="form-label">Category</label><input name="category" id="category" class="form-control" placeholder="e.g. Finance"></div>
+            <div class="col-md-3"><label class="form-label">Topic *</label><input name="topic" id="topic" class="form-control" required></div>
+            <div class="col-md-3"><label class="form-label">Intent</label><input name="intent" id="intent" class="form-control"></div>
+            <div class="col-md-3"><label class="form-label">Language</label><input name="language" id="language" class="form-control" value="en"></div>
+            <div class="col-md-3"><label class="form-label">Category</label><input name="category" id="category" class="form-control"></div>
           </div>
-
-          <div class="mb-2"><label class="form-label">Question *</label><textarea name="question" id="question" class="form-control" placeholder="Enter the question in English…" required rows="2"></textarea></div>
-          <div class="mb-2"><label class="form-label">Answer *</label><textarea name="answer" id="answer" class="form-control" placeholder="Enter the answer in English…" required rows="4"></textarea></div>
-          <small style="color:var(--muted); font-size:.7rem;">AI will automatically handle translations to Tagalog and Bisaya when users ask in those languages.</small>
-
-          <div class="row g-2 mt-3">
-            <div class="col-md-6"><label class="form-label">Keywords</label><input name="keywords" id="keywords" class="form-control" placeholder="comma, separated"></div>
-            <div class="col-md-6"><label class="form-label">Related Questions</label><input name="related_questions" id="related_questions" class="form-control" placeholder="comma, separated"></div>
+          <div class="mb-2"><label class="form-label">Question *</label><textarea name="question" id="question" class="form-control" required rows="2"></textarea></div>
+          <div class="mb-2"><label class="form-label">Answer *</label><textarea name="answer" id="answer" class="form-control" required rows="4"></textarea></div>
+          <div class="row g-2 mt-2">
+            <div class="col-md-6"><label class="form-label">Keywords</label><input name="keywords" id="keywords" class="form-control"></div>
+            <div class="col-md-6"><label class="form-label">Related Questions</label><input name="related_questions" id="related_questions" class="form-control"></div>
             <div class="col-md-4"><label class="form-label">Priority Score</label><input type="number" name="priority_score" id="priority_score" class="form-control" value="0" min="0" max="100"></div>
             <div class="col-md-4"><label class="form-label">Image</label><input type="file" name="image" id="image" class="form-control" accept="image/*"></div>
-            <div class="col-md-4"><label class="form-label">Attachment URL</label><input name="attachment_url" id="attachment_url" class="form-control" placeholder="https://…"></div>
+            <div class="col-md-4"><label class="form-label">Attachment URL</label><input name="attachment_url" id="attachment_url" class="form-control"></div>
           </div>
         </div>
         <div class="modal-footer">
@@ -615,17 +311,14 @@ body {
   </div>
 </div>
 
-<!-- DELETE MODAL (fixed — no overlapping header) -->
 <div class="modal fade" id="deleteModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered modal-sm">
-    <div class="modal-content modal-delete">
+    <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title"><i class="bi bi-exclamation-triangle-fill"></i> Confirm Delete</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <div class="modal-body">
-        Are you sure you want to delete this FAQ? This action cannot be undone.
-      </div>
+      <div class="modal-body">Delete this FAQ permanently?</div>
       <div class="modal-footer">
         <button type="button" class="btn-cancel" data-bs-dismiss="modal">Cancel</button>
         <button type="button" class="btn-del-confirm" id="confirmDeleteBtn"><i class="bi bi-trash"></i> Delete</button>
@@ -638,9 +331,6 @@ body {
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-// ============================================================
-// SIDEBAR (mobile)
-// ============================================================
 function toggleSidebar() {
   const sb = document.getElementById('sidebar');
   const ov = document.getElementById('sidebarOverlay');
@@ -654,114 +344,67 @@ function closeSidebar() {
   document.body.style.overflow = '';
 }
 document.querySelectorAll('.sidebar .nav-link').forEach(link => {
-  link.addEventListener('click', () => {
-    if (window.innerWidth <= 900) closeSidebar();
-  });
+  link.addEventListener('click', () => { if (window.innerWidth <= 900) closeSidebar(); });
 });
 
-// ============================================================
-// CSRF / THEME
-// ============================================================
 function getCSRFToken() {
-  const meta = document.querySelector('meta[name="csrf-token"]');
-  return meta ? meta.getAttribute('content') : '';
+  return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 }
-
 function toggleTheme() {
   const html = document.documentElement;
-  const currentTheme = html.getAttribute('data-bs-theme');
-  const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+  const newTheme = html.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
   html.setAttribute('data-bs-theme', newTheme);
   localStorage.setItem('theme', newTheme);
   updateThemeUI(newTheme);
 }
-
 function updateThemeUI(theme) {
   const icon = document.getElementById('themeIcon');
   const label = document.getElementById('themeLabel');
-  if (theme === 'dark') {
-    icon.className = 'bi bi-moon-fill';
-    label.textContent = 'Dark mode';
-  } else {
-    icon.className = 'bi bi-sun-fill';
-    label.textContent = 'Light mode';
-  }
+  if (icon) icon.className = theme === 'dark' ? 'bi bi-moon-fill' : 'bi bi-sun-fill';
+  if (label) label.textContent = theme === 'dark' ? 'Dark mode' : 'Light mode';
 }
+(function(){ const t = localStorage.getItem('theme') || 'dark'; document.documentElement.setAttribute('data-bs-theme', t); updateThemeUI(t); })();
 
-function loadTheme() {
-  const savedTheme = localStorage.getItem('theme') || 'dark';
-  document.documentElement.setAttribute('data-bs-theme', savedTheme);
-  updateThemeUI(savedTheme);
+function updateBadgeFromCount(el, count) {
+  if (el) { el.textContent = count; el.style.display = count > 0 ? 'inline-block' : 'none'; }
 }
-loadTheme();
-
-// ============================================================
-// BADGES
-// ============================================================
-function updateBadgeFromCount(element, count) {
-  if (element) {
-    element.textContent = count;
-    element.style.display = count > 0 ? 'inline-block' : 'none';
-  }
-}
-
 function refreshBadges() {
-  const unansweredCount = {{ unanswered_count|default(0)|int }};
-  const reportsCount = {{ reports_count|default(0)|int }};
-  updateBadgeFromCount(document.getElementById('unansweredBadge'), unansweredCount);
-  updateBadgeFromCount(document.getElementById('reportsBadge'), reportsCount);
+  updateBadgeFromCount(document.getElementById('unansweredBadge'), {{ unanswered_count|default(0)|int }});
+  updateBadgeFromCount(document.getElementById('reportsBadge'), {{ reports_count|default(0)|int }});
 }
 refreshBadges();
 
-// ============================================================
-// STATS
-// ============================================================
 function computeStats() {
   const rows = document.querySelectorAll('#faqTableBody tr[data-topic]');
   const cats = new Set();
   let high = 0;
   rows.forEach(r => {
-    const p = parseInt(r.dataset.priority) || 0;
-    if (p > 7) high++;
-    const catEl = r.cells[2];
-    if (catEl && catEl.textContent.trim() !== '—') cats.add(catEl.textContent.trim());
+    if ((parseInt(r.dataset.priority) || 0) > 7) high++;
+    const c = r.cells[2]?.textContent.trim();
+    if (c && c !== '—') cats.add(c);
   });
   document.getElementById('statTotal').textContent = rows.length;
   document.getElementById('statHigh').textContent = high;
   document.getElementById('statCats').textContent = cats.size;
-  const unansweredCount = {{ unanswered_count|default(0)|int }};
-  document.getElementById('statUnanswered').textContent = unansweredCount;
+  document.getElementById('statUnanswered').textContent = {{ unanswered_count|default(0)|int }};
 }
 computeStats();
 
-// ============================================================
-// TOAST / EXPORT
-// ============================================================
 function showToast(msg, type='success') {
   const icons = {success:'check-circle-fill',danger:'x-circle-fill',warning:'exclamation-triangle-fill',info:'info-circle-fill'};
-  const wrap = document.getElementById('toastWrap');
   const el = document.createElement('div');
   el.className = `toast-item ${type}`;
   el.innerHTML = `<i class="bi bi-${icons[type]||'info-circle-fill'}"></i><span>${msg}</span>`;
-  wrap.appendChild(el);
+  document.getElementById('toastWrap').appendChild(el);
   setTimeout(() => el.remove(), 3500);
 }
+function exportData() { window.location.href = '/api/export/faq'; showToast('Export started...', 'info'); }
 
-function exportData() {
-  window.location.href = '/api/export/faq';
-  showToast('Export started...', 'info');
-}
-
-// ============================================================
-// MODALS
-// ============================================================
 function openAddModal() {
-  const form = document.getElementById('faqForm');
-  if (form) form.reset();
+  document.getElementById('faqForm')?.reset();
   document.getElementById('faq_uuid').value = '';
   document.getElementById('faq_id').value = '';
-  const warningDiv = document.getElementById('duplicateWarning');
-  if (warningDiv) warningDiv.style.display = 'none';
+  document.getElementById('duplicateWarning').style.display = 'none';
   document.getElementById('faqModalLabel').innerHTML = '<i class="bi bi-plus-circle"></i> Add FAQ';
   document.getElementById('language').value = 'en';
   document.getElementById('priority_score').value = '0';
@@ -770,10 +413,7 @@ function openAddModal() {
 function openUpdateModal(faq) {
   try {
     const uuid = faq[16] || '';
-    if (!uuid) {
-      showToast('Error: This FAQ has no UUID. Please refresh or contact admin.', 'danger');
-      return;
-    }
+    if (!uuid) { showToast('Error: FAQ has no UUID.', 'danger'); return; }
     document.getElementById('faq_uuid').value = uuid;
     document.getElementById('faq_id').value = faq[0] || '';
     document.getElementById('topic').value = faq[1] || '';
@@ -786,39 +426,31 @@ function openUpdateModal(faq) {
     document.getElementById('category').value = faq[9] || '';
     document.getElementById('priority_score').value = faq[10] || 0;
     document.getElementById('attachment_url').value = faq[11] || '';
-    const warningDiv = document.getElementById('duplicateWarning');
-    if (warningDiv) warningDiv.style.display = 'none';
+    document.getElementById('duplicateWarning').style.display = 'none';
     document.getElementById('faqModalLabel').innerHTML = '<i class="bi bi-pencil"></i> Edit FAQ';
     new bootstrap.Modal(document.getElementById('faqModal')).show();
   } catch (err) {
-    showToast('Error opening edit modal: ' + err.message, 'danger');
+    showToast('Error opening edit: ' + err.message, 'danger');
   }
 }
 
-document.getElementById('faqForm').addEventListener('submit', async function(e) {
+document.getElementById('faqForm')?.addEventListener('submit', async function(e) {
   e.preventDefault();
   const fd = new FormData(this);
-  const csrfToken = getCSRFToken();
-  fd.append('csrf_token', csrfToken);
+  const csrf = getCSRFToken();
+  fd.append('csrf_token', csrf);
   const uuid = fd.get('faq_uuid');
-
   try {
     const res = await fetch(uuid ? '/update_faq' : '/add_faq', {
-      method: 'POST',
-      body: fd,
-      headers: { 'X-CSRFToken': csrfToken }
+      method: 'POST', body: fd, headers: { 'X-CSRFToken': csrf }
     });
     if (res.ok) {
-      bootstrap.Modal.getInstance(document.getElementById('faqModal')).hide();
+      bootstrap.Modal.getInstance(document.getElementById('faqModal'))?.hide();
       showToast(uuid ? 'FAQ updated!' : 'FAQ created!', 'success');
       setTimeout(() => location.reload(), 900);
     } else {
       let d;
-      try { d = await res.json(); }
-      catch {
-        const text = await res.text();
-        d = { error: 'Server error: ' + text.substring(0, 200) };
-      }
+      try { d = await res.json(); } catch { d = { error: await res.text() }; }
       showToast('Error: ' + (d.error || 'Unknown'), 'danger');
     }
   } catch (err) {
@@ -826,60 +458,47 @@ document.getElementById('faqForm').addEventListener('submit', async function(e) 
   }
 });
 
-// ============================================================
-// DELETE
-// ============================================================
 let faqToDelete = null;
-
-function deleteFAQ(public_uuid) {
-  if (!public_uuid || public_uuid === 'None' || public_uuid === 'null') {
-    showToast('Error: Invalid UUID. Please refresh the page.', 'danger');
+function deleteFAQ(uuid) {
+  if (!uuid || uuid === 'None' || uuid === 'null') {
+    showToast('Invalid UUID. Refresh the page.', 'danger');
     return;
   }
-  faqToDelete = public_uuid;
+  faqToDelete = uuid;
   new bootstrap.Modal(document.getElementById('deleteModal')).show();
 }
-
-document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
+document.getElementById('confirmDeleteBtn')?.addEventListener('click', async () => {
   if (!faqToDelete) return;
   try {
-    const csrfToken = getCSRFToken();
     const res = await fetch(`/delete_faq/${faqToDelete}`, {
-      method: 'GET',
-      headers: { 'X-CSRFToken': csrfToken }
+      method: 'GET', headers: { 'X-CSRFToken': getCSRFToken() }
     });
-    bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
+    bootstrap.Modal.getInstance(document.getElementById('deleteModal'))?.hide();
     if (res.ok || res.redirected) {
       showToast('FAQ deleted.', 'danger');
       setTimeout(() => location.reload(), 600);
     } else {
-      const text = await res.text();
-      showToast('Failed to delete: ' + text.substring(0, 200), 'danger');
+      showToast('Failed to delete', 'danger');
     }
-  } catch (err) {
+  } catch {
     showToast('Error deleting FAQ.', 'danger');
   }
   faqToDelete = null;
 });
 
-// ============================================================
-// TABLE
-// ============================================================
 function sortTable(col) {
   const tbody = document.getElementById('faqTableBody');
   const rows = Array.from(tbody.querySelectorAll('tr[data-topic]'));
   const asc = tbody.dataset.sortAsc !== 'true';
   rows.sort((a, b) => {
-    let aVal, bVal;
     if (col === 3) {
-      aVal = parseInt(a.dataset.priority) || 0;
-      bVal = parseInt(b.dataset.priority) || 0;
-      return asc ? aVal - bVal : bVal - aVal;
-    } else {
-      aVal = a.cells[col]?.innerText.toLowerCase() || '';
-      bVal = b.cells[col]?.innerText.toLowerCase() || '';
-      return asc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      return asc
+        ? (parseInt(a.dataset.priority)||0) - (parseInt(b.dataset.priority)||0)
+        : (parseInt(b.dataset.priority)||0) - (parseInt(a.dataset.priority)||0);
     }
+    const aVal = a.cells[col]?.innerText.toLowerCase() || '';
+    const bVal = b.cells[col]?.innerText.toLowerCase() || '';
+    return asc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
   });
   rows.forEach(r => tbody.appendChild(r));
   tbody.dataset.sortAsc = asc;
@@ -902,8 +521,8 @@ function filterTopic() {
     row.style.display = (mt && mp && ms) ? '' : 'none';
   });
 }
-
 function filterTableFull() { filterTopic(); }
 </script>
+<script src="/static/js/admin-common.js" defer></script>
 </body>
 </html>

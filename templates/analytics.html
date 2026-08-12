@@ -10,6 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/admin-common.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
 * { box-sizing: border-box; }
@@ -118,19 +119,14 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
   .stats-row { grid-template-columns:1fr 1fr; }
   .chart-container { height:220px; }
 }
-  /* Scrollbar variables — put in :root */
 :root {
   --scrollbar-track: rgba(255,255,255,0.05);
   --scrollbar-thumb: rgba(255,255,255,0.15);
 }
-
-/* Light theme override */
 [data-bs-theme="light"] {
   --scrollbar-track: rgba(0,0,0,0.05);
   --scrollbar-thumb: rgba(0,0,0,0.15);
 }
-
-/* Scrollbar styles */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--scrollbar-track); border-radius: 3px; }
 ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
@@ -138,7 +134,7 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
 [data-bs-theme="light"] ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
 </style>
 </head>
-<body>
+<body data-admin-page="analytics">
 <div class="bg-mesh"></div>
 <div class="bg-grid"></div>
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
@@ -189,7 +185,7 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
     </div>
   </div>
 
-  <div class="page-body">
+  <div class="page-body fade-in">
     <div class="cache-stats-card">
       <div class="chart-title">
         <i class="bi bi-cpu"></i> Cache Performance
@@ -314,15 +310,6 @@ function updateThemeUI(theme) {
   if (label) label.textContent = theme === 'dark' ? 'Dark mode' : 'Light mode';
 }
 (function(){ const t = localStorage.getItem('theme') || 'dark'; document.documentElement.setAttribute('data-bs-theme', t); updateThemeUI(t); })();
-
-async function updateBadge(url, el) {
-  try { const d = await (await fetch(url)).json(); const c = d.count||0; if (el) { el.textContent=c; el.style.display=c>0?'inline-block':'none'; } } catch(e) {}
-}
-function refreshBadges() {
-  updateBadge('/unanswered_count', document.getElementById('unansweredBadge'));
-  updateBadge('/reports_count', document.getElementById('reportsBadge'));
-}
-refreshBadges(); setInterval(refreshBadges, 30000);
 
 function showToast(msg, type='success') {
   const icons = {success:'check-circle-fill',danger:'x-circle-fill',warning:'exclamation-triangle-fill',info:'info-circle-fill'};
@@ -463,5 +450,6 @@ loadCacheStats();
 setInterval(loadCacheStats, 30000);
 loadAnalytics();
 </script>
+<script src="/static/js/admin-common.js" defer></script>
 </body>
 </html>

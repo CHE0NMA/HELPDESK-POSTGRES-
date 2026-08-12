@@ -295,8 +295,17 @@ def get_known_holiday_for_date(query_date) -> Optional[Dict]:
         conn.close()
 
 
-def get_events_for_week(start_date, detected_lang: str = 'english', dept: str = 'all') -> List[Dict]:
-    end_date = start_date + timedelta(days=6)
+def get_events_for_week(start_date, detected_lang: str = 'english', dept: str = 'all',
+                         end_date=None) -> List[Dict]:
+    """`end_date`: optional explicit end of the range. Defaults to
+    start_date + 6 days (a week), which is all this was ever called with
+    until dates.py's "this month"/"next month" handling needed the full
+    calendar month instead — see gather_range_facts() in services/dates.py.
+    Name kept as-is (get_events_for_week) since it's used in several
+    other places for the week case; only the optional end_date is new.
+    """
+    if end_date is None:
+        end_date = start_date + timedelta(days=6)
     conn = get_db()
     cur = conn.cursor()
     try:

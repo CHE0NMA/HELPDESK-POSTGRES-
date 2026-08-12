@@ -626,3 +626,45 @@ def api_my_chats():
     finally:
         cur.close()
         conn.close()
+
+@bp.route("/api/admin/realtime")
+def api_admin_realtime():
+    """Lightweight payload for admin live badges (poll every 8–15s)."""
+    if not admin_required():
+        return jsonify({"error": "Unauthorized"}), 403
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT COUNT(*) FROM unanswered_questions")
+        unanswered = cur.fetchone()[0]
+
+        cur.execute(
+            """
+            SELECT COUNT(*) FROM satisfaction_feedback
+            WHERE rating = 'thumbs_down'
+              AND created_at > NOW() - INTERVAL '7 days'
+            """
+        )
+        reports = cur.fetchone()[0]
+
+        cur.execute(
+            "SELECT COUNT(*) FROM faq_review_queue WHERE status = 'pending'"
+        )
+        review = cur.fetchone()[0]
+
+        cur.execute(
+            "SELECT COUNT(*) FROM pending_faq_drafts WHERE status = 'pending'"
+        )
+        drafts = cur.fetchone()[0]
+
+        return jsonify({
+            "unanswered": unanswered,
+            "reports": reports,
+            "review_queue": review,
+            "pending_drafts": drafts,
+            "total": unanswered + reports + review + drafts,
+            "ts": datetime.now().isoformat(),
+        })
+    finally:
+        cur.close()
+        conn.close()

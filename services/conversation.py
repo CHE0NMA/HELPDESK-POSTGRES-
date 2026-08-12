@@ -1,11 +1,57 @@
-"""Per-session conversation memory (short-term context for follow-ups)."""
+"""Per-session conversation memory (short-term context for follow-ups).
+
+--- "random new chat every time" fix ---
+This used to be backed ONLY by the module-level `conversation_contexts`
+dict below — a plain Python dict living in ONE worker process's memory.
+That silently breaks in two extremely common deployment situations,
+both of which look exactly like "randomly starts a new chat":
+
+  1. More than one worker process (gunicorn/uwsgi `--workers > 1`, or
+     any autoscaled/multi-dyno host). Each worker has its OWN copy of
+     this dict. Request 1 (page load) can land on worker A and create
+     the session there; request 2 (the student's very next message)
+     gets load-balanced to worker B, which has never heard of that
+     session_id — so it looks like a brand new chat, and which worker
+     you land on next is effectively random from the student's POV.
+  2. Any restart/redeploy/idle-sleep of the process (common on
+     free/hobby hosts) wipes the dict entirely — every open
+     conversation resets at once.
+
+Neither of those is fixable by changing anything client-side (cookies,
+localStorage session ids, etc.) — the state has to actually be shared
+and durable on the server. Fixed here by making Postgres the source of
+truth: every mutation is written through to a `conversation_state`
+table (session_id, JSON payload), and a cache-miss on the in-process
+dict falls back to loading from the DB before creating a fresh context.
+The in-process dict is kept as a fast L1 cache so a hot session doesn't
+round-trip to Postgres on every single message.
+
+If the DB write/read fails for any reason, everything degrades to the
+old in-memory-only behavior rather than raising — a slow/unavailable DB
+should never break the chat itself, it just loses the durability fix.
+
+NOTE: `last_disambiguation` is intentionally NOT persisted — its
+payload can carry raw handbook-chunk dicts / FAQ row tuples that aren't
+cleanly JSON round-trippable, and a "which one did you mean?" prompt is
+answered (or abandoned) within the same short exchange in practice, so
+losing it on a cross-worker miss is a much smaller problem than losing
+the whole conversation.
+"""
+import json
+import logging
 import re
 import time
+from datetime import date, datetime
 from typing import Dict, List, Optional
+
+logger = logging.getLogger("pac_helpdesk.conversation")
+
+_TABLE_READY = False
 
 
 class ConversationContext:
-    def __init__(self):
+    def __init__(self, session_id: str = None):
+        self.session_id = session_id
         self.last_topic = None
         self.last_intent = None
         self.conversation_history: List[dict] = []
@@ -39,6 +85,8 @@ class ConversationContext:
             if len(self.conversation_history) > 10:
                 self.conversation_history.pop(0)
             self.last_answer = bot_response
+
+        _save_ctx(self.session_id, self)
 
     def get_history(self, limit: int = 3) -> List[dict]:
         return self.conversation_history[-limit:]
@@ -97,18 +145,214 @@ class ConversationContext:
             'original_question': original_question,
             'detected_lang': detected_lang,
         }
+        # Not persisted (see module docstring) — but still save the rest
+        # of the context (history, topic, etc.) so a cross-worker miss
+        # right after this doesn't lose everything, just the pending
+        # picker itself.
+        _save_ctx(self.session_id, self)
 
     def clear_disambiguation(self):
         self.last_disambiguation = None
+        _save_ctx(self.session_id, self)
 
 
 conversation_contexts: Dict[str, ConversationContext] = {}
 
 
 def get_conversation_context(session_id: str) -> ConversationContext:
-    if session_id not in conversation_contexts:
-        conversation_contexts[session_id] = ConversationContext()
-    return conversation_contexts[session_id]
+    session_id = session_id or 'default'
+    ctx = conversation_contexts.get(session_id)
+    if ctx is not None:
+        return ctx
+
+    # L1 cache miss — try to recover durable state from Postgres before
+    # assuming this is genuinely a brand new conversation. This is the
+    # path that fixes "random new chat every time": a message that lands
+    # on a different worker process, or after a restart, now finds the
+    # real history instead of an empty context.
+    ctx = _load_ctx(session_id)
+    conversation_contexts[session_id] = ctx
+    return ctx
+
+
+# ---------------------------------------------------------------------
+# DB-backed persistence (source of truth). See module docstring for why.
+# ---------------------------------------------------------------------
+
+def _ensure_table():
+    global _TABLE_READY
+    if _TABLE_READY:
+        return
+    try:
+        from database import get_db
+        conn = get_db()
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS conversation_state (
+                    session_id TEXT PRIMARY KEY,
+                    data JSONB NOT NULL,
+                    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+                )
+            """)
+            conn.commit()
+            _TABLE_READY = True
+        finally:
+            cur.close()
+            conn.close()
+    except Exception as e:
+        # DB not reachable yet at import/first-use time, or the app is
+        # mid-migration — just try again next call. Never blocks chat.
+        logger.debug(f"conversation_state ensure_table skipped: {e}")
+
+
+def _json_default(obj):
+    """Handles the one non-JSON-native type we actually store: dates."""
+    if isinstance(obj, (date, datetime)):
+        return {'__date__': obj.isoformat()}
+    return str(obj)
+
+
+def _json_object_hook(d: dict):
+    if set(d.keys()) == {'__date__'}:
+        try:
+            return date.fromisoformat(d['__date__'])
+        except ValueError:
+            return None
+    return d
+
+
+def _ctx_to_dict(ctx: 'ConversationContext') -> dict:
+    return {
+        'last_topic': ctx.last_topic,
+        'last_intent': ctx.last_intent,
+        'conversation_history': ctx.conversation_history,
+        'last_faq_answer': ctx.last_faq_answer,
+        'last_faq_question': ctx.last_faq_question,
+        'last_answer': ctx.last_answer,
+        'last_schedule_query': ctx.last_schedule_query,
+        'last_detected_lang': ctx.last_detected_lang,
+        # last_disambiguation deliberately omitted — see module docstring.
+    }
+
+
+def _apply_dict_to_ctx(ctx: 'ConversationContext', data: dict) -> None:
+    ctx.last_topic = data.get('last_topic')
+    ctx.last_intent = data.get('last_intent')
+    ctx.conversation_history = data.get('conversation_history') or []
+    ctx.last_faq_answer = data.get('last_faq_answer')
+    ctx.last_faq_question = data.get('last_faq_question')
+    ctx.last_answer = data.get('last_answer')
+    ctx.last_schedule_query = data.get('last_schedule_query')
+    ctx.last_detected_lang = data.get('last_detected_lang')
+
+
+def _save_ctx(session_id: Optional[str], ctx: 'ConversationContext') -> None:
+    if not session_id:
+        return
+    _ensure_table()
+    if not _TABLE_READY:
+        return
+    try:
+        from database import get_db
+        payload = json.dumps(_ctx_to_dict(ctx), default=_json_default)
+        conn = get_db()
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                INSERT INTO conversation_state (session_id, data, updated_at)
+                VALUES (%s, %s::jsonb, NOW())
+                ON CONFLICT (session_id) DO UPDATE SET
+                    data = EXCLUDED.data,
+                    updated_at = NOW()
+            """, (session_id, payload))
+            conn.commit()
+        finally:
+            cur.close()
+            conn.close()
+    except Exception as e:
+        # Never let a persistence hiccup break the chat turn itself —
+        # worst case we fall back to in-memory-only behavior again.
+        logger.debug(f"_save_ctx failed for session={session_id}: {e}")
+
+
+def delete_ctx(session_id: str) -> None:
+    """Fully wipe a session's conversation memory — both the in-process
+    L1 cache and the durable DB row. Use this (not just popping the
+    in-memory dict) whenever a chat is explicitly reset/abandoned
+    (routes/pages.py's new_chat() / _reset_session_for_new_chat()), so a
+    reused or recycled session_id can never resurrect a stale
+    conversation from Postgres after the visible chat was supposed to
+    have been cleared.
+    """
+    if not session_id:
+        return
+    conversation_contexts.pop(session_id, None)
+    _ensure_table()
+    if not _TABLE_READY:
+        return
+    try:
+        from database import get_db
+        conn = get_db()
+        cur = conn.cursor()
+        try:
+            cur.execute("DELETE FROM conversation_state WHERE session_id = %s", (session_id,))
+            conn.commit()
+        finally:
+            cur.close()
+            conn.close()
+    except Exception as e:
+        logger.debug(f"delete_ctx failed for session={session_id}: {e}")
+
+
+def _load_ctx(session_id: str) -> 'ConversationContext':
+    ctx = ConversationContext(session_id=session_id)
+    _ensure_table()
+    if not _TABLE_READY:
+        return ctx
+    try:
+        from database import get_db
+        conn = get_db()
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                "SELECT data FROM conversation_state WHERE session_id = %s",
+                (session_id,),
+            )
+            row = cur.fetchone()
+        finally:
+            cur.close()
+            conn.close()
+        if row and row[0] is not None:
+            raw = row[0]
+            # psycopg2 already deserializes JSONB into a dict; only
+            # json.loads() it ourselves if it came back as a string
+            # (e.g. a different driver/config).
+            data = (
+                json.loads(raw, object_hook=_json_object_hook)
+                if isinstance(raw, str) else _rehydrate_dates(raw)
+            )
+            _apply_dict_to_ctx(ctx, data)
+    except Exception as e:
+        logger.debug(f"_load_ctx failed for session={session_id}: {e}")
+    return ctx
+
+
+def _rehydrate_dates(obj):
+    """Walk an already-parsed JSONB dict/list and convert any
+    {'__date__': 'YYYY-MM-DD'} markers back into real date objects —
+    needed when psycopg2 hands back JSONB pre-parsed (so our
+    json.loads object_hook never ran)."""
+    if isinstance(obj, dict):
+        if set(obj.keys()) == {'__date__'}:
+            try:
+                return date.fromisoformat(obj['__date__'])
+            except (ValueError, TypeError):
+                return None
+        return {k: _rehydrate_dates(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_rehydrate_dates(v) for v in obj]
+    return obj
 
 
 def build_context_snapshot(ctx) -> str:

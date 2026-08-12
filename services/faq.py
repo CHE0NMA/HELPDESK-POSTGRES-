@@ -517,11 +517,35 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             _faq_cands_early = []
             _faq_score_early = 0.0
 
-    # Handbook wins when topic detector fires OR retrieval score is strong.
+    # Handbook wins when topic detector fires OR retrieval score is
+    # decisively strong.
+    #
+    # BUG FIX: the score-only branch used to fire at hb_score >= 0.36 —
+    # almost identical to CROSS_CHECK_HANDBOOK_BAR (0.34), which is only
+    # meant to be the bar for tacking on a handbook *footnote*, not for
+    # completely overriding the schedule engine. In practice the
+    # handbook's attendance-policy chunk mentions "special holidays"
+    # (for religious-observance excused absences), so a plainly
+    # date-shaped question like "do we have holidays this month?" was
+    # scoring high enough on pure full-text overlap to hijack routing
+    # away from date_service.answer_date_question() entirely — the
+    # student got a random handbook paragraph instead of real
+    # schedule/holiday data, and this repeated for "do we have class
+    # today" etc.
+    #
+    # A bare retrieval score is real signal when nothing else claims the
+    # question, but it must never preempt a genuinely date-shaped query
+    # (_looks_date) on score alone — only actual topical confirmation
+    # (is_handbook_question) is allowed to do that. The date engine
+    # already gets a handbook footnote merged in afterwards (see
+    # CROSS_CHECK_HANDBOOK_BAR below) when the handbook score is solid,
+    # so nothing is lost by letting the date engine go first.
     _hb_clearly_better = (
         _looks_hb and _hb_score_early >= 0.12
     ) or (
-        _hb_score_early >= 0.36 and _hb_score_early > (_faq_score_early + 0.05)
+        not _looks_date
+        and _hb_score_early >= 0.36
+        and _hb_score_early > (_faq_score_early + 0.05)
     )
 
     if _looks_date and not _hb_clearly_better:

@@ -13,6 +13,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/admin-common.css">
 <style>
 * { box-sizing: border-box; }
 :root {
@@ -593,7 +594,7 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
 [data-bs-theme="light"] ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
 </style>
 </head>
-<body>
+<body data-admin-page="alert_log">
 <div class="bg-mesh"></div>
 <div class="bg-grid"></div>
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
@@ -645,7 +646,7 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
     <div class="topbar-right"></div>
   </div>
 
-  <div class="page-body">
+  <div class="page-body fade-in">
     <!-- Header -->
     <div class="alert-header">
       <div>
@@ -784,29 +785,6 @@ function loadTheme() {
   updateThemeUI(savedTheme);
 }
 loadTheme();
-
-// ============================================================
-// BADGES
-// ============================================================
-function updateBadgeEl(el, count) {
-  if (!el) return;
-  el.textContent = count;
-  el.style.display = count > 0 ? 'inline-block' : 'none';
-}
-
-function fetchUnansweredCount() {
-  fetch('/unanswered_count')
-    .then(r => r.json())
-    .then(data => updateBadgeEl(document.getElementById('unansweredBadge'), data.count || 0))
-    .catch(() => {});
-}
-
-function fetchReportsCount() {
-  fetch('/reports_count')
-    .then(r => r.json())
-    .then(data => updateBadgeEl(document.getElementById('reportsBadge'), data.count || 0))
-    .catch(() => {});
-}
 
 // ============================================================
 // DATA
@@ -1051,14 +1029,9 @@ function exportData() {
 // ============================================================
 document.addEventListener('DOMContentLoaded', function() {
   fetchAlerts();
-  fetchUnansweredCount();
-  fetchReportsCount();
-  setInterval(() => {
-    fetchAlerts();
-    fetchUnansweredCount();
-    fetchReportsCount();
-  }, 60000);
+  setInterval(fetchAlerts, 60000);
 });
 </script>
+<script src="/static/js/admin-common.js" defer></script>
 </body>
 </html>
