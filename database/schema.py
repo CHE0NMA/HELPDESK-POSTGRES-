@@ -766,6 +766,7 @@ def migrate_create_chat_sessions():
         except Exception:
             pass
 
+
 def migrate_add_uuid_to_faq():
     import uuid
     conn = get_db()
