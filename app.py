@@ -46,32 +46,35 @@ def create_app():
     app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 
     class FixVercelPath:
+        """Vercel's rewrite ("/(.*)" -> "/app.py?__vercel_path__=/$1") always
+        invokes this function with a literal PATH_INFO of "/app.py" — the
+        various X-Vercel-*/X-Original-Url/REQUEST_URI headers this used to
+        rely on are NOT reliably present on the current runtime, so that
+        approach silently fell back to "/" for every request. Query strings
+        ARE reliably passed through, so vercel.json now smuggles the real
+        path in as ?__vercel_path__=..., and we recover it from there.
+        """
         def __init__(self, app):
             self.app = app
 
         def __call__(self, environ, start_response):
+            from urllib.parse import parse_qsl, urlencode, unquote
+
             path = environ.get("PATH_INFO", "") or ""
-
-            candidates = [
-                environ.get("HTTP_X_VERCEL_FORWARD_PATH"),
-                environ.get("HTTP_X_ORIGINAL_URL"),
-                environ.get("HTTP_X_FORWARDED_URI"),
-                environ.get("HTTP_X_REWRITE_URL"),
-                environ.get("REQUEST_URI"),
-                environ.get("RAW_URI"),
-            ]
-
-            original = None
-            for c in candidates:
-                if not c:
-                    continue
-                c = c.split("?", 1)[0]
-                if c and c not in ("/app.py", "app.py"):
-                    original = c if c.startswith("/") else "/" + c
-                    break
+            qs = environ.get("QUERY_STRING", "") or ""
 
             if path in ("/app.py", "app.py") or path.endswith("/app.py"):
-                environ["PATH_INFO"] = original or "/"
+                pairs = parse_qsl(qs, keep_blank_values=True)
+                real_path = None
+                remaining = []
+                for key, value in pairs:
+                    if key == "__vercel_path__" and real_path is None:
+                        real_path = value
+                    else:
+                        remaining.append((key, value))
+
+                environ["PATH_INFO"] = unquote(real_path) if real_path else "/"
+                environ["QUERY_STRING"] = urlencode(remaining)
 
             return self.app(environ, start_response)
 
@@ -152,10 +155,7 @@ def create_app():
             "path": request.path,
             "url": request.url,
             "environ_PATH_INFO": request.environ.get("PATH_INFO"),
-            "REQUEST_URI": request.environ.get("REQUEST_URI"),
-            "X_ORIGINAL_URL": request.environ.get("HTTP_X_ORIGINAL_URL"),
-            "X_VERCEL_FORWARD_PATH": request.environ.get("HTTP_X_VERCEL_FORWARD_PATH"),
-            "X_FORWARDED_URI": request.environ.get("HTTP_X_FORWARDED_URI"),
+            "environ_QUERY_STRING": request.environ.get("QUERY_STRING"),
             "rules": [str(r) for r in app.url_map.iter_rules()][:40],
         }
 

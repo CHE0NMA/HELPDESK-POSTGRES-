@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/(.*)",
-      "destination": "/app.py"
+      "destination": "/app.py?__vercel_path__=/$1"
     }
   ],
   "crons": [
