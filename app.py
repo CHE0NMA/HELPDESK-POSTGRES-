@@ -30,6 +30,7 @@ from routes.pages import bp as pages_bp
 from routes.cron import bp as cron_bp
 
 
+
 def _is_vercel() -> bool:
     return bool(os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"))
 
