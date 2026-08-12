@@ -46,8 +46,6 @@ def create_app():
     app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 
     # ---------- Fix Vercel rewrite path ----------
-    # Vercel rewrite sends PATH_INFO=/app.py for every request.
-    # Restore a usable path so Flask routes can match.
     class FixVercelPath:
         def __init__(self, app):
             self.app = app
@@ -71,7 +69,6 @@ def create_app():
     app.wsgi_app = FixVercelPath(app.wsgi_app)
     # ---------- end fix ----------
 
-    # Logging: console only on Vercel (no persistent disk)
     fmt = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     console = logging.StreamHandler()
     console.setFormatter(fmt)
@@ -140,7 +137,6 @@ def create_app():
     app.register_blueprint(pages_bp)
     app.register_blueprint(cron_bp)
 
-    # DB + schema (idempotent — safe on every cold start)
     init_pool()
     ensure_core_tables()
     ensure_admin_exists()
@@ -151,12 +147,10 @@ def create_app():
     ensure_faq_embedding_column()
     ensure_learning_layer()
 
-    # Skip heavy warm-up threads on Vercel
     if not _is_vercel():
         from threading import Thread
         Thread(target=warm_response_tables, daemon=True).start()
 
-        # Local / traditional host only: APScheduler
         try:
             from apscheduler.schedulers.background import BackgroundScheduler
             from services.alerts import (
@@ -189,7 +183,6 @@ def create_app():
     return app
 
 
-# Vercel + local entrypoint: must expose top-level `app`
 app = create_app()
 
 
