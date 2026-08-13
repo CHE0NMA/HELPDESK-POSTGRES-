@@ -117,11 +117,59 @@ def ensure_topic_alias_schema(get_db_fn) -> None:
         conn.close()
 
 
-# ---------------------------------------------------------------------------
-# Seed data (mirrors the old hardcoded forced matches — loaded once)
-# ---------------------------------------------------------------------------
-
 _SEED_ALIASES: List[dict] = [
+    # ---- Identity / History ----
+    {
+        "topic_key": "full_name_campuses",
+        "match_pattern": r"\b(full name|real (full )?name|name of (this )?school|campuses|other campus(es)?|how many campuses|campus locations?|where (is|are) the (main )?campus(es)?|which campus(es)?|main campus|sindangan|salug|postigo|leon b)\b",
+        "title_needles": ["academic program offerings", "brief history", "meetings"],
+        "content_needles": ["sindangan", "salug", "leon b. postigo", "philippine advent college, inc", "main campus", "lbp campus"],
+        "source_priority": "handbook_only",
+        "priority": 110,
+        "notes": "Q1/Q8 – full name + all three campuses",
+    },
+    {
+        "topic_key": "original_name",
+        "match_pattern": r"\b(called before|original name|formerly known|old name|hillside view|before it became)\b",
+        "title_needles": ["brief history"],
+        "content_needles": ["hillside view", "originally known", "1975"],
+        "source_priority": "handbook_only",
+        "priority": 100,
+    },
+    {
+        "topic_key": "founded_history",
+        "match_pattern": r"\b(when did .{0,20} start|who founded|founder|founders|macias|when .{0,15} (built|established|founded)|something about 1975|tell me more about the founders|macias family)\b",
+        "title_needles": ["brief history"],
+        "content_needles": ["mariano", "margie", "macias", "1975", "founded"],
+        "source_priority": "handbook_only",
+        "priority": 105,
+    },
+    {
+        "topic_key": "logo",
+        "match_pattern": r"\b(logo|emblem|symbol|what does .{0,15} logo)\b",
+        "title_needles": ["logo and symbols", "logo", "symbols"],
+        "content_needles": ["bible", "torch", "1975", "blue", "red", "white"],
+        "source_priority": "handbook_only",
+        "priority": 95,
+    },
+    {
+        "topic_key": "hymn",
+        "match_pattern": r"\b(hymn|who wrote|composer|lyrics|alma mater)\b",
+        "title_needles": ["pac hymn", "hymn"],
+        "content_needles": ["pilon", "la sage", "composed"],
+        "source_priority": "handbook_only",
+        "priority": 95,
+    },
+    {
+        "topic_key": "ellen_white",
+        "match_pattern": r"\b(ellen white|education book|greatest want)\b",
+        "title_needles": ["greatest want", "foreword"],
+        "content_needles": ["ellen g. white", "education", "greatest want of the world"],
+        "source_priority": "handbook_only",
+        "priority": 90,
+    },
+
+    # ---- Philosophy / Vision / Mission / Values ----
     {
         "topic_key": "vision",
         "match_pattern": r"\b(want to become|aspire|future of|what does .{0,20} want|envision|envisions)\b",
@@ -129,21 +177,62 @@ _SEED_ALIASES: List[dict] = [
         "content_needles": ["envisions", "center of excellence"],
         "source_priority": "handbook_only",
         "priority": 100,
-        "notes": "Q: what does PAC want to become / vision",
     },
     {
         "topic_key": "core_values",
-        "match_pattern": r"\b(core values|pac values|the pac ones|values of (the )?(school|college|pac))\b",
+        "match_pattern": r"\b(core values|pac values|the pac ones|values of (the )?(school|college|pac)|p-a-c values|purpose-driven)\b",
         "title_needles": ["core values", "core value"],
-        "content_needles": ["purpose-driven", "christ-centered"],
+        "content_needles": ["purpose-driven", "christ-centered", "academic excellence oriented"],
         "source_priority": "handbook_only",
         "priority": 100,
     },
     {
-        "topic_key": "third_degree",
-        "match_pattern": r"\b(heaviest|worst|most serious).{0,25}(demerit|offense|level|degree)\b|\bthird[ -]?degree\b",
-        "title_needles": ["third-degree", "third degree"],
-        "content_needles": ["30 demerit"],
+        "topic_key": "mission",
+        "match_pattern": r"\b(main mission|what.?s the mission|mission of)\b",
+        "title_needles": ["mission"],
+        "content_needles": ["human service", "personal integrity"],
+        "source_priority": "handbook_only",
+        "priority": 90,
+    },
+    {
+        "topic_key": "philosophy",
+        "match_pattern": r"\b(philosophy|school.?s? philosophy|philosophy about)\b",
+        "title_needles": ["philosophy"],
+        "content_needles": ["source of true education", "god is the source"],
+        "source_priority": "handbook_only",
+        "priority": 90,
+    },
+    {
+        "topic_key": "goals",
+        "match_pattern": r"\b(goals students should|goals by graduation|what (are|should).{0,20}goals)\b",
+        "title_needles": ["goals"],
+        "content_needles": ["kindness", "patience", "spiritual life", "scriptures"],
+        "source_priority": "handbook_only",
+        "priority": 85,
+    },
+    {
+        "topic_key": "christ_centered",
+        "match_pattern": r"\b(christ-centered|christ centered living)\b",
+        "title_needles": ["core values", "declaration of principles"],
+        "content_needles": ["christ-centered", "christ centered"],
+        "source_priority": "handbook_only",
+        "priority": 80,
+    },
+
+    # ---- Demerit / Discipline ----
+    {
+        "topic_key": "merit_points_start",
+        "match_pattern": r"\b(how many points|start with|merit points|points do we start|30 points)\b",
+        "title_needles": ["student's behavioral code", "behavioral code"],
+        "content_needles": ["30 points", "merit of 30", "beginning of the semester"],
+        "source_priority": "handbook_only",
+        "priority": 105,
+    },
+    {
+        "topic_key": "first_degree",
+        "match_pattern": r"\b(first[ -]?degree|light\s+offense|examples of (light|first))\b",
+        "title_needles": ["first-degree", "first degree"],
+        "content_needles": ["5 demerit", "public displays of affection", "unchaperoned"],
         "source_priority": "handbook_only",
         "priority": 100,
     },
@@ -156,20 +245,20 @@ _SEED_ALIASES: List[dict] = [
         "priority": 100,
     },
     {
-        "topic_key": "first_degree",
-        "match_pattern": r"\b(first[ -]?degree|light\s+offense)\b",
-        "title_needles": ["first-degree", "first degree"],
-        "content_needles": ["5 demerit"],
+        "topic_key": "third_degree",
+        "match_pattern": r"\b(heaviest|worst|most serious).{0,25}(demerit|offense|level|degree)\b|\bthird[ -]?degree\b",
+        "title_needles": ["third-degree", "third degree"],
+        "content_needles": ["30 demerit"],
         "source_priority": "handbook_only",
         "priority": 100,
     },
     {
         "topic_key": "max_fine",
-        "match_pattern": r"\b(max(imum)?\s*fine|is there a maximum fine|biggest fine|fine for)\b",
-        "title_needles": ["disciplinary measures"],
-        "content_needles": ["1,500", "1500", "fines"],
+        "match_pattern": r"\b(max(imum)?\s*fine|is there a maximum fine|biggest fine|fine for|community service instead of fine)\b",
+        "title_needles": ["disciplinary measures", "student's behavioral code"],
+        "content_needles": ["1,500", "1500", "fines", "community service"],
         "source_priority": "handbook_only",
-        "priority": 90,
+        "priority": 95,
     },
     {
         "topic_key": "appeal",
@@ -178,6 +267,24 @@ _SEED_ALIASES: List[dict] = [
         "content_needles": ["15 days", "appealed within"],
         "source_priority": "handbook_only",
         "priority": 90,
+    },
+    {
+        "topic_key": "probation_20",
+        "match_pattern": r"\b(20 or more demerits|20\+ demerits|get 20|probation|demerits near the end)\b",
+        "title_needles": ["disciplinary measures"],
+        "content_needles": ["20 demerits", "placed on probation", "one semester"],
+        "source_priority": "handbook_only",
+        "priority": 95,
+    },
+
+    # ---- Dress / Conduct ----
+    {
+        "topic_key": "jewelry_dress",
+        "match_pattern": r"\b(jewelry|necklace|ring|earrings|piercing|dress code|how .{0,15}dress|proper attire|slippers|short pants|crop tops)\b",
+        "title_needles": ["dress and appearance", "first-degree", "first degree", "school uniform"],
+        "content_needles": ["necklace", "earrings", "jewelry", "wedding ring", "slippers", "short pants", "crop tops", "uniform", "attire"],
+        "source_priority": "handbook_only",
+        "priority": 95,
     },
     {
         "topic_key": "unchaperoned_hike",
@@ -212,91 +319,156 @@ _SEED_ALIASES: List[dict] = [
         "priority": 95,
     },
     {
+        "topic_key": "pda",
+        "match_pattern": r"\b(public display of affection|pda|going together|sweethearts|kissing|necking)\b",
+        "title_needles": ["first-degree", "first degree", "third-degree", "third degree"],
+        "content_needles": ["public displays of affection", "going together", "kissing", "necking"],
+        "source_priority": "handbook_only",
+        "priority": 100,
+    },
+    {
+        "topic_key": "curfew",
+        "match_pattern": r"\b(curfew|9:30|9\.30|dorm.*(hours|time)|curfew hours)\b",
+        "title_needles": ["first-degree", "first degree", "dormitory"],
+        "content_needles": ["9:30", "curfew", "4:30"],
+        "source_priority": "handbook_only",
+        "priority": 100,
+    },
+    {
+        "topic_key": "music_songs",
+        "match_pattern": r"\b(music|songs|questionable music|indecent songs)\b",
+        "title_needles": ["first-degree", "first degree"],
+        "content_needles": ["questionable music", "indecent songs"],
+        "source_priority": "handbook_only",
+        "priority": 90,
+    },
+    {
+        "topic_key": "worship_absences",
+        "match_pattern": r"\b(miss worship|worship (too many|absences)|worship absences)\b",
+        "title_needles": ["dormitory student's pledge", "dormitory"],
+        "content_needles": ["worship absences", "20 absences", "30 worship"],
+        "source_priority": "handbook_only",
+        "priority": 100,
+    },
+
+    # ---- Legal ----
+    {
         "topic_key": "safe_spaces",
-        "match_pattern": r"\b(safe spaces|ra.?11313|safe spaces act|11313)\b",
+        "match_pattern": r"\b(safe spaces|ra.?11313|safe spaces act|11313|gender-based|gbsh|committee for safe)\b",
         "title_needles": ["gender-based sexual harassment", "gender-based", "safe spaces"],
-        "content_needles": ["11313", "safe spaces act"],
+        "content_needles": ["11313", "safe spaces act", "gender-based harassment committee"],
         "source_priority": "handbook_only",
         "priority": 100,
     },
     {
         "topic_key": "anti_bullying",
         "match_pattern": r"\b(anti.?bullying|ra.?10627|bullying law|10627)\b",
-        "title_needles": ["grievance", "anti-bullying", "bullying"],
+        "title_needles": ["grievance", "anti-bullying", "bullying", "third-degree"],
         "content_needles": ["10627", "anti-bullying"],
         "source_priority": "handbook_only",
         "priority": 90,
     },
     {
-        "topic_key": "programs",
-        "match_pattern": r"\b(programs?|courses?).{0,25}(offer|available|does pac)\b",
-        "title_needles": ["academic program offerings", "academic program", "program offerings"],
-        "content_needles": ["bachelor of science", "bachelor of"],
+        "topic_key": "hazing",
+        "match_pattern": r"\b(hazing|fraternity|sorority)\b",
+        "title_needles": ["third-degree", "third degree"],
+        "content_needles": ["fraternity", "sorority", "hazing", "never be allowed"],
         "source_priority": "handbook_only",
-        "priority": 80,
+        "priority": 95,
+    },
+    {
+        "topic_key": "social_media",
+        "match_pattern": r"\b(social media|cyber|online (harassment|libel)|responsible use of social)\b",
+        "title_needles": ["third-degree", "third degree"],
+        "content_needles": ["social media", "cyber libel", "responsible use"],
+        "source_priority": "handbook_only",
+        "priority": 90,
+    },
+
+    # ---- Programs ----
+    {
+        "topic_key": "programs",
+        "match_pattern": r"\b(programs?|courses?).{0,25}(offer|available|does pac)|nursing|midwifery|business administration|education programs?|tesda|it or computer|computer science|information technology\b",
+        "title_needles": ["academic program offerings", "academic program", "program offerings"],
+        "content_needles": ["bachelor of science", "bachelor of", "nursing", "midwifery", "stem", "humss", "tesda", "housekeeping", "caregiving", "main campus", "salug"],
+        "source_priority": "handbook_only",
+        "priority": 100,
     },
     {
         "topic_key": "senior_high_strands",
         "match_pattern": r"\b(senior high|strands?|shs|what strands)\b",
         "title_needles": ["academic program offerings", "academic program", "program offerings"],
-        "content_needles": ["stem", "humss", "abm", "grades 11"],
+        "content_needles": ["stem", "humss", "abm", "gas", "grades 11"],
         "source_priority": "handbook_only",
-        "priority": 80,
+        "priority": 90,
+    },
+
+    # ---- Academic policies / fees / scholarships ----
+    {
+        "topic_key": "incomplete_grades",
+        "match_pattern": r"\b(incomplete grades?|deadline for incomplete|how long to complete an incomplete|complete an incomplete)\b",
+        "title_needles": ["completion of incomplete", "schedule of examinations", "grading"],
+        "content_needles": ["within one (1) year", "one year", "incomplete grade"],
+        "source_priority": "handbook_only",
+        "priority": 100,
     },
     {
-        "topic_key": "mission",
-        "match_pattern": r"\b(main mission|what.?s the mission|mission of)\b",
-        "title_needles": ["mission"],
-        "content_needles": ["human service", "personal integrity"],
+        "topic_key": "residency_limit",
+        "match_pattern": r"\b(residency (limit|requirement)|maximum .{0,15} years|finish(ing)? a degree|complete the program)\b",
+        "title_needles": ["admission policies", "residency"],
+        "content_needles": ["maximum of 5 years", "5 years to complete"],
+        "source_priority": "handbook_only",
+        "priority": 95,
+    },
+    {
+        "topic_key": "drug_test",
+        "match_pattern": r"\b(drug test|first.?year.{0,20}drug)\b",
+        "title_needles": ["admission policies", "first-year"],
+        "content_needles": ["drug test", "first-year students will be required"],
+        "source_priority": "handbook_only",
+        "priority": 95,
+    },
+    {
+        "topic_key": "sibling_scholarship",
+        "match_pattern": r"\b(scholarship.{0,20}sibling|siblings?|family scholar|discount.{0,15}sibling)\b",
+        "title_needles": ["family scholar", "scholarship"],
+        "content_needles": ["four siblings", "three siblings", "two siblings", "youngest sibling"],
+        "source_priority": "handbook_only",
+        "priority": 100,
+    },
+    {
+        "topic_key": "dorm_fees",
+        "match_pattern": r"\b(dormitory (fees?|charges?)|dorm fees?|bed space)\b",
+        "title_needles": ["dormitory charges", "dormitory"],
+        "content_needles": ["717.99", "938.91", "331.38", "electricity"],
         "source_priority": "handbook_only",
         "priority": 90,
     },
     {
-        "topic_key": "philosophy",
-        "match_pattern": r"\b(philosophy|school.?s? philosophy)\b",
-        "title_needles": ["philosophy"],
-        "content_needles": ["source of true education"],
+        "topic_key": "week_spiritual",
+        "match_pattern": r"\b(week of spiritual emphasis|spiritual emphasis)\b",
+        "title_needles": ["multifaith", "first-degree"],
+        "content_needles": ["week of spiritual emphasis", "spiritual emphasis"],
         "source_priority": "handbook_only",
         "priority": 90,
     },
     {
-        "topic_key": "jewelry_dress",
-        "match_pattern": r"\b(jewelry|necklace|ring|earrings|piercing|dress code|how .{0,15}dress|proper attire)\b",
-        "title_needles": ["dress and appearance", "first-degree", "first degree", "school uniform"],
-        "content_needles": ["necklace", "earrings", "jewelry", "uniform", "attire"],
+        "topic_key": "morphe",
+        "match_pattern": r"\b(morphe|2008)\b",
+        "title_needles": ["school discipline under morphe", "morphe"],
+        "content_needles": ["morphe of 2008", "manual of regulations"],
         "source_priority": "handbook_only",
         "priority": 85,
     },
     {
-        "topic_key": "campus_location",
-        # "campus"/"campuses" is already treated as a real topic elsewhere
-        # (HANDBOOK_KEYWORDS, _QUERY_EXPANSIONS, topic_title_cues in
-        # handbook.py) but had no forced-topic entry, so questions like
-        # "are there any campuses in PAC" / "which locations" fell through
-        # to generic fuzzy retrieval, which grabbed unrelated chunks
-        # (Brief History, Dress and Appearance, Mission — all of which
-        # happen to share generic words like "college"/"page"/"PAC") and
-        # let the LLM stitch them into a hallucinated non-sequitur
-        # ("Philippines is in the Pacific region... so yes, there's a
-        # campus in the Pacific region"). Pin it to the MEETINGS section,
-        # which is the chunk that actually states the campus address.
-        # NOTE: deliberately does NOT match the bare word "campus" alone --
-        # that also matched ordinary "is X allowed on campus?" conduct
-        # questions and force-hijacked them to this section too. Only
-        # phrasing that actually asks about the campus's identity/location
-        # should force this topic.
-        "match_pattern": r"\b(campuses|other campus(es)?|how many campuses|"
-                          r"campus locations?|where (is|are) the (main )?campus(es)?|"
-                          r"which campus(es)?|which locations?|"
-                          r"names? of the (other )?campuses?|main campus)\b",
-        "title_needles": ["meetings"],
-        "content_needles": ["held within the campus", "regular meetings of the members"],
+        "topic_key": "2025_edition",
+        "match_pattern": r"\b(2025 edition|school year 2025|2025-2026|2025.?2026)\b",
+        "title_needles": ["gender-based", "foreword", "academic program"],
+        "content_needles": ["2025", "2025-2026", "sy 2025"],
         "source_priority": "handbook_only",
-        "priority": 90,
-        "notes": "Q: are there any campuses / which locations / campus names",
+        "priority": 80,
     },
 ]
-
 
 def seed_default_aliases(get_db_fn, force: bool = False) -> int:
     """Insert seed aliases if the table is empty (or force=True)."""

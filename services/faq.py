@@ -806,14 +806,20 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             r'\b(vision|mission|philosophy|core values|logo|hymn|founded|'
             r'original name|brief history|want to become|envisions|future of|'
             r'grounds? for (suspension|expulsion)|behavioral code|'
-            r'(first|second|third)[ -]?degree|fraternity|sorority|'
-            r'demerit|merit points?|max(imum)?\s*fine|appeal|'
+            r'(first|second|third)[ -]?degree|fraternity|sorority|hazing|'
+            r'demerit|merit points?|max(imum)?\s*fine|appeal|probation|'
             r'unchaperoned|chaperone|hike|cook(ing)? (in|inside)|visit other dorms|'
             r'anti.?bullying|safe spaces|ra.?11?3?13|ra.?10627|11313|10627|'
             r'senior high strands?|heaviest demerit|'
             r'food .{0,20}(cafeteria|not allowed)|'
             r'how bad is a (second|third)|what.?s a (second|third)[ -]?degree|'
-            r'jewelry|necklace|dress code)\b',
+            r'jewelry|necklace|dress code|slippers|crop tops|short pants|'
+            r'pda|public display|curfew|worship absences|miss worship|'
+            r'macias|founders?|something about 1975|campuses|main campus|'
+            r'incomplete grades?|residency|drug test|sibling|family scholar|'
+            r'dormitory fees?|tesda|computer science|information technology|'
+            r'business administration|week of spiritual|morphe|2025 edition|'
+            r'social media|ellen white)\b',
             question, re.I,
         ))
         # Pure handbook topics must never be answered from FAQ/schedule —
