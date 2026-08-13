@@ -190,6 +190,23 @@ _FORCED_TOPIC_MATCHES = [
     (r'\b(jewelry|necklace|ring|earrings|piercing)\b',
      ['dress and appearance', 'first-degree', 'first degree'],
      ['necklace', 'earrings', 'jewelry', 'wedding ring']),
+    # "campus"/"campuses" was already treated as a real topic elsewhere in
+    # this file (HANDBOOK_KEYWORDS, _QUERY_EXPANSIONS, topic_title_cues
+    # below) but had no forced-topic entry, so it fell through to generic
+    # fuzzy retrieval — which grabbed unrelated chunks (Brief History,
+    # Dress and Appearance, Mission) that merely shared generic words
+    # ("college", "page", "PAC") and let the LLM stitch them into a
+    # hallucinated non-sequitur. Pin it to MEETINGS, the section that
+    # actually states the campus address.
+    # NOTE: deliberately does NOT match the bare word "campus" alone -- that
+    # also matched ordinary "is X allowed on campus?" conduct questions and
+    # force-hijacked them to this section too. Only phrasing that actually
+    # asks about the campus's identity/location should force this topic.
+    (r'\b(campuses|other campus(es)?|how many campuses|campus locations?|'
+     r'where (is|are) the (main )?campus(es)?|which campus(es)?|'
+     r'which locations?|names? of the (other )?campuses?|main campus)\b',
+     ['meetings'],
+     ['held within the campus', 'regular meetings of the members']),
     (r'\b(dress code|how .{0,15}dress|proper attire|uniform)\b',
      ['dress and appearance', 'school uniform', 'dress'],
      ['uniform', 'attire', 'appearance']),
@@ -415,6 +432,29 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8) -> List[Dict]:
             hid = int(r[0])
             if hid not in rows_by_id:
                 rows_by_id[hid] = (r[0], r[1], r[2], r[3], r[4], r[5], best_ts * 0.18)
+
+        # Guarantee forced-topic chunks are always candidates, regardless of
+        # whether they cleared the title_hits pre-filter above. BUG: that
+        # pre-filter caps candidates at max_chunks*4 using a cheap floor
+        # score, and the forced-topic boost below only RE-SCORES chunks
+        # already inside that cutoff -- it can never pull in a chunk that
+        # got crowded out beforehand. Scanning all_rows directly for
+        # forced-topic matches and injecting them here, before any
+        # truncation, closes that gap.
+        forced_early = _forced_topic_for(question)
+        if forced_early:
+            title_needles_e, content_needles_e = forced_early
+            for r in all_rows:
+                title_l3 = (r[2] or '').lower()
+                hid = int(r[0])
+                if hid in rows_by_id:
+                    continue
+                title_hit3 = any(n in title_l3 for n in title_needles_e)
+                if not title_hit3 and content_needles_e:
+                    blob3 = f"{title_l3} {(r[5] or '')}".lower()
+                    title_hit3 = any(n.lower() in blob3 for n in content_needles_e)
+                if title_hit3:
+                    rows_by_id[hid] = (r[0], r[1], r[2], r[3], r[4], r[5], 0.05)
 
         if not rows_by_id:
             scored = []

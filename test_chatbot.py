@@ -10,7 +10,6 @@ SESSION_ID = f"handbook_only_test_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 DELAY_BETWEEN_QUESTIONS = 1.5
 # ====================================================
 
-# Only handbook / identity / discipline / legal questions
 QUESTIONS = [
     # ========== Identity / History ==========
     "What's the real full name of this school and where are the campuses?",
@@ -18,6 +17,11 @@ QUESTIONS = [
     "When did this school start and who founded it?",
     "What does the school logo mean?",
     "Who wrote the PAC hymn?",
+    "Tell me more about the founders...",
+    "Something about 1975?",
+    "Where exactly is the main campus again?",
+    "Is there anything about the Macias family?",
+    "What happened around the time it became a college?",
 
     # ========== Philosophy / Vision / Mission / Values ==========
     "What's the school's philosophy about education?",
@@ -26,6 +30,10 @@ QUESTIONS = [
     "What are the core values again? The PAC ones.",
     "What is the vision of PAC in simple words?",
     "Tell me about the school philosophy again.",
+    "Can you explain the P-A-C values more?",
+    "Is there something about Christ-centered living?",
+    "What are the goals students should achieve by graduation?",
+    "Any mention of Ellen White or Education book?",
 
     # ========== Merit / Demerit system ==========
     "How many points do we start with each semester?",
@@ -37,6 +45,10 @@ QUESTIONS = [
     "What happens if you get 20 or more demerits?",
     "Is there a maximum fine for violations?",
     "How long do I have to appeal a disciplinary decision?",
+    "What if someone gets demerits near the end of the term?",
+    "Is probation automatic at some point?",
+    "Can you stay on probation forever?",
+    "What about community service instead of fine?",
 
     # ========== Dress / Conduct / Campus rules ==========
     "Can we wear jewelry like rings or necklaces?",
@@ -45,16 +57,44 @@ QUESTIONS = [
     "Are we allowed to visit other dorms freely?",
     "Can we cook inside the dorm?",
     "What food is not allowed in the cafeteria?",
+    "Something about curfew hours?",
+    "Are slippers allowed on campus?",
+    "What about short pants or crop tops?",
+    "Is public display of affection okay?",
+    "Any rules about music or songs on campus?",
+    "What happens if you miss worship too many times?",
 
     # ========== Legal / Policies ==========
     "Is there an anti-bullying law in the handbook?",
     "What's the Safe Spaces Act and its RA number?",
+    "Anything about gender-based sexual harassment?",
+    "Is there a committee for Safe Spaces things?",
+    "What about RA 11313?",
+    "Any rules on social media use?",
+    "Is hazing allowed or mentioned?",
+    "What about sexual harassment policy?",
 
     # ========== Programs ==========
     "What programs or courses does PAC actually offer?",
     "What senior high strands are available?",
-]
+    "Is there Nursing or Midwifery?",
+    "Any TESDA courses?",
+    "Which campuses offer IT or Computer Science?",
+    "Do they have Education programs?",
+    "Is Business Administration available?",
 
+    # ========== Extra vague / date-related / follow-ups ==========
+    "Something about the 2025 edition?",
+    "Any updates for school year 2025-2026?",
+    "What about the Week of Spiritual Emphasis?",
+    "Is there a deadline for incomplete grades?",
+    "How long to complete an incomplete?",
+    "Any policy from MORPHE of 2008?",
+    "What's the residency limit for finishing a degree?",
+    "Something about drug test for first years?",
+    "Are there scholarships for siblings?",
+    "What about dormitory fees or charges?",
+]
 # Phrases that usually mean the bot failed / fell back / only disambiguated
 FALLBACK_PHRASES = [
     "i don't have a confirmed answer",

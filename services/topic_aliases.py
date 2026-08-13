@@ -267,6 +267,34 @@ _SEED_ALIASES: List[dict] = [
         "source_priority": "handbook_only",
         "priority": 85,
     },
+    {
+        "topic_key": "campus_location",
+        # "campus"/"campuses" is already treated as a real topic elsewhere
+        # (HANDBOOK_KEYWORDS, _QUERY_EXPANSIONS, topic_title_cues in
+        # handbook.py) but had no forced-topic entry, so questions like
+        # "are there any campuses in PAC" / "which locations" fell through
+        # to generic fuzzy retrieval, which grabbed unrelated chunks
+        # (Brief History, Dress and Appearance, Mission — all of which
+        # happen to share generic words like "college"/"page"/"PAC") and
+        # let the LLM stitch them into a hallucinated non-sequitur
+        # ("Philippines is in the Pacific region... so yes, there's a
+        # campus in the Pacific region"). Pin it to the MEETINGS section,
+        # which is the chunk that actually states the campus address.
+        # NOTE: deliberately does NOT match the bare word "campus" alone --
+        # that also matched ordinary "is X allowed on campus?" conduct
+        # questions and force-hijacked them to this section too. Only
+        # phrasing that actually asks about the campus's identity/location
+        # should force this topic.
+        "match_pattern": r"\b(campuses|other campus(es)?|how many campuses|"
+                          r"campus locations?|where (is|are) the (main )?campus(es)?|"
+                          r"which campus(es)?|which locations?|"
+                          r"names? of the (other )?campuses?|main campus)\b",
+        "title_needles": ["meetings"],
+        "content_needles": ["held within the campus", "regular meetings of the members"],
+        "source_priority": "handbook_only",
+        "priority": 90,
+        "notes": "Q: are there any campuses / which locations / campus names",
+    },
 ]
 
 
