@@ -579,6 +579,21 @@ def mass_insert_faqs(get_db_fn: Callable, faqs: List[Dict], retire_previous: boo
     """
     Insert FAQ-style handbook pairs into the faq table.
     Sets source='handbook'. Optionally retires previous handbook FAQs first.
+
+    BUG FIX: the faq table has no is_active column (only handbook_chunks
+    does -- see full_schema.sql, `faq` only has `source`). The old
+    primary INSERT referenced is_active and always failed, silently
+    falling back to a query that also dropped `source` -- every
+    handbook-generated FAQ ended up tagged source='manual' (the column
+    default) instead of 'handbook'. That meant retire_previous's
+    `WHERE source = 'handbook'` could never find last run's rows even if
+    its is_active UPDATE hadn't *also* been broken by the same missing
+    column -- so every re-ingest of an updated handbook PDF just added a
+    whole new generation of FAQs on top of the old, increasingly
+    outdated ones, forever, degrading answer accuracy over time. Fixed
+    to only touch columns that actually exist, tag rows correctly, and
+    hard-delete the previous handbook generation before inserting the
+    new one (no soft-delete column exists to flip instead).
     """
     if not faqs:
         return 0
@@ -588,10 +603,9 @@ def mass_insert_faqs(get_db_fn: Callable, faqs: List[Dict], retire_previous: boo
     try:
         if retire_previous:
             try:
-                cur.execute("UPDATE faq SET is_active = 0 WHERE source = 'handbook'")
-            except Exception:
-                # table may not have is_active — ignore
-                pass
+                cur.execute("DELETE FROM faq WHERE source = 'handbook'")
+            except Exception as e:
+                logger.warning("mass_insert_faqs: could not retire previous handbook FAQs: %s", e)
         for f in faqs:
             q = (f.get('question') or '').strip()
             a = (f.get('answer') or '').strip()
@@ -602,22 +616,12 @@ def mass_insert_faqs(get_db_fn: Callable, faqs: List[Dict], retire_previous: boo
             priority = int(f.get('priority') or 5)
             try:
                 cur.execute("""
-                    INSERT INTO faq
-                      (question, answer, topic, keywords, priority_score, source, is_active)
-                    VALUES (%s, %s, %s, %s, %s, 'handbook', 1)
+                    INSERT INTO faq (question, answer, topic, keywords, priority_score, source)
+                    VALUES (%s, %s, %s, %s, %s, 'handbook')
                 """, (q[:500], a[:4000], topic, kw, priority))
                 inserted += 1
             except Exception as e:
-                # fallback if is_active or source columns differ
-                logger.warning("mass_insert_faqs row failed: %s", e)
-                try:
-                    cur.execute("""
-                        INSERT INTO faq (question, answer, topic, keywords, priority_score)
-                        VALUES (%s, %s, %s, %s, %s)
-                    """, (q[:500], a[:4000], topic, kw, priority))
-                    inserted += 1
-                except Exception as e2:
-                    logger.error("mass_insert_faqs fallback failed: %s", e2)
+                logger.error("mass_insert_faqs row failed: %s", e)
         conn.commit()
         logger.info("Mass-inserted %d handbook FAQs", inserted)
         return inserted

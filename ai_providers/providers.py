@@ -15,7 +15,13 @@ from config import (
     AI_PROVIDER, GROQ_API_KEY, GROQ_MODEL,
     GEMINI_API_KEY, GEMINI_MODEL,
 )
-INGEST_GROQ_MODEL = os.getenv("INGEST_GROQ_MODEL", "llama-3.1-8b-instant")
+# BUG FIX: llama-3.1-8b-instant shuts down 08/16/26 (Groq's own
+# deprecation page: https://console.groq.com/docs/deprecations) --
+# Groq's recommended replacement is openai/gpt-oss-20b. Same account,
+# same GROQ_API_KEY(s) -- no new API registration needed, just the model
+# string. If INGEST_GROQ_MODEL is set as an env var in your deployment,
+# update it there too; this default only applies when it's unset.
+INGEST_GROQ_MODEL = os.getenv("INGEST_GROQ_MODEL", "openai/gpt-oss-20b")
 from .circuit_breaker import circuit_breaker
 from .metrics import model_metrics
 

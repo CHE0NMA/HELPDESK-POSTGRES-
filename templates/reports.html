@@ -161,10 +161,17 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
       <i class="bi bi-flag"></i> Reports
       <span class="nav-badge badge-yellow" id="reportsBadge" style="display:none"></span>
     </a>
+    <a href="/corrections" class="nav-link"><i class="bi bi-wrench-adjustable"></i> Corrections</a>
     <div class="nav-section">Analytics</div>
     <a href="/analytics" class="nav-link"><i class="bi bi-graph-up"></i> System Analytics</a>
-    <a href="/ratings" class="nav-link"><i class="bi bi-star-half"></i> Chat Ratings</a>
-    <a href="/alert_log" class="nav-link"><i class="bi bi-bell"></i> Alert Log</a>
+    <a href="/ratings" class="nav-link">
+      <i class="bi bi-star-half"></i> Chat Ratings
+      <span class="nav-badge badge-yellow" id="ratingsBadge" style="display:none"></span>
+    </a>
+    <a href="/alert_log" class="nav-link">
+      <i class="bi bi-bell"></i> Alert Log
+      <span class="nav-badge badge-red" id="alertsBadge" style="display:none"></span>
+    </a>
   </nav>
   <div class="sidebar-footer">
     <button type="button" class="theme-toggle-sidebar" id="themeToggle" title="Toggle theme">
@@ -241,7 +248,10 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
                 <button class="act-btn create-faq" title="Create FAQ from this" onclick='createFAQFromReport({{ f.question|tojson }}, {{ f.answer|tojson }})'>
                   <i class="bi bi-journal-plus"></i>
                 </button>
-                <button class="act-btn del" title="Delete" onclick="confirmDelete({{ f.id }})">
+                <button class="act-btn fix" title="Fix this answer directly" onclick='fixAnswerFromReport({{ f.id|tojson }}, {{ f.question|tojson }})'>
+                  <i class="bi bi-wrench-adjustable"></i>
+                </button>
+                <button class="act-btn del" title="Delete" onclick="confirmDelete({{ f.id|tojson }})">
                   <i class="bi bi-trash"></i>
                 </button>
               </div>
@@ -356,6 +366,31 @@ function createFAQFromReport(question, answer) {
   sessionStorage.setItem('prefill_answer', answer);
   window.location.href = '/dashboard?action=create_faq';
   showToast('Redirecting to FAQ creation...', 'info');
+}
+
+async function fixAnswerFromReport(reportId, question) {
+  const correct = prompt(
+    `What's the correct answer for:\n\n"${question}"\n\n` +
+    `This will be saved permanently — the same question will always be ` +
+    `answered from this from now on, reworded naturally per language.`
+  );
+  if (!correct || !correct.trim()) return;
+  try {
+    const res = await fetch('/api/admin/add_correction', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+      body: JSON.stringify({ question, answer: correct.trim(), source_report_id: reportId })
+    });
+    const d = await res.json();
+    if (res.ok && d.success) {
+      showToast('Correction saved — this question is fixed from now on', 'success');
+      setTimeout(() => location.reload(), 800);
+    } else {
+      showToast('Failed to save correction: ' + (d.error || 'Unknown error'), 'danger');
+    }
+  } catch (err) {
+    showToast('Error: ' + err.message, 'danger');
+  }
 }
 
 let deleteId = null;

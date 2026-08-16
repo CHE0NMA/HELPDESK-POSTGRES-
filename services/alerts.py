@@ -21,6 +21,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from database import get_db
+from services.tz import ph_now  # BUG FIX: was comparing against server-UTC datetime.now() -- see services/tz.py
 
 logger = logging.getLogger("pac_helpdesk.alerts")
 
@@ -130,7 +131,7 @@ def check_stale_faqs():
             WHERE last_updated < NOW() - INTERVAL '90 days' AND reviewed_flag = 0
         """)
         for faq_id, question, last_updated in cur.fetchall():
-            days_old = (datetime.now() - last_updated).days if last_updated else 90
+            days_old = (ph_now() - last_updated).days if last_updated else 90
             if days_old > 180:
                 send_stale_faq_alert(faq_id, question, days_old)
             cur.execute("""

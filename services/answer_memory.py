@@ -29,8 +29,17 @@ def _norm_key(q: str, lang: str) -> str:
     return hashlib.md5(f"{normalize_question(q)}|{lang}".encode()).hexdigest()
 
 
-def get_cached_answer(get_db_fn, question: str, detected_lang: str = "english") -> Optional[str]:
-    """Return a previously successful grounded answer, or None."""
+def get_cached_answer(get_db_fn, question: str, detected_lang: str = "english") -> Optional[dict]:
+    """Return {'answer': str, 'faq_id': int|None} for a previously
+    successful grounded answer, or None.
+
+    BUG FIX: used to return a bare answer string, so callers had no way
+    to know the cached answer's original faq_id -- services/faq.py's
+    find_answer() was hardcoding faq_id=None on every cache hit, which
+    silently starved promote_high_frequency_faqs() of usage data for
+    exactly the FAQs popular enough to be getting cached. Now returns
+    faq_id alongside the text so it can keep flowing into chat_history.
+    """
     if not question:
         return None
     qn = normalize_question(question)
@@ -40,7 +49,7 @@ def get_cached_answer(get_db_fn, question: str, detected_lang: str = "english") 
         try:
             cur.execute(
                 """
-                SELECT answer_text, id FROM answer_success_cache
+                SELECT answer_text, id, faq_id FROM answer_success_cache
                 WHERE question_norm = %s AND detected_lang = %s
                 LIMIT 1
                 """,
@@ -58,7 +67,7 @@ def get_cached_answer(get_db_fn, question: str, detected_lang: str = "english") 
                 (row[1],),
             )
             conn.commit()
-            return row[0]
+            return {"answer": row[0], "faq_id": row[2]}
         finally:
             cur.close()
             conn.close()

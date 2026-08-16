@@ -21,6 +21,7 @@ import json
 import logging
 import re
 from datetime import datetime, timedelta
+from services.tz import ph_today  # BUG FIX: server clock is UTC, school is Asia/Manila (UTC+8) -- see services/tz.py
 from typing import Dict, List, Optional, Tuple
 
 from fuzzywuzzy import fuzz
@@ -35,22 +36,44 @@ from services.grounding import answer_is_grounded
 logger = logging.getLogger("pac_helpdesk.dates")
 
 WEEKDAY_NAMES = {
-    'monday': 0, 'lunes': 0, 'tuesday': 1, 'martes': 1,
-    'wednesday': 2, 'miyerkules': 2, 'miyerkoles': 2, 'myerkules': 2, 'wed': 2,
-    'thursday': 3, 'huwebes': 3, 'thu': 3, 'thurs': 3,
-    'friday': 4, 'biyernes': 4, 'fri': 4,
-    'saturday': 5, 'sabado': 5, 'sat': 5,
-    'sunday': 6, 'linggo': 6, 'domingo': 6, 'sun': 6,
+    'monday': 0, 'lunes': 0,
+    'tuesday': 1, 'martes': 1,
+    'wednesday': 2, 'miyerkules': 2, 'miyerkoles': 2, 'myerkules': 2, 'myerkoles': 2, 'wed': 2,
+    'thursday': 3, 'huwebes': 3, 'huebes': 3, 'thu': 3, 'thurs': 3,
+    'friday': 4, 'biyernes': 4, 'byernes': 4, 'fri': 4,
+    'saturday': 5, 'sabado': 5, 'sabadu': 5, 'sat': 5,
+    'sunday': 6, 'linggo': 6, 'dominggo': 6, 'domingo': 6, 'sun': 6,
 }
 TOMORROW_WORDS = [
     'tomorrow', 'tommorow', 'tomorow', 'tommorrow', '2morrow',
-    'bukas', 'ugma', 'ugmang', 'ugma nga adlaw',
+    'bukas', 'ugma', 'ugmang', 'ugma nga adlaw', 'buwas', 'buwas na',
+    'sa bukas', 'sa ugma', 'sa umaga bukas',
 ]
-TODAY_WORDS = ['today', 'todya', 'tody', 'ngayon', 'ngayong', 'karon', 'karong']
-YESTERDAY_WORDS = ['yesterday', 'yesturday', 'kahapon', 'gahapon']
+TODAY_WORDS = [
+    'today', 'todya', 'tody', '2day',
+    'ngayon', 'ngayong', 'ngaon', 'ngaung',
+    'karon', 'karong', 'karun', 'karung', 'niining orasa', 'ron',
+]
+YESTERDAY_WORDS = [
+    'yesterday', 'yesturday', 'yesteday',
+    'kahapon', 'kahapong', 'gahapon', 'kagahapon', 'kaganina',
+]
+LAST_WEEK_WORDS = [
+    'last week', 'previous week', 'past week', 'the week before',
+    'nakaraang linggo', 'linggong nakaraan', 'nakalipas na linggo',
+    'niaging semana', 'miaging semana', 'niabot nga semana', 'nilabay nga semana',
+    'sa milabay nga semana', 'kaniadtong semana',
+]
+LAST_MONTH_WORDS = [
+    'last month', 'previous month', 'past month', 'the month before',
+    'nakaraang buwan', 'buwang nakaraan', 'nakalipas na buwan',
+    'niaging bulan', 'miaging buwan', 'nilabay nga bulan',
+    'sa milabay nga bulan', 'kaniadtong bulan',
+]
 
 DATE_KEYWORDS = [
-    'today', 'tomorrow', 'this week', 'next week', 'this month', 'next month',
+    'today', 'tomorrow', 'this week', 'next week', 'last week', 'previous week',
+    'this month', 'next month', 'last month', 'previous month',
     'open today', 'open tomorrow', 'closed today', 'closed tomorrow',
     'office open', 'office closed', 'school open', 'school closed',
     'class today', 'class tomorrow', 'classes today', 'classes tomorrow',
@@ -58,14 +81,20 @@ DATE_KEYWORDS = [
     'is the registrar', 'is there school', 'are there classes',
     'will there be', 'is it open', 'is it closed', 'have class',
     'what day', 'what date', 'schedule for',
+    # Tagalog
     'bukas', 'ngayon', 'ngayong', 'may pasok', 'walang pasok',
     'may klase', 'walang klase', 'bukas ang', 'sarado ang',
     'bukas ba', 'ngayon ba', 'may pasok ba', 'araw na ito', 'susunod na linggo',
-    'ngayong linggo', 'bukas ba ang', 'sarado ba ang',
+    'ngayong linggo', 'bukas ba ang', 'sarado ba ang', 'nakaraang linggo',
+    'nakaraang buwan', 'kahapon', 'kailan', 'anong araw', 'anong petsa',
+    # Bisaya / Cebuano
     'ugma', 'karon', 'karong', 'abli', 'sirado',
     'walay klase', 'aduna bay klase', 'abli ba', 'sirado ba',
     'karong adlawa', 'ugmang adlaw', 'niining semanaha', 'sunod nga semana',
     'karon nga semana', 'karon nga week', 'ning semana', 'sunod nga week',
+    'miaging semana', 'niaging semana', 'miaging bulan', 'niaging bulan',
+    'kagahapon', 'kanus-a', 'unsa nga adlaw', 'unsa nga petsa',
+    'naa bay klase', 'naay klase', 'unsa may klase', 'aduna bay pasok',
     'holiday', 'holidays', 'no class day', 'no classes day',
     'class suspended', 'classes suspended', 'class suspension',
     'school suspension', 'walay pasok', 'pasok ba',
@@ -74,14 +103,14 @@ DATE_KEYWORDS = [
 OPEN_CLOSED_PATTERNS = [
     r'\b(open|closed|close)\b',
     r'\b(sarado|abli|sirado)\b',
-    r'\b(may pasok|walang pasok|may klase|walang klase|walay klase)\b',
+    r'\b(may pasok|walang pasok|may klase|walang klase|walay klase|naa bay klase|naay klase)\b',
     r'\bdo we have\b.{0,15}\b(class|classes|pasok)\b',
     r'\bis there\b.{0,15}\b(class|classes|pasok)\b',
     r'\bare there\b.{0,15}\b(class|classes)\b',
     r'\bwill there be\b.{0,15}\b(class|classes)\b',
     r'\b(is|are)\b.{0,25}\b(open|closed)\b',
     r'\b(office|school|registrar|business office|cashier)\b.{0,20}\b(available|open|closed)\b',
-    r'\bschedule\b.{0,30}\b(for|on|this|next)\b',
+    r'\bschedule\b.{0,30}\b(for|on|this|next|last)\b',
     r'\b(registrar|business office|cashier)\b.{0,20}\b(open|closed|open ba|sarado)\b',
 ]
 
@@ -98,7 +127,9 @@ def is_date_question(question: str, ctx=None) -> bool:
 
     if (_has_day_word(q, TOMORROW_WORDS)
             or _has_day_word(q, TODAY_WORDS)
-            or _has_day_word(q, YESTERDAY_WORDS)):
+            or _has_day_word(q, YESTERDAY_WORDS)
+            or _has_day_word(q, LAST_WEEK_WORDS)
+            or _has_day_word(q, LAST_MONTH_WORDS)):
         return True
 
     has_weekday = any(
@@ -120,6 +151,27 @@ def is_date_question(question: str, ctx=None) -> bool:
     ):
         return True
 
+    # BUG FIX: the "how about X" follow-up check above only fired when a
+    # WEEKDAY name was present, so a bare range follow-up like "how about
+    # last week" or "and holidays?" right after a schedule answer fell
+    # through entirely and got treated as a brand new (non-date)
+    # question -- landing on handbook retrieval instead of continuing
+    # the date conversation. Mirrors the weekday check but for
+    # short/relative-range follow-ups instead of specific weekdays.
+    if ctx and getattr(ctx, 'last_schedule_query', None):
+        is_range_word = (
+            _has_day_word(q, LAST_WEEK_WORDS) or _has_day_word(q, LAST_MONTH_WORDS)
+            or re.search(r'\b(this|next|last|previous)\s+(week|month)\b', q, re.I)
+            or 'holiday' in q or 'holidays' in q
+        )
+        if is_range_word:
+            return True
+        if len(q.split()) <= 6 and re.search(
+            r'\b(how\s+about|what\s+about|and|then|kaya|paano\s+naman|ug|unya)\b',
+            q, re.I,
+        ):
+            return True
+
     schedule_context = (
         fuzzy_contains(q, sched.CLASS_KEYWORDS)
         or fuzzy_contains(q, sched.OFFICE_KEYWORDS)
@@ -136,7 +188,7 @@ def is_date_question(question: str, ctx=None) -> bool:
         if re.search(p, q, re.I):
             return True
 
-    if re.search(r'\b(this|next)\s+(week|month)\b', q, re.I) and schedule_context:
+    if re.search(r'\b(this|next|last|previous)\s+(week|month)\b', q, re.I) and schedule_context:
         return True
 
     # Class / weather suspension only — NOT disciplinary "grounds for suspension".
@@ -256,7 +308,7 @@ def _next_weekday_from_date(start_date, target_weekday: int):
 def parse_date_with_ai(question: str) -> Optional[Tuple[datetime.date, str, str]]:
     if circuit_breaker.is_open():
         return None
-    today = datetime.now().date()
+    today = ph_today()
     prompt = f"""{nlg.now_context()}
 Today's date is {today.strftime('%B %d, %Y')} ({today.strftime('%A')}), year {today.year}.
 
@@ -301,7 +353,7 @@ Only respond with the JSON, nothing else."""
 
 def parse_date_with_regex(question: str) -> Tuple[datetime.date, str, str]:
     q = question.lower()
-    today = datetime.now().date()
+    today = ph_today()
     current_year, next_year = today.year, today.year + 1
 
     if re.search(
@@ -314,6 +366,22 @@ def parse_date_with_regex(question: str) -> Tuple[datetime.date, str, str]:
                 target = _next_weekday_from_date(next_week, wd)
                 return target, 'specific', target.strftime('%B %d, %Y')
         return next_week, 'next_week', 'next week'
+
+    if _has_day_word(q, LAST_WEEK_WORDS):
+        last_week_start = today - timedelta(days=7)
+        for name, wd in WEEKDAY_NAMES.items():
+            if re.search(rf'\b{name}\b', q, re.IGNORECASE):
+                # Nearest occurrence of that weekday within the 7 days
+                # ending yesterday, not next week's or today's.
+                target = last_week_start + timedelta(days=(wd - last_week_start.weekday()) % 7)
+                return target, 'specific', target.strftime('%B %d, %Y')
+        return last_week_start, 'last_week', 'last week'
+
+    if _has_day_word(q, LAST_MONTH_WORDS):
+        first_this_month = today.replace(day=1)
+        last_month_end = first_this_month - timedelta(days=1)
+        last_month_start = last_month_end.replace(day=1)
+        return last_month_start, 'last_month', last_month_start.strftime('%B %Y')
 
     if re.search(r'(this\s+week|ngayong\s+linggo|karong\s+semana)', q, re.IGNORECASE):
         for name, wd in WEEKDAY_NAMES.items():
@@ -493,7 +561,7 @@ def _dept_status_for_scope(raw: Dict, scope: str) -> Tuple[str, Optional[str]]:
 
 
 def gather_single_day_facts(query_date, dept: str = 'all') -> Dict:
-    today = datetime.now().date()
+    today = ph_today()
     facts: Dict = {
         'date': query_date.strftime('%A, %B %d, %Y'),
         'today': today.strftime('%A, %B %d, %Y'),
@@ -523,7 +591,7 @@ def gather_single_day_facts(query_date, dept: str = 'all') -> Dict:
 
 
 def gather_range_facts(query_date, date_type: str, dept: str = 'all') -> Dict:
-    if date_type in ('this_month', 'next_month'):
+    if date_type in ('this_month', 'next_month', 'last_month'):
         first = query_date.replace(day=1)
         last = (first + timedelta(days=32)).replace(day=1) - timedelta(days=1)
         # BUG FIX: get_events_for_week() previously always used
@@ -723,7 +791,7 @@ def answer_date_question(
             return None
 
     # --- range branch ---
-    if date_type in ('this_week', 'next_week', 'this_month', 'next_month'):
+    if date_type in ('this_week', 'next_week', 'last_week', 'this_month', 'next_month', 'last_month'):
         facts = gather_range_facts(query_date, date_type, dept)
         canonical = build_canonical_range_sentence(facts)
         natural = nlg.speak_naturally(

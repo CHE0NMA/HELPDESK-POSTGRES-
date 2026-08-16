@@ -640,7 +640,17 @@ def api_admin_realtime():
               AND created_at > NOW() - INTERVAL '7 days'
             """
         )
-        reports = cur.fetchone()[0]
+        sat_reports = cur.fetchone()[0]
+
+        # BUG FIX: reports badge used to only count satisfaction_feedback,
+        # missing everything submitted through the detailed report flow
+        # (routes/chat.py's /feedback, routes/api.py's /api/report), which
+        # lands in bad_feedback. Matches the merged /reports page.
+        cur.execute(
+            "SELECT COUNT(*) FROM bad_feedback WHERE created_at > NOW() - INTERVAL '7 days'"
+        )
+        bad_reports = cur.fetchone()[0]
+        reports = sat_reports + bad_reports
 
         cur.execute(
             "SELECT COUNT(*) FROM faq_review_queue WHERE status = 'pending'"
@@ -652,11 +662,28 @@ def api_admin_realtime():
         )
         drafts = cur.fetchone()[0]
 
+        # New badges: alerts raised in the last 24h ("new" since
+        # alert_history has no read/unread flag to key off of), and chat
+        # ratings of 1-2 stars in the last 7 days that haven't been looked
+        # at yet -- both are "needs a human to glance at this" signals,
+        # same spirit as unanswered/reports.
+        cur.execute(
+            "SELECT COUNT(*) FROM alert_history WHERE created_at > NOW() - INTERVAL '24 hours'"
+        )
+        alerts_new = cur.fetchone()[0]
+
+        cur.execute(
+            "SELECT COUNT(*) FROM chat_ratings WHERE rating <= 2 AND created_at > NOW() - INTERVAL '7 days'"
+        )
+        low_ratings = cur.fetchone()[0]
+
         return jsonify({
             "unanswered": unanswered,
             "reports": reports,
             "review_queue": review,
             "pending_drafts": drafts,
+            "alerts_new": alerts_new,
+            "low_ratings": low_ratings,
             "total": unanswered + reports + review + drafts,
             "ts": datetime.now().isoformat(),
         })

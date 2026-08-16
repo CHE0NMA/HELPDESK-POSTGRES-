@@ -16,6 +16,7 @@
     holidays: '/holidays',
     handbook: '/handbook',
     reports: '/reports',
+    corrections: '/corrections',
     analytics: '/analytics',
     ratings: '/ratings',
     alert_log: '/alert_log',
@@ -121,13 +122,21 @@
   window.toggleSidebar = toggleSidebar;
   window.closeSidebar = closeSidebar;
 
-  const lastBadge = { unanswered: null, reports: null };
+  const BADGE_KEY = {
+    unansweredBadge: 'unanswered',
+    unansweredBadge2: 'unanswered',
+    reportsBadge: 'reports',
+    alertsBadge: 'alerts',
+    ratingsBadge: 'ratings',
+  };
+  const lastBadge = { unanswered: null, reports: null, alerts: null, ratings: null };
 
   function setBadge(id, count) {
     const el = document.getElementById(id);
     if (!el) return;
     const n = Number(count) || 0;
-    const prev = lastBadge[id === 'reportsBadge' ? 'reports' : 'unanswered'];
+    const key = BADGE_KEY[id] || id;
+    const prev = lastBadge[key];
     el.textContent = n;
     el.style.display = n > 0 ? 'inline-block' : 'none';
     if (prev !== null && prev !== n && n > 0) {
@@ -136,8 +145,7 @@
       el.classList.add('pulse');
       setTimeout(function () { el.classList.remove('pulse'); }, 600);
     }
-    if (id === 'unansweredBadge' || id === 'unansweredBadge2') lastBadge.unanswered = n;
-    if (id === 'reportsBadge') lastBadge.reports = n;
+    lastBadge[key] = n;
   }
 
   async function fetchJSON(url) {
@@ -150,11 +158,15 @@
     if (document.hidden) return;
     let unanswered = 0;
     let reports = 0;
+    let alertsNew = 0;
+    let lowRatings = 0;
     try {
       try {
         const d = await fetchJSON('/api/admin/realtime');
         unanswered = d.unanswered || 0;
         reports = d.reports || 0;
+        alertsNew = d.alerts_new || 0;
+        lowRatings = d.low_ratings || 0;
       } catch (_) {
         const [u, rep] = await Promise.all([
           fetchJSON('/unanswered_count').catch(function () { return { count: 0 }; }),
@@ -162,16 +174,25 @@
         ]);
         unanswered = u.count || 0;
         reports = rep.count || 0;
+        // No standalone endpoints for these two yet — they only come
+        // through /api/admin/realtime, so they stay 0 if that call fails.
       }
       setBadge('unansweredBadge', unanswered);
       setBadge('unansweredBadge2', unanswered);
       setBadge('reportsBadge', reports);
+      setBadge('alertsBadge', alertsNew);
+      setBadge('ratingsBadge', lowRatings);
 
       const su = $('#statUnanswered');
       if (su) su.textContent = unanswered;
 
       if (typeof window.onAdminLiveUpdate === 'function') {
-        window.onAdminLiveUpdate({ unanswered: unanswered, reports: reports });
+        window.onAdminLiveUpdate({
+          unanswered: unanswered,
+          reports: reports,
+          alertsNew: alertsNew,
+          lowRatings: lowRatings,
+        });
       }
     } catch (e) {
       console.debug('admin live', e);
@@ -216,10 +237,11 @@
       nav('/holidays', 'calendar-event', 'Holidays &amp; Events') +
       nav('/handbook', 'journal-bookmark-fill', 'Student Handbook') +
       nav('/reports', 'flag', 'Reports', 'reportsBadge', 'badge-yellow') +
+      nav('/corrections', 'wrench-adjustable', 'Corrections') +
       '<div class="nav-section">Analytics</div>' +
       nav('/analytics', 'graph-up', 'System Analytics') +
-      nav('/ratings', 'star-half', 'Chat Ratings') +
-      nav('/alert_log', 'bell', 'Alert Log') +
+      nav('/ratings', 'star-half', 'Chat Ratings', 'ratingsBadge', 'badge-yellow') +
+      nav('/alert_log', 'bell', 'Alert Log', 'alertsBadge', 'badge-red') +
       '</nav>' +
       '<div class="sidebar-footer">' +
       '<button type="button" class="theme-toggle-sidebar" id="themeToggle" title="Toggle theme">' +

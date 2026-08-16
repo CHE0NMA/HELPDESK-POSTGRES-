@@ -270,21 +270,28 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "probation_20",
-        "match_pattern": r"\b(20 or more demerits|20\+ demerits|get 20|probation|demerits near the end)\b",
+        "match_pattern": r"\b(20 or more demerits|20\+ demerits|get 20|probation|"
+                          r"demerit.{0,25}(end|near).{0,15}(term|semester)|"
+                          r"(end|near).{0,15}(term|semester).{0,25}demerit|"
+                          r"malapit sa katapusan.{0,20}demerit|"
+                          r"hapit na matapos.{0,20}demerit)\b",
         "title_needles": ["disciplinary measures"],
         "content_needles": ["20 demerits", "placed on probation", "one semester"],
         "source_priority": "handbook_only",
-        "priority": 95,
+        "priority": 100,
     },
 
     # ---- Dress / Conduct ----
     {
         "topic_key": "jewelry_dress",
-        "match_pattern": r"\b(jewelry|necklace|ring|earrings|piercing|dress code|how .{0,15}dress|proper attire|slippers|short pants|crop tops)\b",
+        "match_pattern": r"\b(jewelry|necklace|ring|earrings|piercing|dress code|"
+                          r"how .{0,15}dress|proper attire|inappropriate attire|"
+                          r"slippers|short pants|crop tops|tsinelas|damit|"
+                          r"ano ang damit|pananamit|bisti)\b",
         "title_needles": ["dress and appearance", "first-degree", "first degree", "school uniform"],
         "content_needles": ["necklace", "earrings", "jewelry", "wedding ring", "slippers", "short pants", "crop tops", "uniform", "attire"],
         "source_priority": "handbook_only",
-        "priority": 95,
+        "priority": 100,
     },
     {
         "topic_key": "unchaperoned_hike",
@@ -336,11 +343,12 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "music_songs",
-        "match_pattern": r"\b(music|songs|questionable music|indecent songs)\b",
+        "match_pattern": r"\b(music|songs|questionable music|indecent songs|"
+                          r"rules? about music|musika|kanta|awit)\b",
         "title_needles": ["first-degree", "first degree"],
         "content_needles": ["questionable music", "indecent songs"],
         "source_priority": "handbook_only",
-        "priority": 90,
+        "priority": 100,
     },
     {
         "topic_key": "worship_absences",
@@ -388,11 +396,15 @@ _SEED_ALIASES: List[dict] = [
     # ---- Programs ----
     {
         "topic_key": "programs",
-        "match_pattern": r"\b(programs?|courses?).{0,25}(offer|available|does pac)|nursing|midwifery|business administration|education programs?|tesda|it or computer|computer science|information technology\b",
+        "match_pattern": r"\b(programs?|courses?|kurso).{0,25}(offer|available|does pac|meron)|"
+                          r"nursing|midwifery|business administration|education programs?|"
+                          r"tesda|it or computer|computer science|information technology|"
+                          r"bsba|bsit|bsba|bpa|beed|bsed|bped|"
+                          r"which campus(es)? .{0,20}offer\b",
         "title_needles": ["academic program offerings", "academic program", "program offerings"],
         "content_needles": ["bachelor of science", "bachelor of", "nursing", "midwifery", "stem", "humss", "tesda", "housekeeping", "caregiving", "main campus", "salug"],
         "source_priority": "handbook_only",
-        "priority": 100,
+        "priority": 105,
     },
     {
         "topic_key": "senior_high_strands",
@@ -414,11 +426,13 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "residency_limit",
-        "match_pattern": r"\b(residency (limit|requirement)|maximum .{0,15} years|finish(ing)? a degree|complete the program)\b",
-        "title_needles": ["admission policies", "residency"],
-        "content_needles": ["maximum of 5 years", "5 years to complete"],
+        "match_pattern": r"\b(residency (limit|requirement)|maximum .{0,15} years|"
+                          r"finish(ing)? a degree|complete the program|"
+                          r"how long .{0,20}(finish|complete|degree))\b",
+        "title_needles": ["admission policies", "residency", "guidelines for graduation and academic honor", "academic honors"],
+        "content_needles": ["maximum of 5 years", "5 years to complete", "residency"],
         "source_priority": "handbook_only",
-        "priority": 95,
+        "priority": 100,
     },
     {
         "topic_key": "drug_test",
@@ -594,15 +608,63 @@ def match_aliases(question: str, get_db_fn=None) -> List[dict]:
     return hits
 
 
+_hit_dedup_lock = Lock()
+_recent_alias_hits: Dict[tuple, float] = {}
+_HIT_DEDUP_WINDOW = 3.0  # seconds — handbook.py calls forced_topic_for()
+# several times (once early, once in main retrieval, and once per
+# candidate chunk inside chunk_is_relevant_hard's loop) for what is
+# logically ONE student question. Bumping hit_count on every call would
+# inflate it 5-20x per real question. This collapses those repeat calls
+# within one answer-pipeline run into a single increment, without
+# caching (and thus staling) the needles themselves — those are always
+# recomputed fresh.
+
+
+def _should_bump(alias_id: int, question: str) -> bool:
+    key = (alias_id, question)
+    now = time.time()
+    with _hit_dedup_lock:
+        last = _recent_alias_hits.get(key)
+        if last is not None and (now - last) < _HIT_DEDUP_WINDOW:
+            return False
+        _recent_alias_hits[key] = now
+        if len(_recent_alias_hits) > 2000:  # opportunistic cleanup
+            cutoff = now - _HIT_DEDUP_WINDOW
+            for k, ts in list(_recent_alias_hits.items()):
+                if ts < cutoff:
+                    del _recent_alias_hits[k]
+    return True
+
+
 def forced_topic_for(question: str, get_db_fn=None) -> Optional[Tuple[List[str], List[str]]]:
     """Drop-in replacement for handbook._forced_topic_for.
 
     Returns (title_needles, content_needles) from the highest-priority match.
+
+    BUG FIX: this now also records that the alias actually fired
+    (hit_count), which used to be dead code — apply_alias_boosts()/
+    bump_alias_hit() existed but nothing in handbook.py ever called them,
+    since handbook.py already does its own inline scoring boost and only
+    ever used this read-only lookup. That left hit_count permanently
+    stuck at 0 in the admin dashboard, with no way to see which aliases
+    were actually earning their keep. get_db_fn now also resolves to the
+    real database.get_db by default (handbook.py's caller never passed
+    one), matching the pattern match_aliases() already uses — otherwise
+    bump_alias_hit() would silently no-op forever.
     """
+    if get_db_fn is None:
+        try:
+            from database import get_db
+            get_db_fn = get_db
+        except Exception:
+            get_db_fn = None
+
     hits = match_aliases(question, get_db_fn)
     if not hits:
         return None
     best = hits[0]
+    if get_db_fn is not None and _should_bump(best["id"], question):
+        bump_alias_hit(best["id"], get_db_fn)
     return list(best["title_needles"]), list(best["content_needles"])
 
 

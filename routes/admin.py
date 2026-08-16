@@ -4,6 +4,7 @@ import time
 import uuid
 import json
 from datetime import datetime, timezone
+from services.tz import ph_now  # BUG FIX: was using server-UTC datetime.now()/today() for "days ago" -- see services/tz.py
 from services.handbook_ingest import parse_pasted_faqs, mass_insert_faqs
 from flask import Blueprint, jsonify, redirect, render_template, request, session, make_response
 from werkzeug.security import check_password_hash
@@ -159,6 +160,20 @@ def add_faq():
         faq_cache.invalidate()
         invalidate_response_tables()
         invalidate_dashboard_cache()
+
+        # BUG FIX: nothing was ever calling this for FAQs added/edited
+        # through the admin panel -- only a one-time backfill script
+        # populated `embedding`, so every FAQ added since then had
+        # embedding=NULL forever and silently fell back to fuzzy-only
+        # matching (services/answer_engine.py's SEMANTIC_BLEND never
+        # applied to it). Best-effort: never blocks the save if
+        # GEMINI_API_KEY is unset or the call fails.
+        try:
+            from services.embeddings import store_embedding_for_faq
+            store_embedding_for_faq(get_db, question, d.get('keywords', ''), public_uuid=public_uuid)
+        except Exception as e:
+            logger.debug(f"add_faq embedding backfill skipped: {e}")
+
         return jsonify({'success': True, 'message': 'FAQ added successfully', 'uuid': public_uuid})
     except Exception as e:
         conn.rollback()
@@ -211,6 +226,13 @@ def update_faq():
         faq_cache.invalidate()
         invalidate_response_tables()
         invalidate_dashboard_cache()
+
+        try:
+            from services.embeddings import store_embedding_for_faq
+            store_embedding_for_faq(get_db, d.get('question', ''), d.get('keywords', ''), public_uuid=faq_uuid)
+        except Exception as e:
+            logger.debug(f"update_faq embedding backfill skipped: {e}")
+
         return jsonify({'success': True, 'message': 'FAQ updated successfully'})
     except Exception as e:
         conn.rollback()
@@ -280,7 +302,7 @@ def unanswered():
         SELECT id, question, resolved_question, context, created_at
         FROM unanswered_questions ORDER BY created_at DESC
     """)
-    today = datetime.today()
+    today = ph_now()
     questions = [{'id': r[0], 'question': r[1],
                   'resolved_question': r[2] if (r[2] and r[2].strip() != (r[1] or '').strip()) else None,
                   'context': r[3], 'days_ago': (today.date() - r[4].date()).days if r[4] else 0,
@@ -368,20 +390,42 @@ def answer_question(qid):
 
 @bp.route('/reports')
 def reports():
+    """
+    BUG FIX: this used to read ONLY satisfaction_feedback (thumbs-down
+    chat ratings). The detailed "report an issue" flow -- routes/chat.py's
+    /feedback and routes/api.py's /api/report, which capture a reason +
+    free-text details -- both insert into a completely separate table,
+    bad_feedback, which nothing here ever displayed. Admins could see a
+    raw count of it on /api/analytics/chart_data but never the actual
+    reported question/answer/reason. Now merges both sources so nothing
+    submitted through either flow is invisible. IDs are prefixed
+    ('sf_'/'bf_') so delete_feedback() below knows which table a given
+    row came from.
+    """
     if not admin_required():
         return redirect('/admin')
     conn = get_db()
     cur = conn.cursor()
     cur.execute("SELECT id, question, answer, created_at FROM satisfaction_feedback "
                 "WHERE rating='thumbs_down' ORDER BY created_at DESC")
-    today = datetime.today()
-    feedbacks = [{'id': f[0], 'question': f[1], 'answer': f[2],
-                  'days_ago': (today.date() - f[3].date()).days if f[3] else 0} for f in cur.fetchall()]
-    new_reports_count = sum(1 for f in feedbacks if f['days_ago'] == 0)
+    sat_rows = cur.fetchall()
+    cur.execute("SELECT id, question, answer, created_at FROM bad_feedback ORDER BY created_at DESC")
+    bad_rows = cur.fetchall()
     cur.execute("SELECT COUNT(*) FROM unanswered_questions")
     unanswered_count = cur.fetchone()[0]
     cur.close()
     conn.close()
+
+    today = ph_now()
+
+    def _row(prefix, r):
+        return {'id': f'{prefix}{r[0]}', 'question': r[1], 'answer': r[2],
+                'days_ago': (today.date() - r[3].date()).days if r[3] else 0}
+
+    feedbacks = [_row('sf_', r) for r in sat_rows] + [_row('bf_', r) for r in bad_rows]
+    feedbacks.sort(key=lambda f: f['days_ago'])
+    new_reports_count = sum(1 for f in feedbacks if f['days_ago'] == 0)
+
     return render_template('reports.html', feedbacks=feedbacks, new_reports_count=new_reports_count,
                             unanswered_count=unanswered_count)
 
@@ -393,21 +437,31 @@ def reports_count():
     conn = get_db()
     cur = conn.cursor()
     cur.execute("SELECT COUNT(*) FROM satisfaction_feedback WHERE rating='thumbs_down'")
-    count = cur.fetchone()[0]
+    sat_count = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM bad_feedback")
+    bad_count = cur.fetchone()[0]
     cur.close()
     conn.close()
-    return jsonify({'count': count})
+    return jsonify({'count': sat_count + bad_count})
 
 
-@bp.route('/delete_feedback/<int:fid>', methods=['POST'])
+@bp.route('/delete_feedback/<string:fid>', methods=['POST'])
 @csrf.exempt
 def delete_feedback(fid):
+    """fid is now prefixed ('sf_123' / 'bf_45') by the merged /reports
+    view above, so this knows which of the two tables to delete from."""
     if not admin_required():
         return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
+    if fid.startswith('sf_'):
+        table, raw_id = 'satisfaction_feedback', fid[3:]
+    elif fid.startswith('bf_'):
+        table, raw_id = 'bad_feedback', fid[3:]
+    else:
+        return jsonify({'status': 'error', 'message': 'Unknown feedback id'}), 400
     conn = get_db()
     cur = conn.cursor()
     try:
-        cur.execute("DELETE FROM satisfaction_feedback WHERE id=%s", (fid,))
+        cur.execute(f"DELETE FROM {table} WHERE id=%s", (raw_id,))
         conn.commit()
         if cur.rowcount == 0:
             return jsonify({'status': 'error', 'message': 'Feedback not found'}), 404
@@ -418,6 +472,87 @@ def delete_feedback(fid):
     finally:
         cur.close()
         conn.close()
+
+
+@bp.route('/api/admin/add_correction', methods=['POST'])
+@csrf.exempt
+def add_correction():
+    """
+    The "fix it directly" feature: takes a question + the correct answer
+    (typically typed in right next to a reported entry on /reports) and
+    saves it as a permanent override in answer_corrections. From then on,
+    that exact question is answered from this correction FIRST -- before
+    FAQ matching, handbook retrieval, date logic, or the success cache
+    (see services/faq.py's find_answer()) -- reworded naturally per
+    question/language through the same extraction pipeline used for FAQ
+    answers, but grounded strictly in the corrected text.
+
+    If `source_report_id` is included (the prefixed id from the merged
+    /reports view, e.g. "sf_123" or "bf_45"), that report is deleted once
+    the correction is saved -- fixing a reported answer resolves it.
+    """
+    if not admin_required():
+        return jsonify({'error': 'Unauthorized'}), 403
+    d = request.get_json(silent=True) or request.form
+    question = (d.get('question') or '').strip()
+    answer = (d.get('answer') or '').strip()
+    if not question or not answer:
+        return jsonify({'error': 'question and answer are required'}), 400
+
+    from services.corrections import save_correction
+    faq_id = d.get('faq_id')
+    ok = save_correction(
+        get_db, question, answer,
+        created_by=session.get('admin_user', 'admin'),
+        faq_id=int(faq_id) if faq_id else None,
+        source_report_id=d.get('source_report_id'),
+    )
+    if not ok:
+        return jsonify({'error': 'Could not save correction'}), 500
+
+    source_report_id = (d.get('source_report_id') or '').strip()
+    if source_report_id.startswith('sf_'):
+        _delete_report_row('satisfaction_feedback', source_report_id[3:])
+    elif source_report_id.startswith('bf_'):
+        _delete_report_row('bad_feedback', source_report_id[3:])
+
+    return jsonify({'success': True})
+
+
+def _delete_report_row(table, raw_id):
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"DELETE FROM {table} WHERE id=%s", (raw_id,))
+        conn.commit()
+    except Exception as e:
+        logger.warning(f"add_correction: could not auto-resolve source report: {e}")
+        conn.rollback()
+    finally:
+        cur.close()
+        conn.close()
+
+
+@bp.route('/corrections')
+def corrections_management():
+    """Admin page listing every standing correction, so it's easy to see
+    (and clean up) what's currently overriding normal matching."""
+    if not admin_required():
+        return redirect('/admin')
+    from services.corrections import list_corrections
+    return render_template('corrections_management.html', corrections=list_corrections(get_db))
+
+
+@bp.route('/api/admin/corrections/<int:correction_id>', methods=['DELETE'])
+@csrf.exempt
+def delete_correction_route(correction_id):
+    if not admin_required():
+        return jsonify({'error': 'Unauthorized'}), 403
+    from services.corrections import delete_correction
+    ok = delete_correction(get_db, correction_id)
+    if not ok:
+        return jsonify({'error': 'Correction not found'}), 404
+    return jsonify({'success': True})
 
 
 @bp.route('/history')

@@ -86,18 +86,27 @@ class FAQCache:
     def set(self, q, data):
         k = self._key(q)
         with self.lock:
-            if len(self.cache) >= self.maxsize:
+            if len(self.cache) >= self.maxsize and k not in self.cache:
                 oldest = min(self.cache, key=lambda x: self.cache[x]['ts'])
                 del self.cache[oldest]
-            self.cache[k] = {'data': data, 'ts': time.time()}
+            # BUG FIX: invalidate_pattern() used to substring-match against
+            # `self.cache`'s own keys, but those keys are MD5 hex digests
+            # (see _key()) -- a pattern like "today" or "registrar" can
+            # NEVER appear in a hex string (0-9a-f only), so
+            # invalidate_pattern() was a permanent no-op. Keeping the raw
+            # question text alongside the hash gives it something real to
+            # match against.
+            self.cache[k] = {'data': data, 'ts': time.time(), 'raw_key': q}
 
     def invalidate(self):
         with self.lock:
             self.cache.clear()
 
     def invalidate_pattern(self, pattern):
+        pattern = pattern.lower()
         with self.lock:
-            for k in [k for k in self.cache if pattern.lower() in k.lower()]:
+            for k in [k for k, e in self.cache.items()
+                      if pattern in e.get('raw_key', '').lower()]:
                 del self.cache[k]
 
 

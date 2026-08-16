@@ -398,6 +398,113 @@ def _note_header(kind: str, lang: str) -> str:
     return d.get(lang, d.get('english', ''))
 
 
+def _chunk_is_schedule_related(chunk: dict) -> bool:
+    """True when a handbook chunk is plausibly ABOUT schedules/holidays/
+    attendance, not just a chunk that happens to share a few common words
+    (month, week, office...) with a date-shaped question. Used to gate
+    whether a handbook footnote is allowed under a date/schedule answer —
+    see find_answer()'s date_ans branch."""
+    title = (chunk.get('section_title') or '').lower()
+    content = (chunk.get('content') or '')[:600].lower()
+    blob = f"{title} {content}"
+    return bool(re.search(
+        r'\b(holiday|holidays|class suspension|school suspension|'
+        r'no class|walang pasok|walay klase|office hours|schedule of|'
+        r'attendance|excused absence|special holiday|'
+        r'calendar|academic calendar|class days?)\b',
+        blob, re.I,
+    ))
+
+
+def _ai_pick_best_source(question: str, hb_chunks: list, faq_candidates: list,
+                          llm_chat_fn) -> str:
+    """Tie-breaker only — called when handbook and FAQ scores are both
+    'solid' and close enough that the deterministic router (faq_margin /
+    hb_threshold / combine_gap above) can't confidently pick a winner on
+    score alone (see both_solid in find_answer()).
+
+    Score-based routing can't tell the difference between "this chunk is
+    genuinely about the question" and "this chunk just shares a few
+    words with the question" (the exact failure mode behind the
+    MEETINGS/TREASURER handbook mis-routes and the graduation/poster
+    footnotes on date answers). This shows the AI the actual retrieved
+    TEXT — not just the numeric scores — and asks a narrow, cheap
+    classification question about it.
+
+    Returns one of: 'handbook', 'faq', 'both', 'neither'.
+
+    IMPORTANT: this never generates or invents the final answer. It only
+    decides which already-retrieved source(s) the caller should trust;
+    the winning source still goes through the normal extraction +
+    grounding pipeline (services.answer_engine / services.handbook) same
+    as every other path in this file. A wrong pick here can at worst
+    suppress a genuinely relevant source or (in the 'both'/failure-open
+    case) fall back to the pre-existing combine behavior — it can never
+    cause a fabricated fact to reach the student, since grounding is
+    checked downstream regardless of what this function returns.
+    """
+    if llm_chat_fn is None:
+        return 'both'  # fail open — behave exactly as before this existed
+
+    hb_excerpt = ''
+    if hb_chunks:
+        top = hb_chunks[0]
+        title = (top.get('section_title') or '').strip()
+        body = (top.get('content') or '')[:400].strip()
+        hb_excerpt = f"{title}: {body}" if title else body
+
+    faq_excerpt = ''
+    if faq_candidates:
+        faq_row = faq_candidates[0].get('faq') or ()
+        faq_q = faq_row[1] if len(faq_row) > 1 else ''
+        faq_a = (faq_row[0] if faq_row else '') or ''
+        faq_excerpt = f"Q: {faq_q}\nA: {(faq_a or '')[:400]}"
+
+    if not hb_excerpt and not faq_excerpt:
+        return 'neither'
+    if not hb_excerpt:
+        return 'faq'
+    if not faq_excerpt:
+        return 'handbook'
+
+    prompt = f"""A student asked: "{question}"
+
+Two candidate sources were retrieved for this question. Some retrieved
+excerpts only SHARE A FEW WORDS with the question without actually
+answering it (e.g. a "Meetings" section that mentions "campus" in a
+location address, retrieved for a question about a dress code that
+also mentions "campus"). Decide which source(s), if any, genuinely
+answer what the student asked — not just resemble it.
+
+--- HANDBOOK EXCERPT ---
+{hb_excerpt}
+
+--- FAQ EXCERPT ---
+{faq_excerpt}
+
+Reply with EXACTLY ONE WORD, nothing else:
+HANDBOOK - only the handbook excerpt actually answers this question
+FAQ - only the FAQ excerpt actually answers this question
+BOTH - both genuinely answer part of the question
+NEITHER - neither excerpt actually answers this question
+
+Answer:"""
+
+    try:
+        raw = (llm_chat_fn(prompt, max_tokens=5) or '').strip().upper()
+    except Exception as e:
+        logger.debug(f"_ai_pick_best_source call failed, defaulting to both: {e}")
+        return 'both'
+
+    if raw.startswith('HANDBOOK'):
+        return 'handbook'
+    if raw.startswith('FAQ'):
+        return 'faq'
+    if raw.startswith('NEITHER'):
+        return 'neither'
+    return 'both'  # BOTH, or an unparseable reply — fail open
+
+
 def _merge_with_handbook(base_answer: str, question: str, hb_chunks: list,
                           detected_lang: str) -> str:
     hb_ans = handbook_service.answer_from_selected_chunk(question, hb_chunks[0], detected_lang)
@@ -467,15 +574,48 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
         if resolved:
             return resolved if return_topic else resolved[0]
 
+    # Admin-verified corrections: absolute top priority, even over the
+    # success cache below. When an admin fixes a reported wrong answer
+    # (see services/corrections.py + routes/admin.py's
+    # /api/admin/add_correction), that fix must win over anything else
+    # cached for the same question -- otherwise a stale wrong answer
+    # could keep winning the answer_success_cache race after being
+    # explicitly corrected.
+    try:
+        from services.corrections import get_correction
+        from database import get_db as _gdb
+        correction = get_correction(_gdb, question)
+        if correction:
+            from ai_providers import llm_chat
+            from services.answer_engine import _extract_from_answer
+            reworded = _extract_from_answer(
+                question, correction['question'], correction['answer'],
+                llm_chat, detected_lang=detected_lang,
+            )
+            final_answer = reworded or correction['answer']
+            ctx.update(user_msg=question, bot_response=final_answer)
+            result = (final_answer, 'Corrected', correction.get('faq_id'), None, detected_lang)
+            return result if return_topic else result[0]
+    except Exception as e:
+        logger.debug(f"corrections lookup failed: {e}")
+
     # Successful-answer memory: identical questions that previously earned
     # a grounded, thumbs-up-worthy reply skip re-extraction.
     try:
         from services.answer_memory import get_cached_answer
         from database import get_db as _gdb
-        cached_ans = get_cached_answer(_gdb, question, detected_lang)
-        if cached_ans:
-            ctx.update(user_msg=question, bot_response=cached_ans)
-            result = (cached_ans, 'Cached', None, None, detected_lang)
+        cached = get_cached_answer(_gdb, question, detected_lang)
+        if cached:
+            # BUG FIX: this used to hardcode faq_id=None on every cache
+            # hit, even when the cached answer originally came from a
+            # specific FAQ row. That silently starved
+            # promote_high_frequency_faqs() (services/alerts.py) of the
+            # very usage data it needs -- the more often a popular FAQ
+            # got served from cache, the LESS its real usage counted
+            # toward promoting it. get_cached_answer() now returns the
+            # original faq_id too, so it keeps flowing into chat_history.
+            ctx.update(user_msg=question, bot_response=cached['answer'])
+            result = (cached['answer'], 'Cached', cached.get('faq_id'), None, detected_lang)
             return result if return_topic else result[0]
     except Exception:
         pass
@@ -565,7 +705,23 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             question, detected_lang, ctx=ctx
         )
         if date_ans:
-            # Still allow a handbook/FAQ footnote when those scores are solid
+            # Still allow a handbook/FAQ footnote when those scores are
+            # solid AND the top match is actually schedule-related.
+            #
+            # BUG FIX: this used to gate purely on score (hb_score >=
+            # CROSS_CHECK_HANDBOOK_BAR). That bar exists to avoid one
+            # specific false positive (the "special holidays" attendance
+            # chunk scoring ~0.36 on date-shaped questions -- see the
+            # comment above CROSS_CHECK_HANDBOOK_BAR's definition), but
+            # nothing stopped a COMPLETELY unrelated chunk (graduation
+            # honors, poster policy, SGO meetings) from also clearing
+            # that same score just by sharing a few common words with
+            # the question ("month", "week", "office"...). A plain
+            # schedule question like "do we have class tomorrow?" was
+            # getting a random "GUIDELINES FOR GRADUATION" footnote
+            # glued underneath a perfectly correct answer. Now the top
+            # chunk must ALSO look like it's actually about schedules,
+            # not just clear the score bar.
             signals = {
                 'hb_score': _hb_score_early,
                 'hb_chunks': _hb_chunks_early,
@@ -573,18 +729,34 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 'faq_score': _faq_score_early,
             }
             final_ans = date_ans
-            if (signals['hb_score'] >= CROSS_CHECK_HANDBOOK_BAR
-                    and signals['hb_chunks']
-                    and not circuit_breaker.is_open()):
+
+            hb_ok = (
+                signals['hb_score'] >= max(CROSS_CHECK_HANDBOOK_BAR, 0.45)
+                and signals['hb_chunks']
+                and _chunk_is_schedule_related(signals['hb_chunks'][0])
+                and not circuit_breaker.is_open()
+            )
+            if hb_ok:
                 final_ans = _merge_with_handbook(
                     final_ans, question, signals['hb_chunks'], detected_lang
                 )
             elif (signals['faq_score'] >= CROSS_CHECK_FAQ_BAR
                     and signals['faq_candidates']
                     and not circuit_breaker.is_open()):
-                final_ans = _merge_with_faq(
-                    final_ans, question, signals['faq_candidates'], detected_lang
-                )
+                top_faq_question = ''
+                try:
+                    faq_row = signals['faq_candidates'][0].get('faq') or ()
+                    top_faq_question = (faq_row[1] if len(faq_row) > 1 else '') or ''
+                except Exception:
+                    pass
+                if re.search(
+                    r'\b(holiday|class|schedule|open|closed|pasok|klase|'
+                    r'office hours|suspension)\b',
+                    top_faq_question, re.I,
+                ):
+                    final_ans = _merge_with_faq(
+                        final_ans, question, signals['faq_candidates'], detected_lang
+                    )
             result = (final_ans, 'Schedule', None, 'date_query', detected_lang)
             return result if return_topic else result[0]
 
@@ -852,6 +1024,36 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             and candidates and faq_best_score >= engine.FUZZY_MIN_SCORE
             and abs(hb_score - faq_best_score) < combine_gap
         )
+        if both_solid and not circuit_breaker.is_open():
+            # AI arbitration tie-breaker. Deliberately narrow: only runs
+            # when both_solid is already True, i.e. two sources cleared
+            # their individual score bars AND are close enough (gap <
+            # combine_gap) that the deterministic router can't confidently
+            # pick one. It never runs for pure_handbook_topics, a clear
+            # is_hb detection, or when only one source is plausible --
+            # those are already decisive and don't need a second opinion.
+            # It also never fabricates an answer itself: it only decides
+            # which already-retrieved source(s) to trust, and the actual
+            # reply still goes through the normal extraction+grounding
+            # pipeline either way. If the call fails or returns something
+            # unparseable, it fails open to the pre-existing combine
+            # behavior, so this can only make routing MORE cautious, not
+            # less safe than before.
+            source_pick = _ai_pick_best_source(question, hb_chunks, candidates, llm_chat)
+            if source_pick == 'handbook':
+                both_solid = False
+                handbook_should_lead = True
+            elif source_pick == 'faq':
+                both_solid = False
+                handbook_should_lead = False
+            elif source_pick == 'neither':
+                both_solid = False
+                handbook_should_lead = False
+                candidates = []
+            # source_pick == 'both' (or arbitration unavailable/
+            # inconclusive): leave both_solid True, fall through to the
+            # existing combine below unchanged.
+
         if both_solid and not circuit_breaker.is_open():
             combined = _combine_handbook_and_faq(
                 question, candidates, hb_chunks, detected_lang

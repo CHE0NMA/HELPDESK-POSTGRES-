@@ -49,6 +49,9 @@ logger = logging.getLogger("pac_helpdesk.conversation")
 _TABLE_READY = False
 
 
+_L1_TTL_SECONDS = 8  # See get_conversation_context() below for why this exists.
+
+
 class ConversationContext:
     def __init__(self, session_id: str = None):
         self.session_id = session_id
@@ -62,6 +65,7 @@ class ConversationContext:
         self.last_detected_lang = None
 
         self.last_disambiguation: Optional[dict] = None
+        self._loaded_at = time.time()
 
     def update(self, topic=None, intent=None, user_msg=None, bot_response=None,
                faq_answer=None, faq_question=None, detected_lang=None):
@@ -162,14 +166,24 @@ conversation_contexts: Dict[str, ConversationContext] = {}
 def get_conversation_context(session_id: str) -> ConversationContext:
     session_id = session_id or 'default'
     ctx = conversation_contexts.get(session_id)
-    if ctx is not None:
+    # BUG FIX: the L1 cache used to be trusted forever once populated,
+    # which only fixed the *first* cross-worker hop for a session. If a
+    # session later bounced BACK to a worker that already had it cached
+    # (e.g. A -> B -> A across three messages), worker A would return its
+    # stale first-load snapshot -- missing whatever B saved in between --
+    # and then silently overwrite that newer state on its own next save.
+    # A short TTL makes a worker re-sync with Postgres periodically
+    # instead of trusting one snapshot for the rest of the process's
+    # lifetime, while still avoiding a DB round trip for the handful of
+    # internal calls made while answering a single message.
+    if ctx is not None and (time.time() - ctx._loaded_at) < _L1_TTL_SECONDS:
         return ctx
 
-    # L1 cache miss — try to recover durable state from Postgres before
-    # assuming this is genuinely a brand new conversation. This is the
-    # path that fixes "random new chat every time": a message that lands
-    # on a different worker process, or after a restart, now finds the
-    # real history instead of an empty context.
+    # L1 cache miss (or stale) — recover durable state from Postgres
+    # before assuming this is genuinely a brand new conversation. This is
+    # the path that fixes "random new chat every time": a message that
+    # lands on a different worker process, or after a restart, now finds
+    # the real history instead of an empty context.
     ctx = _load_ctx(session_id)
     conversation_contexts[session_id] = ctx
     return ctx

@@ -27,6 +27,18 @@ def init_pool():
         "password": DATABASE_CONFIG["password"],
         "database": DATABASE_CONFIG["database"],
         "port": DATABASE_CONFIG["port"],
+        # BUG FIX: every NOW()/CURRENT_DATE/CURRENT_TIMESTAMP call in the
+        # app (90+ call sites across schedule.py, alerts.py, admin.py,
+        # chat.py...) was implicitly evaluated in the DB server's own
+        # timezone -- UTC on most managed Postgres hosts. For a
+        # Philippines-based school (UTC+8), "today" on the DB side lagged
+        # real PH local time by up to 8 hours: still "yesterday" from
+        # 12:00am-7:59am PH time, exactly when students ask "is there
+        # class today" before heading to school. Setting the session
+        # timezone here fixes it for every query, everywhere, without
+        # touching each call site individually. See services/tz.py for
+        # the matching fix on the Python side.
+        "options": "-c timezone=Asia/Manila",
     }
 
     sslmode = DATABASE_CONFIG.get("sslmode") or os.environ.get("DB_SSLMODE", "require")
