@@ -193,27 +193,6 @@ def api_response_times():
     })
 
 
-@bp.route('/api/visitor_stats')
-def api_visitor_stats():
-    conn = get_db()
-    cur = conn.cursor()
-    try:
-        cur.execute("""
-            SELECT COUNT(*) AS total_visitors,
-                   SUM(question_count) AS total_questions,
-                   COUNT(CASE WHEN DATE(last_seen) = CURRENT_DATE THEN 1 END) AS today_visitors
-            FROM visitor_stats
-        """)
-        row = cur.fetchone()
-        return jsonify({
-            'total_visitors': row[0] or 0,
-            'total_questions': row[1] or 0,
-            'today_visitors': row[2] or 0
-        })
-    finally:
-        cur.close()
-        conn.close()
-
 
 @bp.route('/api/chat_ratings_data')
 def chat_ratings_data():
