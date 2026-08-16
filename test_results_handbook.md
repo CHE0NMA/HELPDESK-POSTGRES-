@@ -1,9 +1,9 @@
 # Chatbot Handbook-Only Test Report
-**Date:** 2026-08-16 01:51
+**Date:** 2026-08-16 12:54
 
-**Session:** handbook_only_test_20260816_014437
+**Session:** handbook_only_test_20260816_124721
 
-**Score:** 66/70 passed
+**Score:** 63/70 passed
 
 ---
 
@@ -11,9 +11,9 @@
 
 **Answer:**
 
-The school’s full name is Philippine Advent College, Inc. (often shortened to Philippine Advent College or PAC)【Excerpt 2 – Brief History of PAC (p.6)】【Excerpt 3 – MEETINGS (p.72)】
+The school’s full legal name is **Philippine Advent College, Inc.** (see the meeting location wording in the handbook’s Meetings section).
 
-The meetings are held “within the campus of Philippine Advent College, Inc., in Magsaysay, Sindangan, Zamboanga del Norte” (MEETINGS, p. 72, Section 1). So the campus is located in Magsaysay, Sindangan, Zamboanga del Norte.
+The meetings are held “within the campus of Philippine Advent College, Inc., in Magsaysay, Sindangan, Zamboanga del Norte” (MEETINGS, p. 72). So the campus is located in Magsaysay, Sindangan, Zamboanga del Norte.
 
 ---
 
@@ -21,7 +21,7 @@ The meetings are held “within the campus of Philippine Advent College, Inc.,
 
 **Answer:**
 
-Before it became a college, PAC was originally called the Hillside View Elementary School (HVES) — as noted in the brief history (Excerpt 1, p.6).
+Before it became a college, PAC was originally called the Hillside View Elementary School (HVES) — as noted in the Brief History of PAC (p. 6).
 
 ---
 
@@ -29,7 +29,7 @@ Before it became a college, PAC was originally called the Hillside View Elementa
 
 **Answer:**
 
-It was founded by former Mayor Mariano J.S. Macias together with his wife, Margie C. Macias (see Brief History of PAC, p. 6).
+PAC was founded by former Mayor Mariano J.S. Macias and his wife Margie C. Macias, together with their children who helped get the school off the ground.
 
 ---
 
@@ -37,7 +37,7 @@ It was founded by former Mayor Mariano J.S. Macias together with his wife,
 
 **Answer:**
 
-The logo shows a wide‑open Bible at its center—signifying that the Bible is the foundation of the college’s Christian education. Behind it is a torch, the light that illuminates the Bible and the school, pointing to God as the true source of all wisdom. The year 1975 marks when the college was founded. The blue background stands for royalty, the red lettering for passion, love and the power to carry that light, and the white behind the Bible represents the purity of the school’s mission.
+The logo is the official symbol of Philippine Advent College, Inc. It shows an open Bible at the center (the foundation of Christian education) with a torch of light behind it, representing God’s wisdom illuminating the school and its community. The year 1975 marks when the college was founded. The blue background stands for royalty, the red in the name for passion, love and power, and the white behind the Bible symbolizes the purity of its mission.
 
 ---
 
@@ -45,7 +45,7 @@ The logo shows a wide‑open Bible at its center—signifying that the Bible is 
 
 **Answer:**
 
-The PAC hymn was composed by L.V. Pilon, with the lyrics written by S.L. La Sage (see the hymn page p. 7).
+The PAC hymn was composed by L.V. Pilon, with the lyrics written by S.L. La Sage (see the PAC Hymn excerpt, p. 7).
 
 ---
 
@@ -64,7 +64,7 @@ Elementary School (HVES), became an academy and later a college and was founded 
 
 **Answer:**
 
-The college traces its roots back to 1975 – that’s the year the original Hillside View Elementary School was upgraded into an academy (and later a college) by former Mayor Mariano J.S. Macias and Margie C. Macias (Brief History of PAC, p.6). The logo even highlights 1975 as the year the institution was founded and began its light‑bringing influence on the community (Logo and Symbols, p.10).
+1975 is the founding year of Philippine Advent College. That’s when the school—originally the Hillside View Elementary School—was turned into an academy (and later a college) by former Mayor Mariano J.S. Macias, Margie C. Macias and their children, with strong support from the local Seventh‑day Adventist community. (See the Brief History of PAC, p. 6 and the Logo & Symbols note, p. 10.)
 
 ---
 
@@ -72,7 +72,7 @@ The college traces its roots back to 1975 – that’s the year the original
 
 **Answer:**
 
-The main campus is the Philippine Advent College, Inc. campus in Magsaysay, Sindangan, Zamboanga del Norte (see MEETINGS, Sec. 1, p. 72).
+The main campus is the Philippine Advent College, Inc. campus located in Magsaysay, Sindangan, Zamboanga del Norte (see MEETINGS, Sec. 1, p. 72).
 
 ---
 
@@ -80,7 +80,7 @@ The main campus is the Philippine Advent College, Inc. campus in Magsaysay, Sind
 
 **Answer:**
 
-Yes! Excerpt 1 tells us that the college was founded by former Mayor Mariano J.S. Macias and his wife Margie C. Macias, and it even lists several of their children—Marquinjo K.C. Macias, Marictibert C. Macias, Mariano J.C. Macias Jr., Margerald C. Macias, and Maresnena C. Macias—who helped establish the institution.
+Yes! Excerpt 1 (Brief History of PAC, p. 6) tells you that the college was founded by former Mayor Mariano J.S. Macias and his wife Margie C. Macias, and it even lists several of their children—Marquinjo K.C., Marictibert C., Mariano J.C. Jr., Margerald C., and Maresnena C. Macias—as key figures in establishing the institution.
 
 ---
 
@@ -88,7 +88,7 @@ Yes! Excerpt 1 tells us that the college was founded by former Mayor Maria
 
 **Answer:**
 
-Around 1975 the school that started out as Hillside View Elementary School was upgraded to an academy and then to a college. It was founded by former Mayor Mariano J.S. Macias and Margie C. Macias, with strong backing from local Seventh‑day Adventist church elders. (Brief History of PAC, p. 6)
+Around 1975 the school that started out as Hillside View Elementary School made the jump to become an academy and then a college. It was founded by former Mayor Mariano J.S. Macias and Margie C. Macias, with strong backing from local Seventh‑day Adventist church elders. (Brief History of PAC, p. 6)
 
 ---
 
@@ -96,7 +96,7 @@ Around 1975 the school that started out as Hillside View Elementary School
 
 **Answer:**
 
-The school says that true education comes from God, and it’s all about living out Christ’s example in everything faculty and students do—so they become useful, productive citizens now and are prepared for the world to come. (Philosophy, p.8)
+The school says that true education comes from God and that everyone—faculty and students—should live out Christ’s example, aiming to be useful citizens now and prepared for the world to come (Philosophy, p. 8).
 
 ---
 
@@ -104,7 +104,7 @@ The school says that true education comes from God, and it’s all about living 
 
 **Answer:**
 
-PAC’s future goal is to become a “Center of Excellence in Christian Education,” aiming for world‑class academic excellence and globally competitive technical education (Vision, p.8).
+PAC’s future goal is to become a “Center of Excellence in Christian Education,” aiming for world‑class academic excellence and globally competitive technical education while keeping the true Source of Knowledge at the heart of learning (Vision, p.8).
 
 ---
 
@@ -120,7 +120,7 @@ The college’s main mission is to provide an excellent, distinctive Christian e
 
 **Answer:**
 
-Sure! The PAC core values are Purpose‑Driven, Academic Excellence Oriented, and Christ‑Centered (see Core Values, p. 8).
+The PAC core values are P – Purpose‑Driven, A – Academic Excellence Oriented, and C – Christ‑Centered (Core Values, p. 8).
 
 ---
 
@@ -128,7 +128,7 @@ Sure! The PAC core values are Purpose‑Driven, Academic Excellence Oriented, 
 
 **Answer:**
 
-PAC’s vision is to become a top‑notch Christian college that offers world‑class academics and competitive technical training, all while encouraging discovery and remembering that true knowledge comes from God.
+PAC’s vision is to become a top‑notch Christian college that delivers world‑class academic and technical education, encouraging discovery and investigation while always remembering that true knowledge comes from God.
 
 ---
 
@@ -136,7 +136,7 @@ PAC’s vision is to become a top‑notch Christian college that offers world‑
 
 **Answer:**
 
-Sure! As the handbook notes in the Philosophy section (p. 8), Philippine Advent College believes God is the source of true education and is committed to having faculty and students reflect Christ in every aspect of life, preparing them for fruitful citizenship now and for the world to come.
+Sure! The Philosophy (p.8) says the college believes God is the source of true education and is committed to having faculty and students reflect Christ in every part of life, shaping us for useful, fruitful citizenship now and readiness for the world to come.
 
 ---
 
@@ -144,19 +144,15 @@ Sure! As the handbook notes in the Philosophy section (p. 8), Philippine Adven
 
 **Answer:**
 
-Sure! The Core Values (p. 8) break down “P‑A‑C” like this:  
-
-- **P – Purpose‑Driven**: live and lead with a clear objective, using your skills wisely and taking part in activities that grow you and benefit others.  
-- **A – Academic Excellence Oriented**: stay motivated, disciplined and curious, consistently working toward top‑notch results with a strong work ethic and love of learning.  
-- **C – Christ‑Centered**: faculty and students embody Christian education, driven by love and purpose, recognizing the Almighty as the true source of wisdom.
+Sure! The “P‑A‑C” values are laid out in the Core Values section (p.8). P stands for **Purpose‑Driven** – it means living and leading with clear objectives, using your skills wisely, and doing things that help both your own growth and the welfare of others. A is **Academic Excellence Oriented**, which describes being motivated, disciplined, curious and consistently working toward top‑notch academic results. C is **Christ‑Centered**, meaning faculty and students base their learning and actions on Christian teachings, showing love, purpose and recognizing God as the true source of wisdom.
 
 ---
 
-### ✅ Q18: Is there something about Christ-centered living?
+### ❌ Q18: Is there something about Christ-centered living?
 
 **Answer:**
 
-<div class="text">Yes! The manual even says it’s built on “the values of discipline, excellence and Christ‑centered living” (Declaration of Principles, p. 14). So Christ‑centered living is explicitly part of the college’s guiding principles.</div>
+<div class="text">I'm not sure about that yet. You can visit the Registrar's Office or ask your academic adviser for more information.</div>
 
 ---
 
@@ -164,7 +160,9 @@ Sure! The Core Values (p. 8) break down “P‑A‑C” like this:
 
 **Answer:**
 
-By graduation, PAC expects you to have — adopted a lifestyle of kindness, patience, honesty and humility; built a wholesome spiritual life through private devotions, public worship and soul‑winning activities; gained a clear, scriptural understanding that lets you discuss religious topics and interpret world events through Biblical prophecy; developed critical‑thinking habits that let you express ideas, make wise choices and apply theory to life’s problems; cultivated an appreciation for nature, literature, music and the fine arts; practiced balanced, healthful living with proper diet, rest, exercise and natural remedies; recognized your God‑given gifts and chosen a life‑work that matches your potential; and respected the dignity of labor by engaging in productive manual work, using resources responsibly and striving for excellence in workmanship. (Excerpt 1 –
+According to the section **Goals** (see page 8):
+
+Learned to respond effectively to the changing needs of a developing nation and get actively involved in the government programs designed to achieve national development goals. In harmony with its philosophy, vision and mission, PAC has specific goals.
 
 ---
 
@@ -172,7 +170,7 @@ By graduation, PAC expects you to have — adopted a lifestyle of kindness, 
 
 **Answer:**
 
-Yes—Excerpt 1 quotes Ellen G. White from her book *Education* (p. 57).
+Yep—there’s a direct citation of Ellen G. White’s book *Education* on page 57 in the “Greatest Want of the World” excerpt. It even quotes her words verbatim. (Excerpt 1, p.5)
 
 ---
 
@@ -202,7 +200,7 @@ SDP (Per Semester) 526.00
 
 **Answer:**
 
-A first‑degree offense carries 5 demerits (see “First‑Degree Offense (5 Demerits)” on p. 17).
+A first‑degree offense carries 5 demerits (see “First‑Degree Offense (5 Demerits)” on p.17).
 
 ---
 
@@ -210,7 +208,7 @@ A first‑degree offense carries 5 demerits (see “First‑Degree Offense
 
 **Answer:**
 
-A second‑degree offense is taken pretty seriously – it’s worth 15 demerits. The Student Disciplinary Committee can also order labor or a fine, but the fine can’t be more than 1,500 pesos (see “Second‑Degree Offense (15 Demerits)” p. 18).
+A second‑degree offense carries 15 demerits and can get you a labor assignment or a fine — but the fine can’t be more than 1,500 pesos (see “Second‑Degree Offense (15 Demerits)” on p. 18). So it’s definitely serious, though not the highest level of penalty.
 
 ---
 
@@ -228,7 +226,7 @@ If students violate the following standards of moral conduct or practice, the sc
 
 **Answer:**
 
-Sure! First‑degree (light) offenses are things like “excessive going together of sweethearts in isolated places or public displays of affection,” holding any meeting (party, rehearsal, drama, etc.) without the vice‑president’s approval, skipping orientations or spiritual‑emphasis events, playing indecent music on campus, being noisy or obnoxious in classrooms or dorms, gaming outside the allowed Saturday 6‑10 PM and Sunday 6‑9 PM windows, loitering, littering, wearing slippers or “inappropriate attire” (short pants, crop tops, piercings, etc.), staying out of your dorm during curfew (9:30 PM‑4:30 AM), unchaperoned hikes or off‑campus outings, visiting dorms or faculty homes without permission, and any slight dorm‑rule violations. (First‑Degree Offense (5 Demerits), p.17)
+First‑Degree Offense (5 Demerits) (p.17) covers things like loitering — persistently hanging around with no purpose, littering — dropping or throwing garbage, wearing slippers or “inappropriate” attire such as short pants, crop tops or backless tops, and being out of your dorm during curfew (9:30 PM‑4:30 AM).
 
 ---
 
@@ -236,7 +234,20 @@ Sure! First‑degree (light) offenses are things like “excessive going togethe
 
 **Answer:**
 
-A third‑degree offense (30 demerits) is any of the following violations (p. 19): immorality (e.g., living together, premarital sex, kissing, etc.); forging or tampering with official records; possessing or using alcohol, vaping, tobacco, narcotics or other harmful substances; bringing or using hazardous items like firearms or explosives; fighting or assault (including use of deadly weapons); serious vandalism that causes permanent damage; theft; instigating class stoppages or blocking school duties; insubordination (belligerent or abusive acts toward staff); involvement in unsanctioned fraternity/sorority activities, hazing or recruiting that inflicts pain; bullying (repeated/severe physical or verbal/e‑mail harassment); and sexual harassment (e.g., requests for sexual favors or other sexual behavior by someone in authority).
+The handbook’s “Third‑Degree Offense (30 Demerits)” on page 19 says a serious or third‑degree offense includes things like:
+
+- Immorality (living together, premarital sex, kissing, necking, or any untactful intimacy that harms the school’s honor)  
+- Forgery or tampering with official records or transfer forms  
+- Possession or use of alcohol, vaping, tobacco (including smokeless or “momma”), narcotics, prohibited drugs, or any addictive substances  
+- Bringing or using hazardous materials such as firearms, deadly weapons, or explosives  
+- Fighting or assault (any intentional physical injury, especially with weapons)  
+- Serious vandalism (permanent damage to school, faculty, or student property)  
+- Theft (using or taking another’s property without consent)  
+- Instigating a class stoppage or blocking staff from doing their jobs  
+- Insubordination (belligerent or abusive acts toward an employee or their representative)  
+- Unauthorized fraternity/sorority activities, including hazing that causes physical or psychological pain  
+- Bullying (repeated or severe physical, verbal, written, or electronic actions that cause distress)  
+- Sexual harassment (requests for sexual favors or any sexual behavior by someone in authority).
 
 ---
 
@@ -244,7 +255,7 @@ A third‑degree offense (30 demerits) is any of the following violations (p.�
 
 **Answer:**
 
-If you rack up 20 demerits (or more) within the last month of a term, you’re put on probation right away (Disciplinary Measures, p.14). While on probation you can’t hold any office or responsibility, and the Student Disciplinary Committee (with input from the home dean and academic chairs) will review whether the probation stays or gets lifted. No one can stay on probation longer than one semester; if it isn’t lifted, you’re denied admission for the next term.
+If you rack up 20 or more demerits (and it’s within a month of the term’s end), you’re put on probation right away (Disciplinary Measures, p.14). While on probation you can’t hold any office or responsibility, and the Student Disciplinary Committee (with input from the home dean and academic chairs) will review whether to keep or lift it. No one can stay on probation longer than one semester; if it isn’t lifted, you’re denied admission for the next term.
 
 ---
 
@@ -260,7 +271,7 @@ Yep—if they hand out a fine, it can’t be more than P1,500.00 pesos (Discip
 
 **Answer:**
 
-You’ve got 15 days from the moment you receive the decision to file an appeal (see “Prescription and Appeal,” p. 22).
+You’ve got 15 days from the moment you receive the decision to file an appeal. First you appeal to the Administrative Council (within those 15 days), and if that body upholds the original ruling you get another 15 days to take it to the Board of Trustees. (Excerpt 1 – Prescription and Appeal, p.22)
 
 ---
 
@@ -299,7 +310,7 @@ Any candidate for honors must not have undergone character probation and committ
 
 **Answer:**
 
-Sure! According to the Disciplinary Measures (p. 14), the Student Disciplinary Committee can choose either community service **or** a fine (up to P1,500) based on how serious the offense is. So if the committee deems it appropriate, you can do community service instead of paying a fine.
+Sure! If you get a penalty, the Student Disciplinary Committee can choose either community service or a fine (up to P1,500) depending on how serious the offense is (Disciplinary Measures, p.14). So you could do community service instead of paying a fine.
 
 ---
 
@@ -307,7 +318,7 @@ Sure! According to the Disciplinary Measures (p. 14), the Student Disciplina
 
 **Answer:**
 
-No – the handbook says you must leave all jewelry (rings, bracelets, necklaces, etc.) at home or in a box while on campus, with the only exception being a wedding ring. (Dress and Appearance, p. 25; First‑Degree Offense, p. 17, rule 9)
+No — the handbook says you have to leave all jewelry (rings, bracelets, necklaces, etc.) at home or in a box while on campus, with the only exception being a wedding ring. (Dress and Appearance, p. 25; First‑Degree Offense, p. 17, rule 9)
 
 ---
 
@@ -315,7 +326,11 @@ No – the handbook says you must leave all jewelry (rings, bracelets, necklac
 
 **Answer:**
 
-At PAC you’re expected to dress modestly and neatly. No jewelry (rings, bracelets, necklaces) is allowed on campus except a wedding ring. Ladies must avoid jeans or “square” pants for religious or formal events, wear dresses that cover the knee (slits must be at least 3 inches below the knee), and skip transparent, sleeveless or overly snug skirts; T‑shirts with indecent words or prints are also prohibited. Men should not wear indecent T‑shirts or tight, suggestive pants; for religious or formal services they need a suit, a white or light‑colored shirt with tie, a barong Tagalog, or long‑sleeved shirt with necktie. Additionally, slippers, short/city shorts, backless or crop tops, and most jewelry (piercings, earrings, necklaces, nose rings) are not allowed on campus. (Excerpt
+The handbook says you should dress modestly and neatly, keeping things simple. No jewelry (except a wedding ring) is allowed on campus, and you can’t wear slippers, short or “city” shorts, backless or crop tops, or any piercings, earrings, necklaces or nose rings (Excerpt 2 – First‑Degree Offense, p. 17).  
+
+For ladies, jeans and square pants are banned for religious or formal events, and dresses must cover the knee when you sit or stand; any slit has to be at least 3 inches below the knee. Transparent, sleeveless or overly snug skirts are not allowed, and T‑shirts with indecent prints are prohibited (Excerpt 1 – Dress and Appearance, p. 25).  
+
+For men, avoid indecent T‑shirts and tight‑fitting pants with suggestive prints. For religious or
 
 ---
 
@@ -339,7 +354,7 @@ You can’t just wander into another dorm whenever you want. The handbook says
 
 **Answer:**
 
-The handbook says cooking in the dorm is only allowed if you have proper authority from the home dean. So, without that permission, you can’t cook inside the dorm (Excerpt 1 – Rule 14, p.18).
+Hey! According to the handbook, cooking inside the dorm (or anywhere) is only allowed if you have proper authority from the home dean. It’s listed as rule 14 under “Second‑Degree Offense (15 Demerits)” (p. 18), so doing it without permission would be a violation.
 
 ---
 
@@ -347,7 +362,7 @@ The handbook says cooking in the dorm is only allowed if you have proper authori
 
 **Answer:**
 
-The handbook says you can’t eat or bring any food into the cafeteria that isn’t sanctioned by the S.D.A. church (Rule 13, “Food,” p. 18). So anything not approved by the church is not allowed.
+The handbook says you can’t eat or bring any food into the cafeteria that isn’t **sanctioned by the S.D.A. church** (Excerpt 1, rule 13). So anything not approved by the church is not allowed.
 
 ---
 
@@ -355,7 +370,7 @@ The handbook says you can’t eat or bring any food into the cafeteria that isn�
 
 **Answer:**
 
-The curfew is from 9:30 PM until 4:30 AM — you need to be back in your dorm during those hours (First‑Degree Offense, rule 10, p.17).
+The curfew is from 9:30 PM until 4:30 AM — you need to be back in your dorm during those hours (First‑Degree Offense, rule 10, p.17).
 
 ---
 
@@ -374,7 +389,7 @@ Zamboanga del Norte, on every last Friday of the month around 1:30 PM.
 
 **Answer:**
 
-Short pants and crop tops are listed as “inappropriate attire” and aren’t allowed on campus. Wearing them counts as a first‑degree offense (5 demerits) [First‑Degree Offense, p. 17].
+Short pants and crop tops are listed as “inappropriate attire” and aren’t allowed on campus. Wearing them counts as a first‑degree offense (5 demerits) — see the First‑Degree Offense list (p. 17).
 
 ---
 
@@ -382,7 +397,7 @@ Short pants and crop tops are listed as “inappropriate attire” and aren’t 
 
 **Answer:**
 
-No, it’s not allowed. The handbook lists “showing public displays of affection” as a first‑degree offense (5 demerits) [Excerpt 1 – First‑Degree Offense, p.17], and it also groups kissing and other “untactful intimacies” under immorality, a third‑degree offense (30 demerits) that can lead to dismissal [Excerpt 2 – Third‑Degree Offense, p.19]. So PDA is prohibited.
+No, it’s not allowed. The handbook lists “showing public displays of affection” as a violation (First‑Degree Offense, 5 demerits, p.17) and even groups kissing and other intimacies under “Immorality” (Third‑Degree Offense, 30 demerits, p.19). So PDA is prohibited and can lead to disciplinary action.
 
 ---
 
@@ -421,7 +436,7 @@ d. RA 7877 Anti-Sexual Harassment Act e.
 
 **Answer:**
 
-The Safe Spaces Act is Republic Act 11313, enacted in 2019, which addresses gender‑based sexual harassment and promotes a safe, respectful, and inclusive learning environment.
+The Safe Spaces Act is Republic Act 11313, enacted in 2019 to address gender‑based sexual harassment and promote a safe, respectful learning environment.
 
 ---
 
@@ -429,7 +444,7 @@ The Safe Spaces Act is Republic Act 11313, enacted in 2019, which addresses 
 
 **Answer:**
 
-Sure! PAC’s handbook says the school has a zero‑tolerance policy for Gender‑Based Sexual Harassment (GBSH) and defines it as any unwelcome sexual behavior—verbal, physical or online—directed at someone because of sex, gender, sexual orientation, gender identity or expression (see Excerpt 1 p.22). It covers things like catcalling, unwanted touching, stalking, non‑consensual sharing of sexual content, cyber‑harassment and homophobic/transphobic slurs, and it applies everywhere: on campus, in school‑run online platforms, during activities (on‑ or off‑site) and in public spaces within the educational environment. A Gender‑Based Harassment Committee (GBHC) handles complaints, investigations, survivor support, confidentiality and sanctions, and the school must provide semesterly gender‑sensitivity training and keep clear anti‑harassment policies posted (Excerpt 2 p.23). If you need to report something, there’s a safe, accessible reporting system in place.
+Sure! PAC’s handbook says it has a zero‑tolerance policy for Gender‑Based Sexual Harassment (GBSH) (A. Institution, p.23) and defines GBSH as any unwelcome sexual behavior—verbal, physical or online—based on sex, gender, sexual orientation, gender identity or expression (Gender‑Based Sexual Harassment, p.22). All students are protected in school premises, online class platforms, school activities (on‑ or off‑campus) and any public spaces within the educational environment (p.22). A Gender‑Based Harassment Committee handles complaints, investigations, survivor support and sanctions, and the school provides semester‑long gender‑sensitivity training (p.22‑23). If you need to report something, the handbook notes there’s a “safe, accessible reporting system” (A. Institution, p.23).
 
 ---
 
@@ -437,7 +452,7 @@ Sure! PAC’s handbook says the school has a zero‑tolerance policy for Gende
 
 **Answer:**
 
-Yes—PAC has a Gender‑Based Harassment Committee (GBHC) set up specifically to handle Safe Spaces Act matters (see “Gender‑Based Harassment Committee” in the Gender‑Based Sexual Harassment policy, p. 22). It’s the body that manages complaints, investigations and preventive programs.
+Yes—PAC has a Gender‑Based Harassment Committee (GBHC) set up specifically to implement the Safe Spaces Act (RA 11313). It handles complaints, supports survivors, keeps things confidential, and runs preventive programs. (Excerpt 1, p.22)
 
 ---
 
@@ -445,7 +460,7 @@ Yes—PAC has a Gender‑Based Harassment Committee (GBHC) set up specifically t
 
 **Answer:**
 
-RA 11313 is the Safe Spaces Act of 2019. Our school follows it to create a safe, respectful and inclusive environment, defining gender‑based sexual harassment (GBSH) and covering protection in school premises, online class platforms, school activities (on‑ or off‑campus) and other public spaces. In line with the act, we’ve set up a Gender‑Based Harassment Committee to handle complaints, support survivors, keep things confidential, and run preventive programs.
+RA 11313 is the Safe Spaces Act of 2019. Our school follows it by defining gender‑based sexual harassment (any unwelcome sexual behavior based on sex, gender, orientation, identity or expression) and by setting up a Gender‑Based Harassment Committee to handle complaints, support survivors, keep things confidential, and run preventive programs. (See “Gender‑Based Sexual Harassment” p. 22.)
 
 ---
 
@@ -471,7 +486,7 @@ Yes—hazing is mentioned, and it’s explicitly prohibited. Excerpt 1 (Thir
 
 **Answer:**
 
-The college follows CHED rules and Republic Act 11313 (the Safe Spaces Act) to protect everyone from gender‑based sexual harassment (see “Gender‑Based Sexual Harassment,” p. 22). It defines GBSH as any unwelcome sexual behavior—verbal, physical or online—based on sex, gender, sexual orientation, gender identity or expression, including catcalling, unwanted touching, stalking, non‑consensual sharing of sexual images, cyber‑harassment and homophobic/transphobic slurs. The policy covers all school premises, online class platforms, school activities (on‑ or off‑campus) and any public spaces within the educational environment. A Gender‑Based Harassment Committee (Chair Doris M. Mansueto, Vice‑Chair Marites A. Rabaca, Secretary Shelim Y.) handles complaints, investigations, survivor support, confidentiality, sanctions and preventive programs.
+Sure! The college’s sexual‑harassment policy is laid out in the **Gender‑Based Sexual Harassment** section (p.22). It defines GBSH as any unwelcome sexual behavior—verbal, physical or online—based on sex, gender, sexual orientation, gender identity or expression (e.g., catcalling, unwanted touching, stalking, non‑consensual sharing of sexual content, cyber‑harassment, homophobic/transphobic slurs). The protection covers all students (and faculty) in school premises, online class platforms, school activities (on‑ or off‑campus) and any public spaces within the educational environment. A Gender‑Based Harassment Committee (Chair Doris M. Mansueto, Vice‑Chair Marites A. Rabaca, Secretary Shelim Y.) handles complaints, investigations, survivor support, confidentiality, sanctions and preventive programs.
 
 ---
 
@@ -479,14 +494,7 @@ The college follows CHED rules and Republic Act 11313 (the Safe Spaces Act) to
 
 **Answer:**
 
-Sure! PAC’s academic lineup includes:
-
-- In Allied Health: BS Nursing and Bachelor of Midwifery (both only at the Main Campus).  
-- In Teacher Education & Arts: Early Childhood Education (Main & Salug), Elementary Education (Main), Secondary Education majors in English, Math and Filipino (all Main), Physical Education (Main & LBP), Technical‑Vocational Teacher Education (LBP) and Social Work (Salug).  
-- In Business Education: BS Business Administration – HR & Management and Public Administration (both Main), plus BS Tourism (LBP).  
-- In Computer Studies: BS Information Technology and BS Computer Science (both Main & Salug).  
-
-They also run the K‑12 basic education program (Kindergarten‑Grade 10, then Grades 11‑12 with STEM, HUMSS, GAS, ABM strands) and three TESDA NC II courses: Housekeeping, Caregiving, and Food & Beverage Services.
+PAC’s offerings include a bunch of bachelor’s degrees, the K‑12 track and a few TESDA NC II courses. In Allied Health you can do BS Nursing or Midwifery (both only at the Main Campus). Teacher Education & Arts has Early Childhood Education (Main & Salug), Elementary Education (Main), Secondary Education majors in English, Math or Filipino (Main), Physical Education (Main & LBP), Technical‑Vocational Teacher Education (LBP) and Social Work (Salug). Business Education offers BS Business Administration – HR & Management and Public Administration (both Main) plus BS Tourism (LBP). Computer Studies gives you BS Information Technology and BS Computer Science (both Main & Salug). The Basic Education K‑12 program runs Kindergarten through Grade 12, with senior‑high strands in STEM, HUMSS, GAS and ABM. Finally, under TESDA you can take NC II in Housekeeping, Caregiving and Food & Beverage Services.
 
 ---
 
@@ -494,15 +502,15 @@ They also run the K‑12 basic education program (Kindergarten‑Grade 10, the
 
 **Answer:**
 
-The senior‑high (Grades 11‑12) strands offered are STEM (Science, Technology, Engineering & Mathematics), HUMSS (Humanities and Social Sciences), GAS (General Academic Strand) and ABM (Accountancy, Business & Management).
+For senior high (Grades 11‑12) the school offers four strands: Science, Technology, Engineering, and Mathematics (STEM); Humanities and Social Sciences (HUMSS); General Academic Strand (GAS); and Accountancy, Business, and Management (ABM).
 
 ---
 
-### ✅ Q56: Is there Nursing or Midwifery?
+### ❌ Q56: Is there Nursing or Midwifery?
 
 **Answer:**
 
-<div class="text">Yes! The School of Allied Health offers a Bachelor of Science in Nursing and a Bachelor of Midwifery, both available only at the Main Campus.</div>
+<div class="text">I'm not sure about that yet. You can visit the Registrar's Office or ask your academic adviser for more information.</div>
 
 ---
 
@@ -510,7 +518,7 @@ The senior‑high (Grades 11‑12) strands offered are STEM (Science, Technolo
 
 **Answer:**
 
-Yes! The college offers three TESDA NC II programs: Housekeeping NC II, Caregiving NC II, and Food and Beverage Services NC II (see “NC II UNDER TECHNICAL EDUCATION AND SKILLS DEVELOPMENT AUTHORITY (TESDA)” on p. 11).
+Yes! The college offers three TESDA NC II programs: Housekeeping NC II, Caregiving NC II, and Food and Beverage Services NC II (see “NC II UNDER TECHNICAL EDUCATION AND SKILLS DEVELOPMENT AUTHORITY (TESDA)” on p. 11).
 
 ---
 
@@ -525,11 +533,11 @@ Zamboanga del Norte, on every last Friday of the month around 1:30 PM.
 
 ---
 
-### ✅ Q59: Do they have Education programs?
+### ❌ Q59: Do they have Education programs?
 
 **Answer:**
 
-<div class="text">Yes! PAC offers education programs such as the Bachelor of Elementary Education (BEEd), Bachelor of Secondary Education (BSEd) majors, and even a Bachelor of Physical Education (BPEd). They also have other fields like Business and Computer Studies, but the education tracks are definitely there.<br><br>From the handbook, for the general policy: Yep—there are Education programs. The fee list even calls out an “Internship Fee (for Education Program)” and “FS 1 & 2 (for Education Program Only)”【OTHER SCHOOL FEES (p.41)】.</div>
+<div class="text">I'm not sure about that yet. You can visit the Registrar's Office or ask your academic adviser for more information.</div>
 
 ---
 
@@ -547,7 +555,22 @@ Liquidate all the expenses incurred within the prescribed period set by the busi
 
 **Answer:**
 
-The handbook’s 2025‑2026 edition lists the Gender‑Based Harassment Committee for SY 2025‑2026 (see Excerpt 1, p.22). It’s headed by Chair Doris M. Mansueto, Associate Dean, School of Nursing, with Vice‑Chair Marites A. Rabaca and Secretary Shelim Y. — that’s the only 2025‑specific info in the excerpts.
+According to the section **Gender-Based Sexual Harassment** (see page 22):
+
+Conducting preventive programs and awareness campaigns
+Gender-Based Harassment Committee for Brevity SY 2025-2026
+Chair: DORIS M. Public spaces within the educational environment
+Gender-Based Harassment Committee (GBHC)
+In compliance with CHED and RA 11313, the institution establishes a Gender-Based
+Harassment Committee, responsible for:
+1. In accordance with the Commission on Higher Education (CHED) policies and Republic Act 11313 (Safe Spaces Act of
+2019), this policy outlines the standards, responsibilities, and procedures for addressing
+Gender-Based Sexual Harassment (GBSH) in all spaces of the school community. Definition of Gender-Based Sexual Harassment (GBSH)
+GBSH refers to any unwelcome sexual behavior—verbal, physical, or online—that is directed toward a person based on sex, gender, sexual orientation, gender identity, or gender expression. Homophobic or transphobic slurs
+Scope of Protection
+All students, regardless of gender or gender identity, are protected against harassment occurring in:
+1. Cyber harassment, sexual advances online, or inappropriate messages
+6.
 
 ---
 
@@ -563,7 +586,7 @@ The handbook’s 2025‑2026 edition lists the Gender‑Based Harassment Committ
 
 **Answer:**
 
-The college holds a Week of Spiritual Emphasis each semester, organized by faculty and student leaders as part of its multifaith program (see VII. Multifaith Services, p.91). Attending it is mandatory—students who don’t show up are charged with a first‑degree offense (5 demerits) under the “Not attending … Week of Spiritual Emphasis” rule (First‑Degree Offense, p.17).
+The college holds a Week of Spiritual Emphasis once every semester, organized by faculty and student leaders (Multifaith Services, p.91). Attending it is mandatory—failure to go to the Week of Spiritual Emphasis (or other religious meetings) is listed as a first‑degree offense worth 5 demerits (First‑Degree Offense, p.17).
 
 ---
 
@@ -571,7 +594,7 @@ The college holds a Week of Spiritual Emphasis each semester, organized by f
 
 **Answer:**
 
-Yes. According to the grading rules (F. Grading System, p. 32), an “INC” (incomplete) mark can’t stay on your record for longer than one academic year. It has to be cleared within that time.
+Yes. According to the Grading System (p. 32), an “INC” (incomplete) mark can’t stay on your record for longer than one academic year. After that it must be resolved or it will be removed.
 
 ---
 
@@ -609,7 +632,7 @@ Students may not use department or dormitory bulletin boards without first obtai
 
 **Answer:**
 
-Yes—according to the Admission Policies (p.27), every first‑year student must take a drug test. The school says the test isn’t punitive and will help anyone who tests positive with the withdrawal process, but if the same substance shows up again the next semester the student won’t be eligible for admission.
+All first‑year students must take a drug test. The policy says the test isn’t punitive and the school will help anyone who tests positive with a withdrawal process, but if the same substance shows up again the next semester the student won’t be eligible for admission (Admission Policies, p.27).
 
 ---
 
@@ -617,7 +640,7 @@ Yes—according to the Admission Policies (p.27), every first‑year student mus
 
 **Answer:**
 
-Yes! The Family Scholar Program (p.79) gives a tuition‑fee discount to the youngest sibling when you have multiple kids enrolled. Four siblings get ₱5,000 off, three siblings ₱3,500 off, and two siblings ₱2,000 off, but it only applies to the sibling in the lowest year.
+Yes! The Family Scholar Program gives a tuition‑fee discount to the youngest sibling when you have multiple kids enrolled. If you have two siblings it’s a Php 2,000 discount; three siblings Php 3,500; and four siblings Php 5,000 (the discount applies only to the sibling in the lowest year) — see “Family Scholar Program,” p. 79.
 
 ---
 
@@ -625,14 +648,7 @@ Yes! The Family Scholar Program (p.79) gives a tuition‑fee discount to the y
 
 **Answer:**
 
-Sure! The dorm fees are listed on page 42 under **DORMITORY CHARGES**:
-
-- Old‑room: ₱717.99 per month  
-- New‑room: ₱938.91 per month  
-- Bed‑space: ₱331.38 per month  
-- Electricity: ₱165.69 per month  
-
-Also, per the **Dormitory Student’s Pledge** (p. 90), you can’t use any electrical gear (like a rice cooker, heater, TV, etc.) without the Home Dean’s permission, and doing so may bring extra charges.
+The dormitory costs are listed on page 42: an Old‑room is $717.99 per month, a New‑room $938.91 per month, a Bed‑space $331.38 per month, plus electricity at $165.69 per month. Also, per the Dormitory Student’s Pledge (p.90), you need Home Dean permission to use any electrical equipment in the dorm, otherwise you’ll be charged for it.
 
 ---
 

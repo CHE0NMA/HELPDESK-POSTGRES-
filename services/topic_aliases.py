@@ -118,19 +118,35 @@ def ensure_topic_alias_schema(get_db_fn) -> None:
 
 
 _SEED_ALIASES: List[dict] = [
-    # ---- Identity / History ----
+    # ------------------------------------------------------------------
+    # Identity / History / Founders / Logo / Hymn
+    # ------------------------------------------------------------------
     {
         "topic_key": "full_name_campuses",
-        "match_pattern": r"\b(full name|real (full )?name|name of (this )?school|campuses|other campus(es)?|how many campuses|campus locations?|where (is|are) the (main )?campus(es)?|which campus(es)?|main campus|sindangan|salug|postigo|leon b)\b",
+        "match_pattern": (
+            r"\b(full name|real (full )?name|name of (this )?school|"
+            r"campuses|other campus(es)?|how many campuses|campus locations?|"
+            r"where (is|are) the (main )?campus(es)?|which campus(es)?|"
+            r"main campus|sindangan|salug|postigo|leon b\.?|"
+            r"ano ang (totoong )?pangalan|unsa ang (tinuod )?ngalan|"
+            r"asa ang (mga )?campus|pila ka campus|asa ang main campus)\b"
+        ),
         "title_needles": ["academic program offerings", "brief history", "meetings"],
-        "content_needles": ["sindangan", "salug", "leon b. postigo", "philippine advent college, inc", "main campus", "lbp campus"],
+        "content_needles": [
+            "sindangan", "salug", "leon b. postigo", "philippine advent college, inc",
+            "main campus", "lbp campus", "magsaysay"
+        ],
         "source_priority": "handbook_only",
         "priority": 110,
-        "notes": "Q1/Q8 – full name + all three campuses",
+        "notes": "Full name + all campuses – keep strict, no bare 'on campus'",
     },
     {
         "topic_key": "original_name",
-        "match_pattern": r"\b(called before|original name|formerly known|old name|hillside view|before it became)\b",
+        "match_pattern": (
+            r"\b(called before|original name|formerly known|old name|hillside view|"
+            r"before it became|una nga ngalan|kanhi nga ngalan|unsa ang una|"
+            r"ano ang dating pangalan)\b"
+        ),
         "title_needles": ["brief history"],
         "content_needles": ["hillside view", "originally known", "1975"],
         "source_priority": "handbook_only",
@@ -138,7 +154,13 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "founded_history",
-        "match_pattern": r"\b(when did .{0,20} start|who founded|founder|founders|macias|when .{0,15} (built|established|founded)|something about 1975|tell me more about the founders|macias family)\b",
+        "match_pattern": (
+            r"\b(when did .{0,20} start|who founded|founder|founders|macias|"
+            r"when .{0,15} (built|established|founded)|something about 1975|"
+            r"tell me more about the founders|macias family|"
+            r"kanus-a gitukod|kinsa ang nagtukod|sino ang nagtatag|"
+            r"kailan tinayo|kasaysayan|history of pac)\b"
+        ),
         "title_needles": ["brief history"],
         "content_needles": ["mariano", "margie", "macias", "1975", "founded"],
         "source_priority": "handbook_only",
@@ -146,7 +168,10 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "logo",
-        "match_pattern": r"\b(logo|emblem|symbol|what does .{0,15} logo)\b",
+        "match_pattern": (
+            r"\b(logo|emblem|symbol|what does .{0,15} logo|"
+            r"ano ang logo|unsa ang logo|kahulugan ng logo)\b"
+        ),
         "title_needles": ["logo and symbols", "logo", "symbols"],
         "content_needles": ["bible", "torch", "1975", "blue", "red", "white"],
         "source_priority": "handbook_only",
@@ -154,7 +179,10 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "hymn",
-        "match_pattern": r"\b(hymn|who wrote|composer|lyrics|alma mater)\b",
+        "match_pattern": (
+            r"\b(hymn|who wrote|composer|lyrics|alma mater|"
+            r"kanta sa pac|pac hymn|sino ang sumulat|kinsa ang nagsulat)\b"
+        ),
         "title_needles": ["pac hymn", "hymn"],
         "content_needles": ["pilon", "la sage", "composed"],
         "source_priority": "handbook_only",
@@ -162,17 +190,26 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "ellen_white",
-        "match_pattern": r"\b(ellen white|education book|greatest want)\b",
+        "match_pattern": (
+            r"\b(ellen white|education book|greatest want|"
+            r"libro ni ellen|white education)\b"
+        ),
         "title_needles": ["greatest want", "foreword"],
         "content_needles": ["ellen g. white", "education", "greatest want of the world"],
         "source_priority": "handbook_only",
         "priority": 90,
     },
 
-    # ---- Philosophy / Vision / Mission / Values ----
+    # ------------------------------------------------------------------
+    # Philosophy / Vision / Mission / Core Values / Goals
+    # ------------------------------------------------------------------
     {
         "topic_key": "vision",
-        "match_pattern": r"\b(want to become|aspire|future of|what does .{0,20} want|envision|envisions)\b",
+        "match_pattern": (
+            r"\b(want to become|aspire|future of|what does .{0,20} want|"
+            r"envision|envisions|vision of|ano ang vision|unsa ang vision|"
+            r"gusto mahimo|kung unsa ang gusto)\b"
+        ),
         "title_needles": ["vision"],
         "content_needles": ["envisions", "center of excellence"],
         "source_priority": "handbook_only",
@@ -180,15 +217,34 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "core_values",
-        "match_pattern": r"\b(core values|pac values|the pac ones|values of (the )?(school|college|pac)|p-a-c values|purpose-driven)\b",
+        "match_pattern": (
+            r"\b(core values|pac values|the pac ones|values of (the )?(school|college|pac)|"
+            r"p-a-c values|purpose-driven|ano ang core values|unsa ang core values|"
+            r"mga pagpapahalaga|mga values)\b"
+        ),
         "title_needles": ["core values", "core value"],
         "content_needles": ["purpose-driven", "christ-centered", "academic excellence oriented"],
         "source_priority": "handbook_only",
         "priority": 100,
     },
     {
+        "topic_key": "christ_centered",
+        "match_pattern": (
+            r"\b(christ-?centered|christ centered living|christ.?centered|"
+            r"centered on christ|kinabuhi nga kristohanon|"
+            r"pamumuhay na kristiyano|christ centered)\b"
+        ),
+        "title_needles": ["core values", "declaration of principles"],
+        "content_needles": ["christ-centered", "christ centered", "c – christ-centered"],
+        "source_priority": "handbook_only",
+        "priority": 95,
+    },
+    {
         "topic_key": "mission",
-        "match_pattern": r"\b(main mission|what.?s the mission|mission of)\b",
+        "match_pattern": (
+            r"\b(main mission|what.?s the mission|mission of|"
+            r"ano ang mission|unsa ang mission|misyon)\b"
+        ),
         "title_needles": ["mission"],
         "content_needles": ["human service", "personal integrity"],
         "source_priority": "handbook_only",
@@ -196,7 +252,10 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "philosophy",
-        "match_pattern": r"\b(philosophy|school.?s? philosophy|philosophy about)\b",
+        "match_pattern": (
+            r"\b(philosophy|school.?s? philosophy|philosophy about|"
+            r"pilosopiya|ano ang philosophy|unsa ang philosophy)\b"
+        ),
         "title_needles": ["philosophy"],
         "content_needles": ["source of true education", "god is the source"],
         "source_priority": "handbook_only",
@@ -204,25 +263,25 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "goals",
-        "match_pattern": r"\b(goals students should|goals by graduation|what (are|should).{0,20}goals)\b",
+        "match_pattern": (
+            r"\b(goals students should|goals by graduation|what (are|should).{0,20}goals|"
+            r"mga layunin|mga goals|unsa ang goals)\b"
+        ),
         "title_needles": ["goals"],
         "content_needles": ["kindness", "patience", "spiritual life", "scriptures"],
         "source_priority": "handbook_only",
         "priority": 85,
     },
-    {
-        "topic_key": "christ_centered",
-        "match_pattern": r"\b(christ-centered|christ centered living)\b",
-        "title_needles": ["core values", "declaration of principles"],
-        "content_needles": ["christ-centered", "christ centered"],
-        "source_priority": "handbook_only",
-        "priority": 80,
-    },
 
-    # ---- Demerit / Discipline ----
+    # ------------------------------------------------------------------
+    # Demerit / Discipline / Probation / Appeal / Fine
+    # ------------------------------------------------------------------
     {
         "topic_key": "merit_points_start",
-        "match_pattern": r"\b(how many points|start with|merit points|points do we start|30 points)\b",
+        "match_pattern": (
+            r"\b(how many points|start with|merit points|points do we start|30 points|"
+            r"pila ka points|ilan ang points|mga puntos)\b"
+        ),
         "title_needles": ["student's behavioral code", "behavioral code"],
         "content_needles": ["30 points", "merit of 30", "beginning of the semester"],
         "source_priority": "handbook_only",
@@ -230,7 +289,10 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "first_degree",
-        "match_pattern": r"\b(first[ -]?degree|light\s+offense|examples of (light|first))\b",
+        "match_pattern": (
+            r"\b(first[ -]?degree|light\s+offense|examples of (light|first)|"
+            r"unang degree|una nga degree|banay nga sala)\b"
+        ),
         "title_needles": ["first-degree", "first degree"],
         "content_needles": ["5 demerit", "public displays of affection", "unchaperoned"],
         "source_priority": "handbook_only",
@@ -238,7 +300,11 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "second_degree",
-        "match_pattern": r"\b(how bad|how serious|what.?s a|what is a).{0,20}second[ -]?degree\b|\bsecond[ -]?degree\b",
+        "match_pattern": (
+            r"\b(how bad|how serious|what.?s a|what is a).{0,20}second[ -]?degree\b|"
+            r"\bsecond[ -]?degree|"
+            r"ikaduha nga degree|pangalawang degree\b"
+        ),
         "title_needles": ["second-degree", "second degree"],
         "content_needles": ["15 demerit"],
         "source_priority": "handbook_only",
@@ -246,7 +312,11 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "third_degree",
-        "match_pattern": r"\b(heaviest|worst|most serious).{0,25}(demerit|offense|level|degree)\b|\bthird[ -]?degree\b",
+        "match_pattern": (
+            r"\b(heaviest|worst|most serious).{0,25}(demerit|offense|level|degree)\b|"
+            r"\bthird[ -]?degree|"
+            r"ikatulo nga degree|pangatlong degree|pinaka bug-at\b"
+        ),
         "title_needles": ["third-degree", "third degree"],
         "content_needles": ["30 demerit"],
         "source_priority": "handbook_only",
@@ -254,7 +324,11 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "max_fine",
-        "match_pattern": r"\b(max(imum)?\s*fine|is there a maximum fine|biggest fine|fine for|community service instead of fine)\b",
+        "match_pattern": (
+            r"\b(max(imum)?\s*fine|is there a maximum fine|biggest fine|fine for|"
+            r"community service instead of fine|"
+            r"pinaka taas nga fine|unsa ang maximum fine|maximum nga multa)\b"
+        ),
         "title_needles": ["disciplinary measures", "student's behavioral code"],
         "content_needles": ["1,500", "1500", "fines", "community service"],
         "source_priority": "handbook_only",
@@ -262,7 +336,11 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "appeal",
-        "match_pattern": r"\b(appeal).{0,50}(decision|disciplinary|sanction|how long|window)|how long.{0,30}appeal\b",
+        "match_pattern": (
+            r"\b(appeal).{0,50}(decision|disciplinary|sanction|how long|window)|"
+            r"how long.{0,30}appeal|"
+            r"mag-apela|pag-apela|unsaon pag-apela|ilan araw ang appeal\b"
+        ),
         "title_needles": ["prescription and appeal"],
         "content_needles": ["15 days", "appealed within"],
         "source_priority": "handbook_only",
@@ -270,32 +348,47 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "probation_20",
-        "match_pattern": r"\b(20 or more demerits|20\+ demerits|get 20|probation|"
-                          r"demerit.{0,25}(end|near).{0,15}(term|semester)|"
-                          r"(end|near).{0,15}(term|semester).{0,25}demerit|"
-                          r"malapit sa katapusan.{0,20}demerit|"
-                          r"hapit na matapos.{0,20}demerit)\b",
+        "match_pattern": (
+            r"\b(20 or more demerits|20\+ demerits|get 20|probation|"
+            r"demerit.{0,25}(end|near).{0,15}(term|semester)|"
+            r"(end|near).{0,15}(term|semester).{0,25}demerit|"
+            r"malapit sa katapusan.{0,20}demerit|"
+            r"hapit na matapos.{0,20}demerit|"
+            r"duol sa katapusan|near the end of the term)\b"
+        ),
         "title_needles": ["disciplinary measures"],
         "content_needles": ["20 demerits", "placed on probation", "one semester"],
         "source_priority": "handbook_only",
         "priority": 100,
     },
 
-    # ---- Dress / Conduct ----
+    # ------------------------------------------------------------------
+    # Dress / Conduct / Dorm / PDA / Curfew / Music / Worship
+    # ------------------------------------------------------------------
     {
         "topic_key": "jewelry_dress",
-        "match_pattern": r"\b(jewelry|necklace|ring|earrings|piercing|dress code|"
-                          r"how .{0,15}dress|proper attire|inappropriate attire|"
-                          r"slippers|short pants|crop tops|tsinelas|damit|"
-                          r"ano ang damit|pananamit|bisti)\b",
+        "match_pattern": (
+            r"\b(jewelry|necklace|ring|earrings|piercing|dress code|"
+            r"how .{0,15}dress|proper attire|inappropriate attire|"
+            r"slippers|short pants|crop tops|tsinelas|damit|"
+            r"ano ang damit|pananamit|bisti|pwede ba mag jewelry|"
+            r"pwede ba magdala ug singsing|allowed to wear|"
+            r"slippers allowed|are slippers)\b"
+        ),
         "title_needles": ["dress and appearance", "first-degree", "first degree", "school uniform"],
-        "content_needles": ["necklace", "earrings", "jewelry", "wedding ring", "slippers", "short pants", "crop tops", "uniform", "attire"],
+        "content_needles": [
+            "necklace", "earrings", "jewelry", "wedding ring", "slippers",
+            "short pants", "crop tops", "uniform", "attire"
+        ],
         "source_priority": "handbook_only",
         "priority": 100,
     },
     {
         "topic_key": "unchaperoned_hike",
-        "match_pattern": r"\b(hike|outing).{0,30}(chaperone|without|unchaperoned)|unchaperoned|(without a chaperone)\b",
+        "match_pattern": (
+            r"\b(hike|outing).{0,30}(chaperone|without|unchaperoned)|unchaperoned|"
+            r"(without a chaperone)|walay chaperone|walang chaperone\b"
+        ),
         "title_needles": ["first-degree", "first degree"],
         "content_needles": ["unchaperoned hike", "unchaperoned"],
         "source_priority": "handbook_only",
@@ -303,7 +396,10 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "visit_dorms",
-        "match_pattern": r"\b(visit|visiting).{0,25}(other )?dorms?|other dorms?\b",
+        "match_pattern": (
+            r"\b(visit|visiting).{0,25}(other )?dorms?|other dorms?|"
+            r"bisita sa laing dorm|pumunta sa ibang dorm\b"
+        ),
         "title_needles": ["first-degree", "first degree"],
         "content_needles": ["visiting in dormitor", "visiting in dormitories"],
         "source_priority": "handbook_only",
@@ -311,7 +407,10 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "cook_dorm",
-        "match_pattern": r"\b(cook|cooking).{0,30}(dorm|dormitory|inside)|cook inside\b",
+        "match_pattern": (
+            r"\b(cook|cooking).{0,30}(dorm|dormitory|inside)|cook inside|"
+            r"magluto sa dorm|pagluto sulod sa dorm\b"
+        ),
         "title_needles": ["second-degree", "second degree"],
         "content_needles": ["cooking within the dormitory", "cooking within"],
         "source_priority": "handbook_only",
@@ -319,7 +418,10 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "cafeteria_food",
-        "match_pattern": r"\b(food|cafeteria).{0,30}(not allowed|prohibited|bawal|banned|restricted)\b",
+        "match_pattern": (
+            r"\b(food|cafeteria).{0,30}(not allowed|prohibited|bawal|banned|restricted)|"
+            r"bawal nga pagkaon|dili allowed nga pagkaon\b"
+        ),
         "title_needles": ["second-degree", "second degree"],
         "content_needles": ["not sanctioned"],
         "source_priority": "handbook_only",
@@ -327,7 +429,11 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "pda",
-        "match_pattern": r"\b(public display of affection|pda|going together|sweethearts|kissing|necking)\b",
+        "match_pattern": (
+            r"\b(public display of affection|pda|going together|sweethearts|"
+            r"kissing|necking|magholding hands|maghalok|"
+            r"public display|affection)\b"
+        ),
         "title_needles": ["first-degree", "first degree", "third-degree", "third degree"],
         "content_needles": ["public displays of affection", "going together", "kissing", "necking"],
         "source_priority": "handbook_only",
@@ -335,7 +441,10 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "curfew",
-        "match_pattern": r"\b(curfew|9:30|9\.30|dorm.*(hours|time)|curfew hours)\b",
+        "match_pattern": (
+            r"\b(curfew|9:30|9\.30|dorm.*(hours|time)|curfew hours|"
+            r"oras sa pag-uli|oras sa dorm|kanus-a ang curfew)\b"
+        ),
         "title_needles": ["first-degree", "first degree", "dormitory"],
         "content_needles": ["9:30", "curfew", "4:30"],
         "source_priority": "handbook_only",
@@ -343,8 +452,11 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "music_songs",
-        "match_pattern": r"\b(music|songs|questionable music|indecent songs|"
-                          r"rules? about music|musika|kanta|awit)\b",
+        "match_pattern": (
+            r"\b(music|songs|questionable music|indecent songs|"
+            r"rules? about music|musika|kanta|awit|"
+            r"bawal nga kanta|dili allowed nga music)\b"
+        ),
         "title_needles": ["first-degree", "first degree"],
         "content_needles": ["questionable music", "indecent songs"],
         "source_priority": "handbook_only",
@@ -352,17 +464,53 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "worship_absences",
-        "match_pattern": r"\b(miss worship|worship (too many|absences)|worship absences)\b",
-        "title_needles": ["dormitory student's pledge", "dormitory"],
+        "match_pattern": (
+            r"\b(miss worship|worship (too many|absences)|worship absences|"
+            r"too many times.*worship|kulang sa worship|"
+            r"pila ka times miss worship|absent sa worship)\b"
+        ),
+        "title_needles": ["dormitory student's pledge", "dormitory", "first-degree"],
         "content_needles": ["worship absences", "20 absences", "30 worship"],
         "source_priority": "handbook_only",
         "priority": 100,
     },
-
-    # ---- Legal ----
+{
+    "topic_key": "staff_people",
+    "match_pattern": (
+        r"(?i)\b("
+        r"who is|sino ang|kinsa ang|who's|who are|"
+        r"president|dean|principal|registrar|cashier|"
+        r"guidance|counselor|librarian|nurse|"
+        r"teacher|instructor|professor|faculty|"
+        r"staff|employee|personnel|office head|"
+        r"director|coordinator|chairperson|"
+        r"contact (person|of)|number of|email of|"
+        r"office of the|sa opisina ni|"
+        r"sino si|kinsa si"
+        r")\b"
+    ),
+    "title_needles": [
+        "administrative staff", "faculty", "personnel",
+        "office of the president", "dean", "registrar",
+        "guidance office", "student affairs"
+    ],
+    "content_needles": [
+        "president", "dean", "registrar", "cashier",
+        "guidance counselor", "principal", "faculty"
+    ],
+    "source_priority": "handbook_only",
+    "priority": 115,
+},
+    # ------------------------------------------------------------------
+    # Legal / Safe Spaces / Anti-Bullying / Hazing / Social Media
+    # ------------------------------------------------------------------
     {
         "topic_key": "safe_spaces",
-        "match_pattern": r"\b(safe spaces|ra.?11313|safe spaces act|11313|gender-based|gbsh|committee for safe)\b",
+        "match_pattern": (
+            r"\b(safe spaces|ra.?11313|safe spaces act|11313|"
+            r"gender-based|gbsh|committee for safe|"
+            r"batas sa safe spaces)\b"
+        ),
         "title_needles": ["gender-based sexual harassment", "gender-based", "safe spaces"],
         "content_needles": ["11313", "safe spaces act", "gender-based harassment committee"],
         "source_priority": "handbook_only",
@@ -370,7 +518,10 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "anti_bullying",
-        "match_pattern": r"\b(anti.?bullying|ra.?10627|bullying law|10627)\b",
+        "match_pattern": (
+            r"\b(anti.?bullying|ra.?10627|bullying law|10627|"
+            r"batas anti-bullying|anti bullying)\b"
+        ),
         "title_needles": ["grievance", "anti-bullying", "bullying", "third-degree"],
         "content_needles": ["10627", "anti-bullying"],
         "source_priority": "handbook_only",
@@ -378,7 +529,10 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "hazing",
-        "match_pattern": r"\b(hazing|fraternity|sorority)\b",
+        "match_pattern": (
+            r"\b(hazing|fraternity|sorority|"
+            r"frat|soro|pag-hazing)\b"
+        ),
         "title_needles": ["third-degree", "third degree"],
         "content_needles": ["fraternity", "sorority", "hazing", "never be allowed"],
         "source_priority": "handbook_only",
@@ -386,39 +540,66 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "social_media",
-        "match_pattern": r"\b(social media|cyber|online (harassment|libel)|responsible use of social)\b",
+        "match_pattern": (
+            r"\b(social media|cyber|online (harassment|libel)|"
+            r"responsible use of social|facebook|tiktok rules)\b"
+        ),
         "title_needles": ["third-degree", "third degree"],
         "content_needles": ["social media", "cyber libel", "responsible use"],
         "source_priority": "handbook_only",
         "priority": 90,
     },
 
-    # ---- Programs ----
+    # ------------------------------------------------------------------
+    # Academic Programs / Strands / TESDA / Campuses for programs
+    # ------------------------------------------------------------------
     {
         "topic_key": "programs",
-        "match_pattern": r"\b(programs?|courses?|kurso).{0,25}(offer|available|does pac|meron)|"
-                          r"nursing|midwifery|business administration|education programs?|"
-                          r"tesda|it or computer|computer science|information technology|"
-                          r"bsba|bsit|bsba|bpa|beed|bsed|bped|"
-                          r"which campus(es)? .{0,20}offer\b",
+        "match_pattern": (
+            r"\b(programs?|courses?|kurso).{0,25}(offer|available|does pac|meron)|"
+            r"nursing|midwifery|business administration|education programs?|"
+            r"tesda|it or computer|computer science|information technology|"
+            r"bsba|bsit|bpa|beed|bsed|bped|"
+            r"which campus(es)? .{0,20}offer|"
+            r"naa bay nursing|naa bay midwifery|naa bay education|"
+            r"meron bang nursing|meron bang midwifery|"
+            r"ano ang mga program|unsa ang mga kurso|"
+            r"is there nursing|is there midwifery|"
+            r"do they have education|is business administration available)\b"
+        ),
         "title_needles": ["academic program offerings", "academic program", "program offerings"],
-        "content_needles": ["bachelor of science", "bachelor of", "nursing", "midwifery", "stem", "humss", "tesda", "housekeeping", "caregiving", "main campus", "salug"],
+        "content_needles": [
+            "bachelor of science in nursing", "midwifery", "bachelor of early childhood",
+            "bachelor of elementary education", "bachelor of science in secondary education",
+            "bachelor of science in business administration", "information technology",
+            "computer science", "stem", "humss", "tesda", "housekeeping", "caregiving",
+            "main campus", "salug"
+        ],
         "source_priority": "handbook_only",
-        "priority": 105,
+        "priority": 110,
     },
     {
         "topic_key": "senior_high_strands",
-        "match_pattern": r"\b(senior high|strands?|shs|what strands)\b",
+        "match_pattern": (
+            r"\b(senior high|strands?|shs|what strands|"
+            r"mga strand|unsa ang strands|ano ang strands)\b"
+        ),
         "title_needles": ["academic program offerings", "academic program", "program offerings"],
         "content_needles": ["stem", "humss", "abm", "gas", "grades 11"],
         "source_priority": "handbook_only",
         "priority": 90,
     },
 
-    # ---- Academic policies / fees / scholarships ----
+    # ------------------------------------------------------------------
+    # Academic policies / Fees / Scholarships / Incomplete / Residency
+    # ------------------------------------------------------------------
     {
         "topic_key": "incomplete_grades",
-        "match_pattern": r"\b(incomplete grades?|deadline for incomplete|how long to complete an incomplete|complete an incomplete)\b",
+        "match_pattern": (
+            r"\b(incomplete grades?|deadline for incomplete|"
+            r"how long to complete an incomplete|complete an incomplete|"
+            r"inc grade|hanggang kailan ang inc|pila ka tuig ang incomplete)\b"
+        ),
         "title_needles": ["completion of incomplete", "schedule of examinations", "grading"],
         "content_needles": ["within one (1) year", "one year", "incomplete grade"],
         "source_priority": "handbook_only",
@@ -426,17 +607,24 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "residency_limit",
-        "match_pattern": r"\b(residency (limit|requirement)|maximum .{0,15} years|"
-                          r"finish(ing)? a degree|complete the program|"
-                          r"how long .{0,20}(finish|complete|degree))\b",
+        "match_pattern": (
+            r"\b(residency (limit|requirement)|maximum .{0,15} years|"
+            r"finish(ing)? a degree|complete the program|"
+            r"how long .{0,20}(finish|complete|degree)|"
+            r"residency limit|maximum of 5 years|"
+            r"hanggang ilan taon|pila ka tuig makahuman)\b"
+        ),
         "title_needles": ["admission policies", "residency", "guidelines for graduation and academic honor", "academic honors"],
         "content_needles": ["maximum of 5 years", "5 years to complete", "residency"],
         "source_priority": "handbook_only",
-        "priority": 100,
+        "priority": 105,
     },
     {
         "topic_key": "drug_test",
-        "match_pattern": r"\b(drug test|first.?year.{0,20}drug)\b",
+        "match_pattern": (
+            r"\b(drug test|first.?year.{0,20}drug|"
+            r"drug test sa first year|required drug test)\b"
+        ),
         "title_needles": ["admission policies", "first-year"],
         "content_needles": ["drug test", "first-year students will be required"],
         "source_priority": "handbook_only",
@@ -444,7 +632,11 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "sibling_scholarship",
-        "match_pattern": r"\b(scholarship.{0,20}sibling|siblings?|family scholar|discount.{0,15}sibling)\b",
+        "match_pattern": (
+            r"\b(scholarship.{0,20}sibling|siblings?|family scholar|"
+            r"discount.{0,15}sibling|scholarship para sa magkapatid|"
+            r"discount sa siblings)\b"
+        ),
         "title_needles": ["family scholar", "scholarship"],
         "content_needles": ["four siblings", "three siblings", "two siblings", "youngest sibling"],
         "source_priority": "handbook_only",
@@ -452,7 +644,10 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "dorm_fees",
-        "match_pattern": r"\b(dormitory (fees?|charges?)|dorm fees?|bed space)\b",
+        "match_pattern": (
+            r"\b(dormitory (fees?|charges?)|dorm fees?|bed space|"
+            r"bayad sa dorm|pila ang dorm)\b"
+        ),
         "title_needles": ["dormitory charges", "dormitory"],
         "content_needles": ["717.99", "938.91", "331.38", "electricity"],
         "source_priority": "handbook_only",
@@ -460,7 +655,10 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "week_spiritual",
-        "match_pattern": r"\b(week of spiritual emphasis|spiritual emphasis)\b",
+        "match_pattern": (
+            r"\b(week of spiritual emphasis|spiritual emphasis|"
+            r"semana sa espirituhanong paghatag og gibug-aton)\b"
+        ),
         "title_needles": ["multifaith", "first-degree"],
         "content_needles": ["week of spiritual emphasis", "spiritual emphasis"],
         "source_priority": "handbook_only",
@@ -468,7 +666,10 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "morphe",
-        "match_pattern": r"\b(morphe|2008)\b",
+        "match_pattern": (
+            r"\b(morphe|2008|manual of regulations|"
+            r"morphe of 2008)\b"
+        ),
         "title_needles": ["school discipline under morphe", "morphe"],
         "content_needles": ["morphe of 2008", "manual of regulations"],
         "source_priority": "handbook_only",
@@ -476,13 +677,43 @@ _SEED_ALIASES: List[dict] = [
     },
     {
         "topic_key": "2025_edition",
-        "match_pattern": r"\b(2025 edition|school year 2025|2025-2026|2025.?2026)\b",
+        "match_pattern": (
+            r"\b(2025 edition|school year 2025|2025-2026|2025.?2026|"
+            r"sy 2025|bag-ong edition|latest handbook)\b"
+        ),
         "title_needles": ["gender-based", "foreword", "academic program"],
         "content_needles": ["2025", "2025-2026", "sy 2025"],
         "source_priority": "handbook_only",
         "priority": 80,
     },
+
+    # ------------------------------------------------------------------
+    # People / Staff / Faculty / Offices (for future data you will insert)
+    # ------------------------------------------------------------------
+    {
+        "topic_key": "staff_people",
+        "match_pattern": (
+            r"\b(who is the|who's the|name of the|"
+            r"president|dean|registrar|cashier|guidance counselor|"
+            r"faculty|teacher|instructor|staff|personnel|"
+            r"office of the|director of|"
+            r"kinsa ang|sino ang|sino ba ang|"
+            r"unsa ang ngalan sa|ano ang pangalan ng)\b"
+        ),
+        "title_needles": [
+            "faculty", "staff", "personnel", "administration",
+            "office of the president", "dean", "registrar", "guidance"
+        ],
+        "content_needles": [
+            "president", "dean", "registrar", "cashier", "guidance",
+            "faculty", "staff", "director"
+        ],
+        "source_priority": "handbook_only",
+        "priority": 85,
+        "notes": "Starter alias for when you add staff/faculty sections or FAQ rows with photos",
+    },
 ]
+
 
 def seed_default_aliases(get_db_fn, force: bool = False) -> int:
     """Insert seed aliases if the table is empty (or force=True)."""

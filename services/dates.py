@@ -114,6 +114,122 @@ OPEN_CLOSED_PATTERNS = [
     r'\b(registrar|business office|cashier)\b.{0,20}\b(open|closed|open ba|sarado)\b',
 ]
 
+# ------------------------------------------------------------------
+# Stronger schedule follow-up detection
+# ------------------------------------------------------------------
+_SCHEDULE_LEVEL_FOLLOWUP_RE = re.compile(
+    r'(?i)\b(?:'
+    r'all levels?|all departments?|whole school|everyone|all of us|for all|'
+    r'so all|also all|including all|all level|'
+    r'(?:elementary|high.?school|college|k-?12|shs|jhs|registrar|business)'
+    r'(?:\s+(?:too|also|as well|ba|pud|naman))?|'
+    r'(?:so|and|what about|how about|kaya|paano|unsa|ano)\s+'
+    r'(?:all|everyone|whole|tanan|lahat|tanang level)|'
+    r'sa tanan|para sa tanan|sa lahat|para sa lahat|'
+    r'college too|elementary also|high school too|for everyone|whole school'
+    r')\b'
+)
+
+def is_schedule_level_followup(question: str, ctx) -> bool:
+    """Very aggressive detector for short follow-ups when schedule context exists."""
+    if not ctx or not getattr(ctx, 'last_schedule_query', None):
+        return False
+
+    q = (question or '').strip().lower()
+    if not q:
+        return False
+
+    # Extremely short messages that contain any of these words are almost
+    # certainly continuing the previous schedule conversation
+    if len(q.split()) <= 6 and any(w in q for w in (
+        'all', 'level', 'college', 'elementary', 'high', 'tanan', 'lahat',
+        'everyone', 'whole', 'too', 'also', 'sa', 'for', 'school'
+    )):
+        return True
+
+    return bool(_SCHEDULE_LEVEL_FOLLOWUP_RE.search(q))
+
+
+def answer_schedule_department_followup(question: str, ctx) -> Optional[str]:
+    """Handle short follow-ups that change the department/level of the
+    previous schedule answer, or expand it to 'all'.
+
+    Examples that now work:
+      - "so all level?"
+      - "all levels?"
+      - "college too?"
+      - "elementary also?"
+      - "sa tanan?"
+      - "for high school?"
+    """
+    if not ctx or not getattr(ctx, 'last_schedule_query', None):
+        return None
+
+    last = ctx.last_schedule_query
+    q = (question or '').strip()
+    if not q:
+        return None
+
+    # --- 1. Explicit "all levels / whole school" expansion ---------------
+    if is_schedule_level_followup(q, ctx):
+        # Force all departments
+        dept = 'all'
+        scope = last.get('scope', 'general')
+        query_date = last.get('query_date')
+        if not query_date:
+            return None
+
+        facts = gather_single_day_facts(query_date, dept)
+        canonical = build_canonical_single_day_sentence(facts, scope, dept)
+        natural = nlg.speak_naturally(
+            canonical,
+            q,
+            last.get('detected_lang', 'english'),
+            extra_note=_RELATIVE_DATE_NOTE,
+        )
+        if natural and not answer_is_grounded(natural, canonical, min_overlap=0.25):
+            natural = canonical
+
+        # Update context so further follow-ups stay correct
+        ctx.last_schedule_query = {
+            'query_date': query_date,
+            'dept': dept,
+            'scope': scope,
+            'detected_lang': last.get('detected_lang', 'english'),
+            'canonical': canonical,
+            'question': q,
+        }
+        return natural
+
+    # --- 2. Normal department switch (existing logic, kept intact) -------
+    dept = sched.detect_dept_from_question(q)
+    if dept == 'all' or len(q.split()) > 6:
+        return None
+
+    if not nlg.classify_followup(q, last.get('question', ''), last.get('canonical', '')):
+        return None
+
+    facts = gather_single_day_facts(last['query_date'], dept)
+    scope = last.get('scope', 'general')
+    canonical = build_canonical_single_day_sentence(facts, scope, dept)
+    natural = nlg.speak_naturally(
+        canonical,
+        q,
+        last.get('detected_lang', 'english'),
+        extra_note=_RELATIVE_DATE_NOTE,
+    )
+    if natural and not answer_is_grounded(natural, canonical, min_overlap=0.25):
+        natural = canonical
+
+    ctx.last_schedule_query = {
+        'query_date': last['query_date'],
+        'dept': dept,
+        'scope': scope,
+        'detected_lang': last.get('detected_lang', 'english'),
+        'canonical': canonical,
+        'question': q,
+    }
+    return natural
 
 def _has_day_word(q: str, words: list) -> bool:
     return fuzzy_contains(q, words, threshold=80)
@@ -729,140 +845,71 @@ _RELATIVE_DATE_NOTE = (
 
 
 def answer_date_question(
-    question: str, detected_lang: str = 'english', ctx=None,
-    forced_dept: Optional[str] = None,
+    question: str,
+    detected_lang: str = 'english',
+    ctx=None,
+    forced_dept: str = None,
 ) -> Optional[str]:
-    if not is_date_question(question, ctx=ctx):
+    """
+    Main entry point for any date / schedule / holiday / class question.
+    Always saves ctx.last_schedule_query so short follow-ups work.
+    """
+    if not question:
         return None
 
-    dept = forced_dept if forced_dept else sched.detect_dept_from_question(question)
-    scope = sched.detect_query_scope(question)
-    has_own_date = _has_explicit_date_signal(question)
+    # 1. Parse the date
+    query_date, date_type, display = parse_date_from_question(question)
 
-    is_followup = False
-    if ctx and getattr(ctx, 'last_schedule_query', None):
-        last = ctx.last_schedule_query
+    # 2. Detect department / scope
+    dept = forced_dept or sched.detect_dept_from_question(question) or 'all'
 
-        if dept == 'all' and last.get('dept', 'all') != 'all':
-            dept = last['dept']
-        if scope == 'general' and last.get('scope', 'general') != 'general':
-            scope = last['scope']
-
-        is_followup = nlg.classify_followup(
-            question, last.get('question', ''), last.get('canonical', '')
-        )
-        if not is_followup:
-            q_lower = question.lower()
-            has_weekday = any(
-                re.search(rf'\b{name}\b', q_lower, re.I)
-                for name in WEEKDAY_NAMES
-            )
-            has_relative = (
-                _has_day_word(q_lower, TOMORROW_WORDS)
-                or _has_day_word(q_lower, TODAY_WORDS)
-                or _has_day_word(q_lower, YESTERDAY_WORDS)
-            )
-            is_correction = bool(re.search(
-                r'\b(i\s+mean[t]?|meant|sorry|not\s+that|correction|actually|'
-                r'how\s+about|what\s+about|and|then|kaya|paano\s+naman)\b',
-                q_lower, re.I,
-            ))
-            if has_weekday or has_relative or is_correction:
-                is_followup = True
-
-    if has_own_date or any(
-        re.search(rf'\b{name}\b', question, re.I) for name in WEEKDAY_NAMES
-    ) or _has_day_word(question.lower(), TOMORROW_WORDS + TODAY_WORDS + YESTERDAY_WORDS):
-        query_date, date_type, display_date = parse_date_from_question(question)
-        if not query_date:
-            sched.record_missing_date_query(question, None)
-            return None
-    elif (
-        is_followup
-        and ctx
-        and ctx.last_schedule_query.get('query_date')
-    ):
-        query_date = ctx.last_schedule_query['query_date']
-        date_type = 'specific'
+    # Simple scope detection
+    q_lower = question.lower()
+    if any(w in q_lower for w in ('class', 'classes', 'pasok', 'klase', 'school day')):
+        scope = 'class'
+    elif any(w in q_lower for w in ('office', 'registrar', 'business', 'cashier', 'open', 'closed')):
+        scope = 'office'
     else:
-        query_date, date_type, display_date = parse_date_from_question(question)
-        if not query_date:
-            sched.record_missing_date_query(question, None)
-            return None
+        scope = 'general'
 
-    # --- range branch ---
+    # 3. Gather facts + build canonical sentence
     if date_type in ('this_week', 'next_week', 'last_week', 'this_month', 'next_month', 'last_month'):
         facts = gather_range_facts(query_date, date_type, dept)
         canonical = build_canonical_range_sentence(facts)
-        natural = nlg.speak_naturally(
-            canonical, question, detected_lang, extra_note=_RELATIVE_DATE_NOTE
-        )
-        # If the paraphrase drifts, use the exact canonical sentence
-        if natural and not answer_is_grounded(natural, canonical, min_overlap=0.25):
-            natural = canonical
-        if ctx is not None:
-            ctx.last_schedule_query = {
-                'query_date': query_date,
-                'dept': dept,
-                'scope': scope,
-                'detected_lang': detected_lang,
-                'canonical': canonical,
-                'question': question,
-            }
-        return natural
+    else:
+        facts = gather_single_day_facts(query_date, dept)
+        canonical = build_canonical_single_day_sentence(facts, scope, dept)
 
-    # --- single-day branch ---
-    facts = gather_single_day_facts(query_date, dept)
-    canonical = build_canonical_single_day_sentence(facts, scope, dept)
+    if not canonical:
+        return None
+
+    # 4. Natural language rephrasing
     natural = nlg.speak_naturally(
-        canonical, question, detected_lang, extra_note=_RELATIVE_DATE_NOTE
+        canonical,
+        question,
+        detected_lang,
+        extra_note=_RELATIVE_DATE_NOTE,
     )
+
+    # 5. Grounding check
     if natural and not answer_is_grounded(natural, canonical, min_overlap=0.25):
         natural = canonical
 
+    final_answer = natural or canonical
+
+    # 6. CRITICAL — save context so short follow-ups work
     if ctx is not None:
         ctx.last_schedule_query = {
             'query_date': query_date,
             'dept': dept,
             'scope': scope,
+            'date_type': date_type,
             'detected_lang': detected_lang,
             'canonical': canonical,
             'question': question,
         }
-    return natural
+        ctx.update(user_msg=question, bot_response=final_answer)
+
+    return final_answer
 
 
-def answer_schedule_department_followup(question: str, ctx) -> Optional[str]:
-    if not ctx or not getattr(ctx, 'last_schedule_query', None):
-        return None
-    dept = sched.detect_dept_from_question(question)
-    if dept == 'all' or len(question.split()) > 6:
-        return None
-
-    last = ctx.last_schedule_query
-    if not nlg.classify_followup(
-        question, last.get('question', ''), last.get('canonical', '')
-    ):
-        return None
-
-    facts = gather_single_day_facts(last['query_date'], dept)
-    scope = last.get('scope', 'general')
-    canonical = build_canonical_single_day_sentence(facts, scope, dept)
-    natural = nlg.speak_naturally(
-        canonical,
-        question,
-        last.get('detected_lang', 'english'),
-        extra_note=_RELATIVE_DATE_NOTE,
-    )
-    if natural and not answer_is_grounded(natural, canonical, min_overlap=0.25):
-        natural = canonical
-
-    ctx.last_schedule_query = {
-        'query_date': last['query_date'],
-        'dept': dept,
-        'scope': scope,
-        'detected_lang': last.get('detected_lang', 'english'),
-        'canonical': canonical,
-        'question': question,
-    }
-    return natural

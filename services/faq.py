@@ -562,7 +562,6 @@ def _combine_handbook_and_faq(question: str, candidates: list, hb_chunks: list,
         )
     return faq_ans or hb_ans
 
-
 def find_answer(question: str, return_topic: bool = False, session_id: str = None):
     start = time.time()
     ctx = get_conversation_context(session_id or 'default')
@@ -574,13 +573,13 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
         if resolved:
             return resolved if return_topic else resolved[0]
 
-    # Admin-verified corrections: absolute top priority, even over the
-    # success cache below. When an admin fixes a reported wrong answer
-    # (see services/corrections.py + routes/admin.py's
-    # /api/admin/add_correction), that fix must win over anything else
-    # cached for the same question -- otherwise a stale wrong answer
-    # could keep winning the answer_success_cache race after being
-    # explicitly corrected.
+    if ctx and getattr(ctx, 'last_schedule_query', None):
+        follow = date_service.answer_schedule_department_followup(question, ctx)
+        if follow:
+            ctx.update(user_msg=question, bot_response=follow)
+            result = (follow, 'Schedule', None, 'date_query', detected_lang)
+            return result if return_topic else result[0]
+
     try:
         from services.corrections import get_correction
         from database import get_db as _gdb
@@ -599,21 +598,11 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
     except Exception as e:
         logger.debug(f"corrections lookup failed: {e}")
 
-    # Successful-answer memory: identical questions that previously earned
-    # a grounded, thumbs-up-worthy reply skip re-extraction.
     try:
         from services.answer_memory import get_cached_answer
         from database import get_db as _gdb
         cached = get_cached_answer(_gdb, question, detected_lang)
         if cached:
-            # BUG FIX: this used to hardcode faq_id=None on every cache
-            # hit, even when the cached answer originally came from a
-            # specific FAQ row. That silently starved
-            # promote_high_frequency_faqs() (services/alerts.py) of the
-            # very usage data it needs -- the more often a popular FAQ
-            # got served from cache, the LESS its real usage counted
-            # toward promoting it. get_cached_answer() now returns the
-            # original faq_id too, so it keeps flowing into chat_history.
             ctx.update(user_msg=question, bot_response=cached['answer'])
             result = (cached['answer'], 'Cached', cached.get('faq_id'), None, detected_lang)
             return result if return_topic else result[0]
@@ -636,10 +625,6 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
         )
         return result if return_topic else result[0]
 
-    # ---- Multi-source gate (cheap retrieval, no triple LLM) ----
-    # Never lock onto the schedule path solely because a keyword matched.
-    # Pull handbook/FAQ relevance first; only answer as Schedule when the
-    # date intent is clear *and* other sources are not clearly stronger.
     _looks_date = date_service.is_date_question(question, ctx=ctx)
     _looks_hb = handbook_service.is_handbook_question(question)
     _hb_score_early, _hb_chunks_early = (0.0, [])
@@ -657,29 +642,6 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             _faq_cands_early = []
             _faq_score_early = 0.0
 
-    # Handbook wins when topic detector fires OR retrieval score is
-    # decisively strong.
-    #
-    # BUG FIX: the score-only branch used to fire at hb_score >= 0.36 —
-    # almost identical to CROSS_CHECK_HANDBOOK_BAR (0.34), which is only
-    # meant to be the bar for tacking on a handbook *footnote*, not for
-    # completely overriding the schedule engine. In practice the
-    # handbook's attendance-policy chunk mentions "special holidays"
-    # (for religious-observance excused absences), so a plainly
-    # date-shaped question like "do we have holidays this month?" was
-    # scoring high enough on pure full-text overlap to hijack routing
-    # away from date_service.answer_date_question() entirely — the
-    # student got a random handbook paragraph instead of real
-    # schedule/holiday data, and this repeated for "do we have class
-    # today" etc.
-    #
-    # A bare retrieval score is real signal when nothing else claims the
-    # question, but it must never preempt a genuinely date-shaped query
-    # (_looks_date) on score alone — only actual topical confirmation
-    # (is_handbook_question) is allowed to do that. The date engine
-    # already gets a handbook footnote merged in afterwards (see
-    # CROSS_CHECK_HANDBOOK_BAR below) when the handbook score is solid,
-    # so nothing is lost by letting the date engine go first.
     _hb_clearly_better = (
         _looks_hb and _hb_score_early >= 0.12
     ) or (
@@ -705,23 +667,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             question, detected_lang, ctx=ctx
         )
         if date_ans:
-            # Still allow a handbook/FAQ footnote when those scores are
-            # solid AND the top match is actually schedule-related.
-            #
-            # BUG FIX: this used to gate purely on score (hb_score >=
-            # CROSS_CHECK_HANDBOOK_BAR). That bar exists to avoid one
-            # specific false positive (the "special holidays" attendance
-            # chunk scoring ~0.36 on date-shaped questions -- see the
-            # comment above CROSS_CHECK_HANDBOOK_BAR's definition), but
-            # nothing stopped a COMPLETELY unrelated chunk (graduation
-            # honors, poster policy, SGO meetings) from also clearing
-            # that same score just by sharing a few common words with
-            # the question ("month", "week", "office"...). A plain
-            # schedule question like "do we have class tomorrow?" was
-            # getting a random "GUIDELINES FOR GRADUATION" footnote
-            # glued underneath a perfectly correct answer. Now the top
-            # chunk must ALSO look like it's actually about schedules,
-            # not just clear the score bar.
+
             signals = {
                 'hb_score': _hb_score_early,
                 'hb_chunks': _hb_chunks_early,
@@ -760,6 +706,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             result = (final_ans, 'Schedule', None, 'date_query', detected_lang)
             return result if return_topic else result[0]
 
+
     dept_followup = date_service.answer_schedule_department_followup(question, ctx)
     if dept_followup:
         result = (dept_followup, 'Schedule', None, 'date_query', detected_lang)
@@ -771,11 +718,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             question, last_ex.get('user', ''), last_ex.get('bot', '')
         )
         word_count = len(question.split())
-        # Only fall back to this word-count guess when the short message
-        # doesn't already look like a fresh, specific handbook topic on
-        # its own (e.g. "dresscode", "logo or motto") — those should go
-        # straight to the real lookup below, not be guessed at from
-        # chat history alone.
+
         if (not is_followup and word_count <= 5 and last_ex.get('bot')
                 and not handbook_service.is_handbook_question(question)):
             is_followup = True
@@ -801,17 +744,11 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 last_faq_answer=ctx.last_faq_answer,
                 last_faq_question=ctx.last_faq_question,
             )
-            # A hedging "I don't have that info" / "we haven't covered
-            # that" response is the model guessing blind from chat
-            # history — it has no way to know whether the handbook/FAQ
-            # actually has the answer. Treat that as no answer and fall
-            # through to the real lookup instead of returning a
-            # confabulated-sounding non-answer to the student.
+
             if ai_followup and not _looks_like_non_answer(ai_followup):
                 ctx.update(user_msg=question, bot_response=ai_followup)
                 result = (ai_followup, 'Follow-up', None, None, detected_lang)
                 return result if return_topic else result[0]
-
 
     is_hb = handbook_service.is_handbook_question(question)
     parts = split_compound_question(question)
@@ -822,7 +759,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             part_class = lang_service.classify_question_ai(part)
             if part_class.get('is_gibberish') or not part_class.get('is_school_related', True):
                 continue
-            # Prefer handbook when the clause is handbook-shaped
+
             part_ans = None
             if handbook_service.is_handbook_question(part) or is_hb:
                 part_ans = handbook_service.answer_handbook_question(
@@ -854,12 +791,10 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 detected_lang,
             )
             return result if return_topic else result[0]
-        # One part only succeeded — still better than a single wrong chunk
-        if len(sub_answers) == 1 and len(parts) >= 2:
-            # Fall through so full question also tries normal path;
-            # but prefer the good partial if later path fails.
-            pass
 
+        if len(sub_answers) == 1 and len(parts) >= 2:
+
+            pass
 
     norm_q = normalize_input(question)
     cache_key = f"{norm_q}_{detected_lang}"
@@ -899,16 +834,6 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
         else:
             hb_threshold = 0.35
 
-        # FAQ can lead when it clearly outscores a weak handbook hit.
-        # Handbook text is often broad; curated FAQs fill specific gaps
-        # (dress details, scholarships, strands, appeal windows, etc.).
-        # FAQ must beat handbook by a clear margin. For handbook-shaped
-        # questions (dress, demerits, strands, RA laws), require an even
-        # larger gap so a loosely matched FAQ (e.g. office hours, scholarships)
-        # cannot steal the answer.
-        # Filter FAQ candidates: reject if the FAQ *question text* does not
-        # share distinctive words with the user question. Stops office-hours /
-        # scholarship / enrollment FAQs from matching dress / vision / demerits.
         def _faq_text_relevant(user_q: str, cand: dict) -> bool:
             try:
                 row = cand.get('faq') or cand.get('row')
@@ -925,9 +850,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 if not u:
                     return True
                 overlap = len(u & f)
-                # Handbook-shaped questions: require stronger topical overlap
-                # so office-hours / enrollment / scholarship FAQs cannot steal
-                # dress / demerit / vision / dorm / strands answers.
+
                 if is_hb:
                     topical = (
                         'dress', 'demerit', 'offense', 'vision', 'mission',
@@ -948,12 +871,10 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 candidates = filtered
                 faq_best_score = candidates[0].get('combined', 0.0)
             else:
-                # No FAQ is actually about this question
+
                 candidates = []
                 faq_best_score = 0.0
 
-        # Handbook-shaped questions: handbook leads unless FAQ is a clear
-        # topical match (after the filter above) with a strong score gap.
         faq_margin = 0.28 if is_hb else 0.10
         faq_clearly_better = (
             (not is_hb)
@@ -961,7 +882,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             and faq_best_score >= engine.FUZZY_MIN_SCORE + 0.12
             and faq_best_score >= (hb_score + faq_margin)
         )
-        # For is_hb: never let FAQ "clearly better" — try handbook first.
+
         if is_hb:
             faq_clearly_better = False
 
@@ -994,10 +915,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             r'social media|ellen white)\b',
             question, re.I,
         ))
-        # Pure handbook topics must never be answered from FAQ/schedule —
-        # that was the source of wrong "cashier / late enrollment /
-        # scholarships" answers on dress/dorm/offense/vision questions.
-        # Data-driven handbook-only topics (admin aliases) expand the pure set
+
         try:
             from services.topic_aliases import is_handbook_only
             if is_handbook_only(question):
@@ -1016,7 +934,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             handbook_should_lead = bool(hb_chunks) or True
 
         combine_gap = 0.22
-        # Never force-combine a weak/unrelated FAQ into a handbook answer
+
         both_solid = (
             (not is_hb)
             and (not pure_handbook_topics)
@@ -1025,20 +943,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             and abs(hb_score - faq_best_score) < combine_gap
         )
         if both_solid and not circuit_breaker.is_open():
-            # AI arbitration tie-breaker. Deliberately narrow: only runs
-            # when both_solid is already True, i.e. two sources cleared
-            # their individual score bars AND are close enough (gap <
-            # combine_gap) that the deterministic router can't confidently
-            # pick one. It never runs for pure_handbook_topics, a clear
-            # is_hb detection, or when only one source is plausible --
-            # those are already decisive and don't need a second opinion.
-            # It also never fabricates an answer itself: it only decides
-            # which already-retrieved source(s) to trust, and the actual
-            # reply still goes through the normal extraction+grounding
-            # pipeline either way. If the call fails or returns something
-            # unparseable, it fails open to the pre-existing combine
-            # behavior, so this can only make routing MORE cautious, not
-            # less safe than before.
+
             source_pick = _ai_pick_best_source(question, hb_chunks, candidates, llm_chat)
             if source_pick == 'handbook':
                 both_solid = False
@@ -1050,10 +955,6 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 both_solid = False
                 handbook_should_lead = False
                 candidates = []
-            # source_pick == 'both' (or arbitration unavailable/
-            # inconclusive): leave both_solid True, fall through to the
-            # existing combine below unchanged.
-
         if both_solid and not circuit_breaker.is_open():
             combined = _combine_handbook_and_faq(
                 question, candidates, hb_chunks, detected_lang
@@ -1083,7 +984,6 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 ctx=ctx,
             )
             if hb_ans:
-                # Never merge FAQ into pure handbook topic answers
                 if (not is_hb and not pure_handbook_topics
                         and faq_best_score >= CROSS_CHECK_FAQ_BAR
                         and faq_best_score >= hb_score - 0.05
@@ -1101,8 +1001,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                     )
                 result = (hb_ans, 'Handbook', None, 'handbook_query', detected_lang)
                 return result if return_topic else result[0]
-            # pure handbook topic with no handbook hit → do NOT fall through
-            # to unrelated FAQ (cashier/enrollment/etc.). Log + fallback.
+
             if pure_handbook_topics:
                 _log_unanswered(cur, conn, question, ctx)
                 result = (
