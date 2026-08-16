@@ -174,9 +174,12 @@ def _extract_from_answer(user_question: str, best_text: str, answer: str,
     Question: {best_text}
     Answer: {answer}
 
-    Instructions:
+        Instructions:
     - Answer using ONLY the information in the FAQ answer above. Do not invent names, dates, amounts, or requirements that aren't stated.
-    - If the student is asking for a list (e.g. "what scholarships are available", "what are the requirements"), enumerate everything relevant found in the FAQ answer - don't just give one item.
+    - Sound like a real chatbot. Never start with "According to…".
+    - If the question is yes/no, lead with Yes or No, then a short reason.
+    - Format for easy reading on EVERY answer: **bold** for key terms, line breaks between points, blank lines between sections; lists as one item per line with - .
+    - If asking for a list, enumerate everything relevant — don't give just one item.
     - {nlg.STYLE_GUIDE}
     - {lang_instruction}
     {few_shot}{casual_note}

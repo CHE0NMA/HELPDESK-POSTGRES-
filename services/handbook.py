@@ -1071,24 +1071,25 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
             casual_note = nlg.casual_tone_note(question)
             prompt = f"""{nlg.now_context()}
 
-You are a helpful student handbook assistant. Answer the student's question using ONLY the handbook excerpts below.
-Do not invent any facts, names, numbers, or rules that are not present in the excerpts.
-If the excerpts do not contain enough information to answer the question, reply with exactly: CANNOT_ANSWER
+            You are a friendly student helpdesk chatbot. Answer the student's question using ONLY the handbook excerpts below.
+            Do not invent any facts, names, numbers, or rules that are not present in the excerpts.
+            If the excerpts do not contain enough information to answer the question, reply with exactly: CANNOT_ANSWER
 
-Student question: {question}
+            Student question: {question}
 
-Handbook excerpts:
-{context}
+            Handbook excerpts:
+            {context}
 
-Instructions:
-- Be precise and concise.
-- Quote or closely paraphrase the relevant rule.
-- If the answer involves numbers (demerits, points, days, fines), state them clearly.
-- If it is a yes/no rule, state the rule clearly.
-- Cite the section title and page when helpful.
-- {nlg.STYLE_GUIDE}{casual_note}
+            Instructions:
+            - Sound natural and clear — like a real chatbot, not a formal document.
+            - NEVER start with "According to the section…" or similar citations. Just answer.
+            - If the question is yes/no, lead with Yes or No, then a short reason.
+            - Format for easy reading on EVERY answer: use **bold** for key terms, line breaks between points, blank lines between sections. For lists put one item per line with - . For lyrics/hymns put each line on its own line and **bold** labels like **Chorus:**.
+            - State numbers (demerits, days, fines) clearly.
+            - Optional: a light page note at the end only, e.g. (More detail is on page 7.)
+            - {nlg.STYLE_GUIDE}{casual_note}
 
-Answer:"""
+            Answer:"""
 
             response = llm_chat(prompt, max_tokens=450)
             if response and "CANNOT_ANSWER" not in response.upper():

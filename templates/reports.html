@@ -105,15 +105,19 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
 .act-btn.del:hover { background:rgba(255,82,82,.15); border-color:rgba(255,82,82,.3); color:#ff8a80; }
 .act-btn.create-faq:hover { background:rgba(81,207,102,.15); border-color:rgba(81,207,102,.3); color:#8ce99a; }
 .act-btn.view:hover { background:rgba(0,229,255,.12); border-color:rgba(0,229,255,.3); color:var(--accent); }
+.act-btn.fix:hover { background:rgba(77,171,247,.18); border-color:rgba(77,171,247,.4); color:var(--accent2); }
 .tbl-actions { display:flex; gap:4px; }
 .modal-content { background:var(--modal-bg); border:1px solid var(--border2); border-radius:18px; color:var(--text); max-height:90vh; display:flex; flex-direction:column; }
 .modal-header { border-bottom:1px solid var(--border); padding:1rem 1.25rem; display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-shrink:0; }
 .modal-title { font-family:'Sora',sans-serif; font-weight:700; font-size:.95rem; margin:0; display:flex; align-items:center; gap:.5rem; color:var(--text); }
-.modal-body { padding:1.25rem; overflow-y:auto; flex:1; color:var(--text-dim); font-size:.9rem; line-height:1.7; white-space:pre-wrap; }
-.modal-footer { border-top:1px solid var(--border); padding:.85rem 1.25rem; flex-shrink:0; }
+.modal-body { padding:1.25rem; overflow-y:auto; flex:1; color:var(--text-dim); font-size:.9rem; line-height:1.7; }
+.modal-footer { border-top:1px solid var(--border); padding:.85rem 1.25rem; flex-shrink:0; display:flex; gap:.6rem; justify-content:flex-end; flex-wrap:wrap; }
 .btn-cancel { padding:.6rem 1.2rem; border-radius:11px; background:rgba(255,255,255,.05); border:1px solid var(--border); color:var(--text-dim); font-weight:600; font-size:.85rem; cursor:pointer; }
 .btn-del-confirm { padding:.6rem 1.2rem; border-radius:11px; background:rgba(255,82,82,.15); border:1.5px solid rgba(255,82,82,.35); color:#ff8a80; font-weight:600; font-size:.85rem; cursor:pointer; display:inline-flex; align-items:center; gap:.4rem; }
 .btn-del-confirm:hover { background:rgba(255,82,82,.25); color:#fff; }
+.btn-save { padding:.6rem 1.2rem; border-radius:11px; background:linear-gradient(135deg,var(--brand),var(--brand2)); border:none; color:#fff; font-weight:700; font-size:.85rem; cursor:pointer; display:inline-flex; align-items:center; gap:.4rem; }
+.btn-save:hover { filter:brightness(1.08); }
+.btn-save:disabled { opacity:.55; cursor:not-allowed; }
 .modal-delete .modal-title i { color:#ff8a80; }
 [data-bs-theme="dark"] .modal-delete .btn-close, [data-bs-theme="dark"] .modal-header .btn-close { filter:invert(1) grayscale(100%) brightness(200%); }
 .toast-wrap { position:fixed; bottom:1.5rem; right:1.5rem; z-index:9999; display:flex; flex-direction:column; gap:.5rem; }
@@ -125,6 +129,59 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
 .toast-item.info i { color:var(--accent); }
 .empty-state { text-align:center; padding:3rem 1rem; color:var(--text-dim); }
 .empty-state i { font-size:2.2rem; opacity:.35; display:block; margin-bottom:.6rem; }
+
+/* Fix modal form */
+.fix-label { font-size:.78rem; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:.04em; margin-bottom:.35rem; display:block; }
+.fix-q-box {
+  background:rgba(26,115,232,.08); border:1px solid var(--border); border-radius:12px;
+  padding:.75rem .9rem; color:var(--text); font-size:.9rem; margin-bottom:1rem; line-height:1.5;
+}
+.fix-tabs { display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:1rem; }
+.fix-tab {
+  padding:.4rem .85rem; border-radius:20px; font-size:.78rem; font-weight:600; cursor:pointer;
+  border:1px solid var(--border); background:rgba(255,255,255,.04); color:var(--text-dim);
+}
+.fix-tab.active { background:rgba(26,115,232,.25); border-color:rgba(77,171,247,.4); color:var(--text); }
+.fix-search-row { display:flex; gap:.5rem; margin-bottom:.75rem; }
+.fix-search-row input {
+  flex:1; padding:.55rem .85rem; border-radius:10px; border:1.5px solid var(--border);
+  background:rgba(14,32,64,.7); color:var(--text); font-size:.85rem; outline:none;
+}
+[data-bs-theme="light"] .fix-search-row input { background:rgba(255,255,255,.9); color:#1a2a3a; }
+.fix-search-row input:focus { border-color:var(--border2); }
+.fix-search-row button {
+  padding:.55rem .9rem; border-radius:10px; border:1px solid var(--border2);
+  background:rgba(26,115,232,.2); color:var(--accent2); font-weight:600; font-size:.82rem; cursor:pointer;
+}
+.fix-results {
+  max-height:180px; overflow-y:auto; border:1px solid var(--border); border-radius:12px;
+  margin-bottom:.9rem; display:none;
+}
+.fix-results.show { display:block; }
+.fix-hit {
+  padding:.65rem .85rem; border-bottom:1px solid rgba(77,171,247,.08); cursor:pointer;
+  transition:background .15s;
+}
+.fix-hit:last-child { border-bottom:none; }
+.fix-hit:hover { background:rgba(26,115,232,.12); }
+.fix-hit-title { font-size:.82rem; font-weight:600; color:var(--text); margin-bottom:.2rem; }
+.fix-hit-meta { font-size:.72rem; color:var(--muted); margin-bottom:.25rem; }
+.fix-hit-preview { font-size:.78rem; color:var(--text-dim); line-height:1.4;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.fix-textarea {
+  width:100%; min-height:140px; padding:.75rem .9rem; border-radius:12px;
+  border:1.5px solid var(--border); background:rgba(14,32,64,.7); color:var(--text);
+  font-family:'DM Sans',sans-serif; font-size:.9rem; line-height:1.55; resize:vertical; outline:none;
+}
+[data-bs-theme="light"] .fix-textarea { background:rgba(255,255,255,.9); color:#1a2a3a; }
+.fix-textarea:focus { border-color:var(--border2); }
+.fix-hint { font-size:.75rem; color:var(--muted); margin-top:.4rem; }
+.source-chip {
+  display:inline-flex; align-items:center; gap:.3rem; font-size:.72rem; font-weight:600;
+  padding:.18rem .55rem; border-radius:20px; margin-bottom:.65rem;
+  background:rgba(0,229,255,.08); border:1px solid rgba(0,229,255,.2); color:var(--accent);
+}
+
 @media (max-width:900px) {
   .sidebar { transform:translateX(-100%); }
   .sidebar.open { transform:translateX(0); box-shadow:8px 0 32px rgba(0,0,0,.35); }
@@ -248,7 +305,7 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
                 <button class="act-btn create-faq" title="Create FAQ from this" onclick='createFAQFromReport({{ f.question|tojson }}, {{ f.answer|tojson }})'>
                   <i class="bi bi-journal-plus"></i>
                 </button>
-                <button class="act-btn fix" title="Fix this answer directly" onclick='fixAnswerFromReport({{ f.id|tojson }}, {{ f.question|tojson }})'>
+                <button class="act-btn fix" title="Fix this answer" onclick='openFixModal({{ f.id|tojson }}, {{ f.question|tojson }}, {{ f.answer|tojson }})'>
                   <i class="bi bi-wrench-adjustable"></i>
                 </button>
                 <button class="act-btn del" title="Delete" onclick="confirmDelete({{ f.id|tojson }})">
@@ -269,6 +326,7 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
   </div>
 </div>
 
+<!-- View full text -->
 <div class="modal fade" id="fullModal" tabindex="-1">
   <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content">
@@ -282,6 +340,7 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
   </div>
 </div>
 
+<!-- Delete confirm -->
 <div class="modal fade" id="deleteModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered modal-sm">
     <div class="modal-content modal-delete">
@@ -293,6 +352,58 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
       <div class="modal-footer">
         <button type="button" class="btn-cancel" data-bs-dismiss="modal">Cancel</button>
         <button type="button" class="btn-del-confirm" id="deleteConfirmBtn"><i class="bi bi-trash"></i> Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Fix answer modal -->
+<div class="modal fade" id="fixModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-wrench-adjustable" style="color:var(--accent2)"></i> Fix Answer</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <label class="fix-label">Student question</label>
+        <div class="fix-q-box" id="fixQuestion"></div>
+
+        <label class="fix-label">How do you want to set the correct answer?</label>
+        <div class="fix-tabs">
+          <button type="button" class="fix-tab active" data-mode="manual" onclick="setFixMode('manual')">
+            <i class="bi bi-pencil"></i> Write myself
+          </button>
+          <button type="button" class="fix-tab" data-mode="faq" onclick="setFixMode('faq')">
+            <i class="bi bi-journal-text"></i> From FAQ
+          </button>
+          <button type="button" class="fix-tab" data-mode="handbook" onclick="setFixMode('handbook')">
+            <i class="bi bi-journal-bookmark"></i> From Handbook
+          </button>
+        </div>
+
+        <div id="fixSearchWrap" style="display:none">
+          <div class="fix-search-row">
+            <input type="text" id="fixSearchInput" placeholder="Search…" onkeydown="if(event.key==='Enter'){event.preventDefault();runFixSearch();}">
+            <button type="button" onclick="runFixSearch()"><i class="bi bi-search"></i> Search</button>
+          </div>
+          <div class="fix-results" id="fixResults"></div>
+        </div>
+
+        <div id="fixSourceChip" class="source-chip" style="display:none"></div>
+
+        <label class="fix-label">Correct answer</label>
+        <textarea class="fix-textarea" id="fixAnswer" placeholder="Type the correct answer, or pick one from FAQ / Handbook above…"></textarea>
+        <div class="fix-hint">
+          Saved as a permanent correction. This question will be answered from this text first
+          (before FAQ, handbook, and cache), reworded naturally per language.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-cancel" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn-save" id="fixSaveBtn" onclick="saveFix()">
+          <i class="bi bi-check2-circle"></i> Save correction
+        </button>
       </div>
     </div>
   </div>
@@ -368,31 +479,148 @@ function createFAQFromReport(question, answer) {
   showToast('Redirecting to FAQ creation...', 'info');
 }
 
-async function fixAnswerFromReport(reportId, question) {
-  const correct = prompt(
-    `What's the correct answer for:\n\n"${question}"\n\n` +
-    `This will be saved permanently — the same question will always be ` +
-    `answered from this from now on, reworded naturally per language.`
-  );
-  if (!correct || !correct.trim()) return;
-  try {
-    const res = await fetch('/api/admin/add_correction', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-      body: JSON.stringify({ question, answer: correct.trim(), source_report_id: reportId })
-    });
-    const d = await res.json();
-    if (res.ok && d.success) {
-      showToast('Correction saved — this question is fixed from now on', 'success');
-      setTimeout(() => location.reload(), 800);
-    } else {
-      showToast('Failed to save correction: ' + (d.error || 'Unknown error'), 'danger');
-    }
-  } catch (err) {
-    showToast('Error: ' + err.message, 'danger');
+/* ---------- Fix Answer modal ---------- */
+let fixReportId = null;
+let fixQuestion = '';
+let fixMode = 'manual';
+let fixFaqId = null;
+
+function openFixModal(reportId, question, wrongAnswer) {
+  fixReportId = reportId;
+  fixQuestion = question || '';
+  fixFaqId = null;
+  fixMode = 'manual';
+
+  document.getElementById('fixQuestion').textContent = fixQuestion;
+  document.getElementById('fixAnswer').value = '';
+  document.getElementById('fixSearchInput').value = fixQuestion.slice(0, 80);
+  document.getElementById('fixResults').classList.remove('show');
+  document.getElementById('fixResults').innerHTML = '';
+  document.getElementById('fixSourceChip').style.display = 'none';
+  document.getElementById('fixSourceChip').textContent = '';
+
+  setFixMode('manual');
+  new bootstrap.Modal(document.getElementById('fixModal')).show();
+}
+
+function setFixMode(mode) {
+  fixMode = mode;
+  document.querySelectorAll('.fix-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.mode === mode);
+  });
+  const searchWrap = document.getElementById('fixSearchWrap');
+  if (mode === 'manual') {
+    searchWrap.style.display = 'none';
+  } else {
+    searchWrap.style.display = 'block';
+    document.getElementById('fixSearchInput').placeholder =
+      mode === 'faq' ? 'Search FAQ questions or answers…' : 'Search handbook sections…';
+    runFixSearch();
   }
 }
 
+async function runFixSearch() {
+  const q = (document.getElementById('fixSearchInput').value || '').trim();
+  const box = document.getElementById('fixResults');
+  if (q.length < 2) {
+    box.classList.remove('show');
+    box.innerHTML = '';
+    return;
+  }
+  box.classList.add('show');
+  box.innerHTML = '<div class="fix-hit" style="color:var(--muted)">Searching…</div>';
+  try {
+    const res = await fetch('/api/admin/search_sources?q=' + encodeURIComponent(q));
+    if (!res.ok) throw new Error('search failed');
+    const data = await res.json();
+    const items = fixMode === 'faq' ? (data.faqs || []) : (data.handbook || []);
+    if (!items.length) {
+      box.innerHTML = '<div class="fix-hit" style="color:var(--muted)">No matches. Try different words, or write the answer yourself.</div>';
+      return;
+    }
+    box.innerHTML = items.map((item, i) => {
+      if (fixMode === 'faq') {
+        return `<div class="fix-hit" data-idx="${i}" data-kind="faq">
+          <div class="fix-hit-title">${escapeHtmlSimple(item.question)}</div>
+          <div class="fix-hit-meta">${escapeHtmlSimple(item.category || 'FAQ')} · #${item.id}</div>
+          <div class="fix-hit-preview">${escapeHtmlSimple(item.preview || item.answer || '')}</div>
+        </div>`;
+      }
+      const page = item.page_start ? ` · p.${item.page_start}` : '';
+      return `<div class="fix-hit" data-idx="${i}" data-kind="hb">
+        <div class="fix-hit-title">${escapeHtmlSimple(item.section_title || 'Handbook')}</div>
+        <div class="fix-hit-meta">${escapeHtmlSimple(item.chapter || '')}${page}</div>
+        <div class="fix-hit-preview">${escapeHtmlSimple(item.preview || item.content || '')}</div>
+      </div>`;
+    }).join('');
+
+    // attach click handlers with full payload
+    box.querySelectorAll('.fix-hit[data-idx]').forEach(el => {
+      el.addEventListener('click', () => {
+        const idx = Number(el.dataset.idx);
+        const item = items[idx];
+        if (!item) return;
+        if (fixMode === 'faq') {
+          document.getElementById('fixAnswer').value = item.answer || '';
+          fixFaqId = item.id || null;
+          showSourceChip('FAQ: ' + (item.question || '').slice(0, 60));
+        } else {
+          document.getElementById('fixAnswer').value = item.content || '';
+          fixFaqId = null;
+          const label = (item.section_title || 'Handbook') +
+            (item.page_start ? ' (p.' + item.page_start + ')' : '');
+          showSourceChip(label);
+        }
+      });
+    });
+  } catch (e) {
+    box.innerHTML = '<div class="fix-hit" style="color:var(--danger)">Search error. You can still type the answer.</div>';
+  }
+}
+
+function showSourceChip(label) {
+  const chip = document.getElementById('fixSourceChip');
+  chip.style.display = 'inline-flex';
+  chip.innerHTML = '<i class="bi bi-link-45deg"></i> ' + escapeHtmlSimple(label);
+}
+
+async function saveFix() {
+  const answer = (document.getElementById('fixAnswer').value || '').trim();
+  if (!fixQuestion || !answer) {
+    showToast('Please enter a correct answer', 'warning');
+    return;
+  }
+  const btn = document.getElementById('fixSaveBtn');
+  btn.disabled = true;
+  try {
+    const body = {
+      question: fixQuestion,
+      answer: answer,
+      source_report_id: fixReportId
+    };
+    if (fixFaqId) body.faq_id = fixFaqId;
+
+    const res = await fetch('/api/admin/add_correction', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+      body: JSON.stringify(body)
+    });
+    const d = await res.json();
+    if (res.ok && d.success) {
+      bootstrap.Modal.getInstance(document.getElementById('fixModal'))?.hide();
+      showToast('Correction saved — this question is fixed from now on', 'success');
+      setTimeout(() => location.reload(), 800);
+    } else {
+      showToast('Failed to save: ' + (d.error || 'Unknown error'), 'danger');
+    }
+  } catch (err) {
+    showToast('Error: ' + err.message, 'danger');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* ---------- Delete ---------- */
 let deleteId = null;
 function confirmDelete(fid) {
   deleteId = fid;

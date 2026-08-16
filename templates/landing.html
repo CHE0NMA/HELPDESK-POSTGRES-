@@ -334,6 +334,44 @@
     .hb-questions { border-left: none; border-top: 1px solid rgba(66,165,245,.14); }
   }
 
+  /* Reviews */
+  section.reviews { padding: 1rem 1.5rem 3.5rem; }
+
+  .reviews-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: .9rem;
+    max-width: 1080px;
+    margin: 0 auto;
+  }
+
+  .review-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 1.1rem 1.15rem;
+    backdrop-filter: blur(12px);
+  }
+
+  .review-stars {
+    color: #ffc107;
+    font-size: .95rem;
+    letter-spacing: .08em;
+    margin-bottom: .45rem;
+  }
+
+  .review-text {
+    font-size: .86rem;
+    color: var(--text);
+    line-height: 1.55;
+    margin-bottom: .5rem;
+  }
+
+  .review-when {
+    font-size: .72rem;
+    color: var(--text-dim);
+  }
+
   section.whats-new { padding: 0 1.5rem 3.5rem; }
 
   .new-outer { max-width: 1080px; margin: 0 auto; position: relative; }
@@ -596,10 +634,10 @@
     .stat-lbl { font-size: .65rem; }
 
     section.how, section.featured, section.handbook,
-    section.whats-new, section.cats { padding-left: 1rem; padding-right: 1rem; }
+    section.reviews, section.whats-new, section.cats { padding-left: 1rem; padding-right: 1rem; }
 
     .steps { grid-template-columns: 1fr; gap: 1rem; }
-    .featured-grid, .cat-grid { grid-template-columns: 1fr; }
+    .featured-grid, .cat-grid, .reviews-grid { grid-template-columns: 1fr; }
 
     .hb-panel { border-radius: 16px; }
     .hb-copy { padding: 1.35rem 1.2rem; }
@@ -669,8 +707,8 @@
       <div class="stat-lbl">Active Today</div>
     </div>
     <div class="stat">
-      <div class="stat-num">24/7</div>
-      <div class="stat-lbl">Always Available</div>
+      <div class="stat-num" id="ratingAvg">—</div>
+      <div class="stat-lbl" id="ratingLbl">Avg Rating</div>
     </div>
   </div>
 </section>
@@ -760,6 +798,19 @@
         <i class="bi bi-arrow-right hb-arr"></i>
       </a>
     </div>
+  </div>
+</section>
+
+<section class="reviews rv" id="reviews">
+  <div class="sec-head">
+    <div class="sec-tag" style="background:rgba(255,193,7,.08);border-color:rgba(255,193,7,.22);color:#ffc107">★ Student Feedback</div>
+    <h2>What Students Say</h2>
+    <p>Recent ratings from people who used the help desk.</p>
+  </div>
+  <div class="reviews-grid" id="reviewsGrid">
+    <div class="skel skel-feat"></div>
+    <div class="skel skel-feat"></div>
+    <div class="skel skel-feat"></div>
   </div>
 </section>
 
@@ -886,13 +937,68 @@ async function loadVisitorStats() {
     const r = await fetch('/api/visitor_stats');
     if (!r.ok) return;
     const d = await r.json();
-    animateCount(document.getElementById('visitorCount'), d.total_visitors || 0, '+');
-    animateCount(document.getElementById('todayCount'),   d.today_visitors || 0);
-  } catch {}
+
+    const helped = d.students_helped ?? d.total_visitors ?? d.total_questions ?? 0;
+    const today  = d.active_today ?? d.today_visitors ?? 0;
+
+    animateCount(document.getElementById('visitorCount'), helped, helped ? '+' : '');
+    animateCount(document.getElementById('todayCount'), today);
+
+    const avg = Number(d.avg_rating || 0);
+    const cnt = Number(d.rating_count || 0);
+    const avgEl = document.getElementById('ratingAvg');
+    const lblEl = document.getElementById('ratingLbl');
+    if (avgEl) {
+      if (cnt > 0 && avg > 0) {
+        avgEl.textContent = avg.toFixed(1) + '★';
+        if (lblEl) lblEl.textContent = cnt === 1 ? '1 rating' : (cnt + ' ratings');
+      } else {
+        avgEl.textContent = '—';
+        if (lblEl) lblEl.textContent = 'Avg Rating';
+      }
+    }
+  } catch (e) {
+    console.warn('visitor stats', e);
+  }
+}
+
+function starsHtml(n) {
+  const full = Math.max(0, Math.min(5, Math.round(Number(n) || 0)));
+  return '★'.repeat(full) + '☆'.repeat(5 - full);
+}
+
+async function loadReviews() {
+  const grid = document.getElementById('reviewsGrid');
+  if (!grid) return;
+  try {
+    const r = await fetch('/api/public_reviews');
+    if (!r.ok) throw new Error('fail');
+    const d = await r.json();
+    const items = d.reviews || [];
+    grid.innerHTML = '';
+    if (!items.length) {
+      const sec = document.getElementById('reviews');
+      if (sec) sec.style.display = 'none';
+      return;
+    }
+    items.slice(0, 6).forEach((item, i) => {
+      const card = document.createElement('div');
+      card.className = 'review-card rv';
+      card.style.transitionDelay = (i * 0.05) + 's';
+      card.innerHTML =
+        '<div class="review-stars">' + starsHtml(item.rating) + '</div>' +
+        '<div class="review-text">"' + escHtml(item.comment) + '"</div>' +
+        '<div class="review-when">' + escHtml(item.when || '') + '</div>';
+      grid.appendChild(card);
+    });
+    observe();
+  } catch (e) {
+    const sec = document.getElementById('reviews');
+    if (sec) sec.style.display = 'none';
+  }
 }
 
 async function loadHandbookStats() {
-  const section = document.getElementById('handbook');
   try {
     const r = await fetch('/api/handbook_stats');
     if (!r.ok) throw new Error('not available');
@@ -940,12 +1046,12 @@ async function loadFeatured() {
   grid.innerHTML = '';
 
   if (!items.length) {
-    grid.innerHTML = `
-      <div class="empty-state">
-        <i class="bi bi-chat-square-dots"></i>
-        <p>No featured questions yet.<br>
-           <a href="/chat">Open the chat</a> to ask anything.</p>
-      </div>`;
+    grid.innerHTML =
+      '<div class="empty-state">' +
+        '<i class="bi bi-chat-square-dots"></i>' +
+        '<p>No featured questions yet.<br>' +
+           '<a href="/chat">Open the chat</a> to ask anything.</p>' +
+      '</div>';
     return;
   }
 
@@ -954,17 +1060,17 @@ async function loadFeatured() {
     const m = meta(item.category);
     const a = document.createElement('a');
     a.className = 'feat-card rv';
-    a.href = `/chat?q=${encodeURIComponent(item.question)}`;
+    a.href = '/chat?q=' + encodeURIComponent(item.question);
     a.style.transitionDelay = (i * .055) + 's';
     const rc = i < 3 ? rankClass[i] : '';
-    a.innerHTML = `
-      <div class="feat-rank ${rc}">${i + 1}</div>
-      <div class="feat-icon" style="--fi:${m.color}">${m.icon}</div>
-      <div class="feat-text">
-        <div class="feat-q">${escHtml(item.question)}</div>
-        <div class="feat-cat">${cap(item.category || 'General')}</div>
-      </div>
-      <i class="bi bi-arrow-right feat-arr"></i>`;
+    a.innerHTML =
+      '<div class="feat-rank ' + rc + '">' + (i + 1) + '</div>' +
+      '<div class="feat-icon" style="--fi:' + m.color + '">' + m.icon + '</div>' +
+      '<div class="feat-text">' +
+        '<div class="feat-q">' + escHtml(item.question) + '</div>' +
+        '<div class="feat-cat">' + cap(item.category || 'General') + '</div>' +
+      '</div>' +
+      '<i class="bi bi-arrow-right feat-arr"></i>';
     grid.appendChild(a);
   });
   observe();
@@ -981,7 +1087,7 @@ async function loadNew() {
   scroll.innerHTML = '';
 
   if (!items.length) {
-    scroll.innerHTML = `<p style="color:var(--text-dim);padding:1.5rem 0;flex-shrink:0">No recent updates yet.</p>`;
+    scroll.innerHTML = '<p style="color:var(--text-dim);padding:1.5rem 0;flex-shrink:0">No recent updates yet.</p>';
     return;
   }
 
@@ -989,13 +1095,16 @@ async function loadNew() {
     const m    = meta(item.category);
     const card = document.createElement('a');
     card.className = 'new-card';
-    card.href = `/chat?q=${encodeURIComponent(item.question)}`;
+    card.href = '/chat?q=' + encodeURIComponent(item.question);
     card.style.setProperty('--nc', m.color);
     const ago = item.days_ago === 0 ? 'Today' : item.days_ago + 'd ago';
-    card.innerHTML = `
-      <div class="new-chip ${item.is_new ? 'isnew' : 'updated'}">${item.is_new ? '🟢 New' : '🔵 Updated'}</div>
-      <div class="new-q">${escHtml(item.question)}</div>
-      <div class="new-meta">${m.icon} <span>${cap(item.category || 'General')}</span> · <span>${ago}</span></div>`;
+    card.innerHTML =
+      '<div class="new-chip ' + (item.is_new ? 'isnew' : 'updated') + '">' +
+        (item.is_new ? '🟢 New' : '🔵 Updated') +
+      '</div>' +
+      '<div class="new-q">' + escHtml(item.question) + '</div>' +
+      '<div class="new-meta">' + m.icon + ' <span>' + cap(item.category || 'General') +
+        '</span> · <span>' + ago + '</span></div>';
     scroll.appendChild(card);
   });
 }
@@ -1017,38 +1126,40 @@ function buildCard(cat, questions) {
   const rest    = questions.slice(PREVIEW);
   const total   = questions.length;
 
-  const prevHTML = prev.map(q => `
-    <a class="q-prev-item" href="/chat?q=${encodeURIComponent(q.question)}">
-      <i class="bi bi-arrow-right-circle-fill"></i>
-      <span>${escHtml(q.question)}</span>
-    </a>`).join('');
+  const prevHTML = prev.map(q =>
+    '<a class="q-prev-item" href="/chat?q=' + encodeURIComponent(q.question) + '">' +
+      '<i class="bi bi-arrow-right-circle-fill"></i>' +
+      '<span>' + escHtml(q.question) + '</span>' +
+    '</a>'
+  ).join('');
 
-  const restHTML = rest.map(q => `
-    <a class="q-item" href="/chat?q=${encodeURIComponent(q.question)}">
-      <i class="bi bi-arrow-right-circle-fill arr-l"></i>
-      <span>${escHtml(q.question)}</span>
-      <i class="bi bi-box-arrow-up-right q-arr"></i>
-    </a>`).join('');
+  const restHTML = rest.map(q =>
+    '<a class="q-item" href="/chat?q=' + encodeURIComponent(q.question) + '">' +
+      '<i class="bi bi-arrow-right-circle-fill arr-l"></i>' +
+      '<span>' + escHtml(q.question) + '</span>' +
+      '<i class="bi bi-box-arrow-up-right q-arr"></i>' +
+    '</a>'
+  ).join('');
 
-  card.innerHTML = `
-    <div class="cat-hdr">
-      <div class="cat-ico">${m.icon}</div>
-      <div class="cat-info">
-        <div class="cat-name">${cap(cat)}</div>
-        <div class="cat-cnt">${total} question${total !== 1 ? 's' : ''}</div>
-      </div>
-      <div class="cat-tog"><i class="bi bi-chevron-down"></i></div>
-    </div>
-    <div class="q-preview">${prevHTML}</div>
-    <div class="cat-more-row">
-      ${rest.length
-        ? `<button class="see-more" onclick="toggleCard(event,this)">
-             <i class="bi bi-plus-circle"></i> ${rest.length} more
-           </button>`
-        : '<span></span>'}
-      <span class="cat-total-lbl">${total} total</span>
-    </div>
-    ${rest.length ? `<div class="q-list-full">${restHTML}</div>` : ''}`;
+  card.innerHTML =
+    '<div class="cat-hdr">' +
+      '<div class="cat-ico">' + m.icon + '</div>' +
+      '<div class="cat-info">' +
+        '<div class="cat-name">' + cap(cat) + '</div>' +
+        '<div class="cat-cnt">' + total + ' question' + (total !== 1 ? 's' : '') + '</div>' +
+      '</div>' +
+      '<div class="cat-tog"><i class="bi bi-chevron-down"></i></div>' +
+    '</div>' +
+    '<div class="q-preview">' + prevHTML + '</div>' +
+    '<div class="cat-more-row">' +
+      (rest.length
+        ? '<button class="see-more" onclick="toggleCard(event,this)">' +
+            '<i class="bi bi-plus-circle"></i> ' + rest.length + ' more' +
+          '</button>'
+        : '<span></span>') +
+      '<span class="cat-total-lbl">' + total + ' total</span>' +
+    '</div>' +
+    (rest.length ? '<div class="q-list-full">' + restHTML + '</div>' : '');
 
   card.querySelector('.cat-hdr').addEventListener('click', e => {
     const btn = card.querySelector('.see-more');
@@ -1065,7 +1176,7 @@ function toggleCard(e, btn) {
   const n    = card.querySelectorAll('.q-list-full .q-item').length;
   btn.innerHTML = open
     ? '<i class="bi bi-dash-circle"></i> Show less'
-    : `<i class="bi bi-plus-circle"></i> ${n} more`;
+    : '<i class="bi bi-plus-circle"></i> ' + n + ' more';
 }
 
 const CAT_LIMIT = 6;
@@ -1084,12 +1195,12 @@ async function loadCats() {
     animateCount(document.getElementById('catCount'), cats.length);
 
     if (!cats.length) {
-      grid.innerHTML = `
-        <div class="empty-state">
-          <i class="bi bi-inbox"></i>
-          <p>No categories yet.<br>
-             <a href="/chat">Open chat instead</a>.</p>
-        </div>`;
+      grid.innerHTML =
+        '<div class="empty-state">' +
+          '<i class="bi bi-inbox"></i>' +
+          '<p>No categories yet.<br>' +
+             '<a href="/chat">Open chat instead</a>.</p>' +
+        '</div>';
       return;
     }
 
@@ -1103,16 +1214,16 @@ async function loadCats() {
     if (cats.length > CAT_LIMIT) {
       const wrap = document.getElementById('seeAllWrap');
       wrap.style.display = 'block';
-      document.getElementById('seeAllText').textContent = `See All ${cats.length} Topics`;
+      document.getElementById('seeAllText').textContent = 'See All ' + cats.length + ' Topics';
     }
     observe();
   } catch {
-    document.getElementById('catGrid').innerHTML = `
-      <div class="empty-state">
-        <i class="bi bi-exclamation-circle"></i>
-        <p>Could not load categories.<br>
-           <a href="/chat">Open chat instead</a>.</p>
-      </div>`;
+    document.getElementById('catGrid').innerHTML =
+      '<div class="empty-state">' +
+        '<i class="bi bi-exclamation-circle"></i>' +
+        '<p>Could not load categories.<br>' +
+           '<a href="/chat">Open chat instead</a>.</p>' +
+      '</div>';
   }
 }
 
@@ -1126,7 +1237,7 @@ function toggleAllCats() {
   document.getElementById('seeAllIcon').className = catsExpanded ? 'bi bi-grid-fill' : 'bi bi-grid';
   document.getElementById('seeAllText').textContent = catsExpanded
     ? 'Show Less'
-    : `See All ${document.querySelectorAll('.cat-card[data-cat]').length} Topics`;
+    : 'See All ' + document.querySelectorAll('.cat-card[data-cat]').length + ' Topics';
   if (catsExpanded) observe();
 }
 
@@ -1148,7 +1259,7 @@ document.getElementById('srch').addEventListener('input', function () {
       const btn = card.querySelector('.see-more');
       if (btn) {
         const n = card.querySelectorAll('.q-list-full .q-item').length;
-        btn.innerHTML = `<i class="bi bi-plus-circle"></i> ${n} more`;
+        btn.innerHTML = '<i class="bi bi-plus-circle"></i> ' + n + ' more';
       }
     }
   });
@@ -1172,6 +1283,7 @@ window.addEventListener('DOMContentLoaded', () => {
   loadCats();
   loadVisitorStats();
   loadHandbookStats();
+  loadReviews();
 });
 
 /* ---- PWA install ---- */

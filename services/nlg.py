@@ -31,11 +31,6 @@ _LANG_NAMES = {
     'mixed_tb': 'a natural mix of Tagalog and Bisaya', 'english': 'English',
 }
 
-# Casual terms of address students actually use when texting a friend
-# ("bai naa ta klase ron?"). Detecting these lets the bot mirror the same
-# energy back instead of answering a playful message with a stiff,
-# formal-sounding reply — the FACTS stay exactly as accurate either way;
-# only the wrapping tone changes.
 _CASUAL_ADDRESS_TERMS = [
     'bai', 'bro', 'sis', 'pre', 'day', 'uy', 'dawg', 'cuz', 'te', 'kuya', 'ate', 'jowa', 'mars',
 ]
@@ -69,21 +64,17 @@ def casual_tone_note(question: str) -> str:
 
 
 STYLE_GUIDE = (
-    "Reply the way a warm, slightly playful friend would actually text back — natural, "
-    "casual, and a little fun when the moment allows it, never a formatted announcement "
-    "or a bulleted status report, no markdown headers. Match the student's own energy: "
-    "if they're casual (slang, 'bai'/'bro'/'sis', short texting style), be casual and "
-    "playful right back; if they're formal, stay a bit more polished. Whatever the tone, "
-    "the actual facts in the answer must always be exactly correct — only the wrapping "
-    "changes, never the content. 1-4 short sentences unless the student is asking for a list."
+    "Reply like a helpful chatbot: natural, clear, and easy to scan. "
+    "Never start with 'According to the section…' or formal handbook citations. "
+    "If the question is yes/no, lead with Yes or No, then a short reason. "
+    "Use light structure on ALL answers when it helps readability: "
+    "**bold** for key terms or short labels, line breaks between points, "
+    "and blank lines between sections (rules, verses, steps). "
+    "For lists use one item per line starting with - . "
+    "Keep facts exact. Short answers can be 1–3 sentences; longer structure is fine "
+    "when listing rules, lyrics, or multi-part info."
 )
 
-# Short, real examples of the tone/register wanted per language — shown
-# to the model as few-shot examples rather than just described in an
-# instruction. Small/fast models follow a shown example far more
-# reliably than a described rule, especially for Bisaya, which is the
-# most under-represented of the three in most training data. These are
-# generic (not tied to any specific fact), just demonstrating register.
 _FEW_SHOT_EXAMPLES = {
     'tagalog': (
         'Halimbawa:\n'
@@ -120,13 +111,6 @@ _FEW_SHOT_EXAMPLES = {
 
 def few_shot_example(detected_lang: str) -> str:
     return _FEW_SHOT_EXAMPLES.get(detected_lang, "")
-
-
-STYLE_GUIDE = (
-    "Reply the way a helpful person would actually text a friend back — natural, warm, "
-    "a little conversational. NOT a formatted announcement, NOT a bulleted status report, "
-    "no markdown headers. 1-4 short sentences unless the student is asking for a list."
-)
 
 
 def now_context() -> str:

@@ -2,10 +2,7 @@
 
 Used by both the live /chat POST endpoint and the /chat/<uuid> page-load
 path, so a message renders identically whether it just arrived or is
-being restored from chat_history after a refresh. Having two separate
-copies of this logic (one in routes/chat.py, one implicitly "missing" on
-reload) was why images disappeared on refresh — the reload path never
-converted the stored "[Image: path]" marker into an <img> tag at all.
+being restored from chat_history after a refresh.
 """
 import re
 
@@ -16,16 +13,36 @@ _IMG_TAG = (
 
 
 def format_bot_message(answer: str, show_images: bool = True) -> str:
-    """Turn a raw stored/generated answer into the HTML the chat bubble
-    expects: **bold** -> <strong>, newlines -> <br>, and [Image: path]
-    markers -> actual <img> tags (or stripped out if show_images=False).
+    """Turn a raw answer into clean chat HTML.
+
+    Supports on ALL answers (not only lyrics):
+      - **bold**  -> <strong>
+      - *italic*  -> <em>
+      - blank lines -> paragraph spacing
+      - single newlines -> <br> (lists, steps, lyrics stay readable)
+      - lines starting with - or • -> bullet marker
+      - [Image: path] -> <img>
     """
     if not answer:
         return ''
-    formatted = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', answer)
-    formatted = formatted.replace('\n', '<br>')
+
+    text = answer
+
+    # Bold first, then italic (so ** doesn't get eaten as italic)
+    text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
+    text = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'<em>\1</em>', text)
+
+    # Normalize bullet prefixes
+    text = re.sub(r'(?m)^[\-\u2022]\s+', '• ', text)
+
+    # Paragraph breaks (blank line) vs line breaks
+    parts = re.split(r'\n\s*\n', text)
+    blocks = [p.replace('\n', '<br>') for p in parts]
+    formatted = '<br><br>'.join(blocks)
+
     if show_images:
         formatted = re.sub(r'\[Image: (.*?)\]', _IMG_TAG, formatted)
     else:
         formatted = re.sub(r'\[Image: .*?\]', '', formatted)
+
     return formatted

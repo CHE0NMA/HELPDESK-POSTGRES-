@@ -187,17 +187,17 @@ def chat():
 
         _log_chat(session_id, user_msg, strip_html(answer), category or '', detected_lang, faq_id=faq_id)
 
-        if topic in ('Disambiguation', 'Handbook'):
-            return jsonify({'reply': answer, 'category': category,
-                             'chat_uuid': session.get('current_chat_uuid'), 'new_chat': started_new_chat})
-
         conversation_turn = session.get('conversation_turn', 0) + 1
         session['conversation_turn'] = conversation_turn
-        show_images = _should_show_image(user_msg, answer, conversation_turn)
-        formatted = format_bot_message(answer, show_images=show_images)
+        # Format ALL replies (handbook, FAQ, schedule, etc.) the same way
+        show_images = (
+                topic not in ('Disambiguation',)
+                and _should_show_image(user_msg, answer, conversation_turn)
+        )
+        formatted = format_bot_message(answer or '', show_images=show_images)
 
         return jsonify({'reply': f'<div class="text">{formatted}</div>', 'category': category,
-                         'chat_uuid': session.get('current_chat_uuid'), 'new_chat': started_new_chat})
+                        'chat_uuid': session.get('current_chat_uuid'), 'new_chat': started_new_chat})
 
     except Exception as e:
         logger.error(f"Chat error: {e}", exc_info=True)

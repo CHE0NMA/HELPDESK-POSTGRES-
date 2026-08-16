@@ -1219,3 +1219,79 @@ def api_seed_aliases():
     from services.topic_aliases import seed_default_aliases
     n = seed_default_aliases(get_db, force=bool((request.get_json(silent=True) or {}).get("force")))
     return jsonify({"seeded": n})
+
+
+@bp.route('/api/admin/search_sources')
+def api_admin_search_sources():
+    """Search FAQ + handbook for the Reports/Corrections fix modals.
+
+    Query param `q` is required. Returns up to ~10 FAQ hits and ~10 handbook
+    chunks so an admin can pick grounded text instead of typing from scratch.
+    """
+    if not admin_required():
+        return jsonify({'error': 'Unauthorized'}), 403
+    q = (request.args.get('q') or '').strip()
+    if len(q) < 2:
+        return jsonify({'faqs': [], 'handbook': []})
+
+    conn = get_db()
+    cur = conn.cursor()
+    faqs, handbook = [], []
+    try:
+        like = f'%{q}%'
+        try:
+            # FAQ table may not have is_active — fall back without it if needed
+            cur.execute("""
+                SELECT id, question, answer, category
+                FROM faq
+                WHERE (question ILIKE %s OR answer ILIKE %s
+                       OR COALESCE(category,'') ILIKE %s
+                       OR COALESCE(topic,'') ILIKE %s)
+                ORDER BY
+                  CASE WHEN question ILIKE %s THEN 0 ELSE 1 END,
+                  id DESC
+                LIMIT 10
+            """, (like, like, like, like, f'{q}%'))
+            for r in cur.fetchall():
+                ans = r[2] or ''
+                faqs.append({
+                    'id': r[0],
+                    'question': r[1] or '',
+                    'answer': ans,
+                    'preview': (ans[:220] + '…') if len(ans) > 220 else ans,
+                    'category': r[3] or '',
+                })
+        except Exception as e:
+            logger.warning(f"search_sources faq: {e}")
+            conn.rollback()
+
+        try:
+            cur.execute("""
+                SELECT id, section_title, chapter, page_start, content
+                FROM handbook_chunks
+                WHERE is_active = 1
+                  AND (section_title ILIKE %s OR content ILIKE %s OR chapter ILIKE %s
+                       OR COALESCE(keywords,'') ILIKE %s)
+                ORDER BY
+                  CASE WHEN section_title ILIKE %s THEN 0 ELSE 1 END,
+                  chunk_order ASC NULLS LAST, id ASC
+                LIMIT 10
+            """, (like, like, like, like, f'{q}%'))
+            for r in cur.fetchall():
+                content = r[4] or ''
+                handbook.append({
+                    'id': r[0],
+                    'section_title': r[1] or '',
+                    'chapter': r[2] or '',
+                    'page_start': r[3],
+                    'content': content,
+                    'preview': (content[:220] + '…') if len(content) > 220 else content,
+                })
+        except Exception as e:
+            logger.warning(f"search_sources handbook: {e}")
+            conn.rollback()
+
+        return jsonify({'faqs': faqs, 'handbook': handbook})
+    finally:
+        cur.close()
+        conn.close()

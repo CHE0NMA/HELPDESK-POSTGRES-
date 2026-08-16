@@ -690,3 +690,106 @@ def api_admin_realtime():
     finally:
         cur.close()
         conn.close()
+
+    @bp.route('/api/visitor_stats')
+    def api_visitor_stats():
+        """Public social-proof numbers for the landing page."""
+        conn = get_db()
+        cur = conn.cursor()
+        try:
+            total_visitors = 0
+            total_questions = 0
+            today_visitors = 0
+
+            try:
+                cur.execute("""
+                    SELECT COUNT(*) AS total_visitors,
+                           COALESCE(SUM(question_count), 0) AS total_questions,
+                           COUNT(CASE WHEN DATE(last_seen) = CURRENT_DATE THEN 1 END) AS today_visitors
+                    FROM visitor_stats
+                """)
+                row = cur.fetchone()
+                total_visitors = int(row[0] or 0)
+                total_questions = int(row[1] or 0)
+                today_visitors = int(row[2] or 0)
+            except Exception:
+                conn.rollback()
+
+            # Fallback when visitor_stats was never written to
+            if total_visitors == 0 and total_questions == 0:
+                try:
+                    cur.execute("""
+                        SELECT COUNT(DISTINCT session_id),
+                               COUNT(*),
+                               COUNT(DISTINCT CASE WHEN DATE(created_at) = CURRENT_DATE
+                                                   THEN session_id END)
+                        FROM chat_history
+                    """)
+                    row = cur.fetchone()
+                    total_visitors = int(row[0] or 0)
+                    total_questions = int(row[1] or 0)
+                    today_visitors = int(row[2] or 0)
+                except Exception:
+                    conn.rollback()
+
+            avg_rating = 0.0
+            rating_count = 0
+            try:
+                cur.execute("""
+                    SELECT ROUND(AVG(rating)::numeric, 1), COUNT(*)
+                    FROM chat_ratings
+                    WHERE rating BETWEEN 1 AND 5
+                """)
+                rrow = cur.fetchone()
+                avg_rating = float(rrow[0] or 0)
+                rating_count = int(rrow[1] or 0)
+            except Exception:
+                conn.rollback()
+
+            return jsonify({
+                'total_visitors': total_visitors,
+                'total_questions': total_questions,
+                'today_visitors': today_visitors,
+                'students_helped': total_visitors or total_questions,
+                'active_today': today_visitors,
+                'avg_rating': avg_rating,
+                'rating_count': rating_count,
+            })
+        finally:
+            cur.close()
+            conn.close()
+
+    @bp.route('/api/public_reviews')
+    def api_public_reviews():
+        """Recent 4–5★ comments only — safe for the public landing page."""
+        conn = get_db()
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                SELECT rating, comment, created_at
+                FROM chat_ratings
+                WHERE rating >= 4
+                  AND comment IS NOT NULL
+                  AND TRIM(comment) != ''
+                  AND LENGTH(TRIM(comment)) >= 8
+                ORDER BY created_at DESC
+                LIMIT 12
+            """)
+            rows = cur.fetchall()
+            reviews = []
+            for rating, comment, created_at in rows:
+                text = (comment or '').strip()
+                if len(text) > 180:
+                    text = text[:177] + '…'
+                reviews.append({
+                    'rating': int(rating),
+                    'comment': text,
+                    'when': created_at.strftime('%b %Y') if created_at else '',
+                })
+            return jsonify({'reviews': reviews})
+        except Exception as e:
+            logger.error(f"api_public_reviews: {e}")
+            return jsonify({'reviews': []})
+        finally:
+            cur.close()
+            conn.close()
