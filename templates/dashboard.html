@@ -212,7 +212,7 @@ textarea.form-control { resize:vertical; min-height:80px; }
     <div class="stats-row" id="statsRow">
       <div class="stat-card" style="--sc:var(--accent)"><div class="stat-val" id="statTotal">—</div><div class="stat-lbl">Total FAQs</div><i class="bi bi-collection stat-ico"></i></div>
       <div class="stat-card" style="--sc:var(--success)"><div class="stat-val" id="statHigh">—</div><div class="stat-lbl">High Priority</div><i class="bi bi-arrow-up-circle stat-ico"></i></div>
-      <div class="stat-card" style="--sc:var(--warning)"><div class="stat-val" id="statCats">—</div><div class="stat-lbl">Categories</div><i class="bi bi-tags stat-ico"></i></div>
+      <div class="stat-card" style="--sc:var(--warning)"><div class="stat-val" id="statCats">—</div><div class="stat-lbl">Topics</div><i class="bi bi-tags stat-ico"></i></div>
       <div class="stat-card" style="--sc:var(--danger)"><div class="stat-val" id="statUnanswered">—</div><div class="stat-lbl">Unanswered</div><i class="bi bi-question-circle stat-ico"></i></div>
     </div>
 
@@ -243,19 +243,18 @@ textarea.form-control { resize:vertical; min-height:80px; }
           <tr>
             <th class="sortable" onclick="sortTable(0)">Topic</th>
             <th>Question</th>
-            <th>Category</th>
-            <th class="sortable" onclick="sortTable(3)">Priority</th>
+            <th class="sortable" onclick="sortTable(2)">Priority</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody id="faqTableBody">
           {% for f in faqs %}
-          <tr data-topic="{{ f[1] }}" data-priority="{{ f[14] }}" data-uuid="{{ f[16] }}">
-            <td>{{ f[1] }}</td>
-            <td title="{{ f[3] }}" style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f[3] }}</td>
-            <td style="font-size:.82rem">{{ f[13] or '—' }}</td>
+          {# Correct indices from SELECT *: 0=id, 1=topic, 2=intent, 3=question, 4=answer, 10=priority_score, 16=public_uuid #}
+          <tr data-topic="{{ f[1] }}" data-priority="{{ f[10] }}" data-uuid="{{ f[16] }}">
+            <td>{{ f[1] or 'General' }}</td>
+            <td title="{{ f[3] }}" style="max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f[3] }}</td>
             <td>
-              {% set priority_val = f[14]|int %}
+              {% set priority_val = (f[10]|int) if f[10] is not none else 0 %}
               {% if priority_val > 7 %}<span class="priority-high">▲ {{ priority_val }}</span>
               {% elif priority_val > 3 %}<span class="priority-med">● {{ priority_val }}</span>
               {% else %}<span class="priority-low">▼ {{ priority_val }}</span>{% endif %}
@@ -267,7 +266,7 @@ textarea.form-control { resize:vertical; min-height:80px; }
           </tr>
           {% endfor %}
           {% if not faqs %}
-          <tr><td colspan="5"><div class="empty-state"><i class="bi bi-inbox"></i>No FAQs yet. Add your first one!</div></td></tr>
+          <tr><td colspan="4"><div class="empty-state"><i class="bi bi-inbox"></i>No FAQs yet. Add your first one!</div></td></tr>
           {% endif %}
         </tbody>
       </table>
@@ -288,10 +287,9 @@ textarea.form-control { resize:vertical; min-height:80px; }
           <input type="hidden" name="faq_uuid" id="faq_uuid">
           <input type="hidden" name="faq_id" id="faq_id">
           <div class="row g-2 mb-3">
-            <div class="col-md-3"><label class="form-label">Topic *</label><input name="topic" id="topic" class="form-control" required></div>
-            <div class="col-md-3"><label class="form-label">Intent</label><input name="intent" id="intent" class="form-control"></div>
-            <div class="col-md-3"><label class="form-label">Language</label><input name="language" id="language" class="form-control" value="en"></div>
-            <div class="col-md-3"><label class="form-label">Category</label><input name="category" id="category" class="form-control"></div>
+            <div class="col-md-4"><label class="form-label">Topic *</label><input name="topic" id="topic" class="form-control" required></div>
+            <div class="col-md-4"><label class="form-label">Intent</label><input name="intent" id="intent" class="form-control"></div>
+            <div class="col-md-4"><label class="form-label">Language</label><input name="language" id="language" class="form-control" value="en"></div>
           </div>
           <div class="mb-2"><label class="form-label">Question *</label><textarea name="question" id="question" class="form-control" required rows="2"></textarea></div>
           <div class="mb-2"><label class="form-label">Answer *</label><textarea name="answer" id="answer" class="form-control" required rows="4"></textarea></div>
@@ -377,16 +375,16 @@ refreshBadges();
 
 function computeStats() {
   const rows = document.querySelectorAll('#faqTableBody tr[data-topic]');
-  const cats = new Set();
+  const topics = new Set();
   let high = 0;
   rows.forEach(r => {
     if ((parseInt(r.dataset.priority) || 0) > 7) high++;
-    const c = r.cells[2]?.textContent.trim();
-    if (c && c !== '—') cats.add(c);
+    const t = (r.dataset.topic || '').trim();
+    if (t) topics.add(t);
   });
   document.getElementById('statTotal').textContent = rows.length;
   document.getElementById('statHigh').textContent = high;
-  document.getElementById('statCats').textContent = cats.size;
+  document.getElementById('statCats').textContent = topics.size;
   document.getElementById('statUnanswered').textContent = {{ unanswered_count|default(0)|int }};
 }
 computeStats();
@@ -424,8 +422,7 @@ function openUpdateModal(faq) {
     document.getElementById('keywords').value = faq[6] || '';
     document.getElementById('related_questions').value = faq[7] || '';
     document.getElementById('language').value = faq[8] || 'en';
-    document.getElementById('category').value = faq[9] || '';
-    document.getElementById('priority_score').value = faq[10] || 0;
+    document.getElementById('priority_score').value = faq[10] ?? 0;   // correct index
     document.getElementById('attachment_url').value = faq[11] || '';
     document.getElementById('duplicateWarning').style.display = 'none';
     document.getElementById('faqModalLabel').innerHTML = '<i class="bi bi-pencil"></i> Edit FAQ';
@@ -492,7 +489,7 @@ function sortTable(col) {
   const rows = Array.from(tbody.querySelectorAll('tr[data-topic]'));
   const asc = tbody.dataset.sortAsc !== 'true';
   rows.sort((a, b) => {
-    if (col === 3) {
+    if (col === 2) { // Priority column is now index 2
       return asc
         ? (parseInt(a.dataset.priority)||0) - (parseInt(b.dataset.priority)||0)
         : (parseInt(b.dataset.priority)||0) - (parseInt(a.dataset.priority)||0);
@@ -510,7 +507,7 @@ function filterTopic() {
   const priority = document.getElementById('priorityFilter').value;
   const search = document.getElementById('searchInput').value.toLowerCase();
   document.querySelectorAll('#faqTableBody tr[data-topic]').forEach(row => {
-    const t = row.dataset.topic.toLowerCase();
+    const t = (row.dataset.topic || '').toLowerCase();
     const p = parseInt(row.dataset.priority) || 0;
     const q = row.cells[1]?.innerText.toLowerCase() || '';
     const mt = !topic || t === topic;

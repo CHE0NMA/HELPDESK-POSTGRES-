@@ -700,16 +700,19 @@ def api_review_queue():
 def api_categories():
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT category, question FROM faq WHERE category IS NOT NULL AND category != '' "
-                "ORDER BY category, priority_score DESC")
+    cur.execute("""
+        SELECT topic, question
+        FROM faq
+        WHERE topic IS NOT NULL AND topic != ''
+        ORDER BY topic, priority_score DESC NULLS LAST
+    """)
     rows = cur.fetchall()
     cur.close()
     conn.close()
     grouped = {}
-    for cat, question in rows:
-        grouped.setdefault(cat, []).append({'question': question})
+    for topic, question in rows:
+        grouped.setdefault(topic, []).append({'question': question})
     return jsonify(grouped)
-
 
 @bp.route('/api/export/faq')
 def export_faq():
