@@ -175,20 +175,22 @@ def _extract_from_answer(user_question: str, best_text: str, answer: str,
     Answer: {answer}
 
         Instructions:
-    - Answer using ONLY the information in the FAQ answer above. Do not invent names, dates, amounts, or requirements that aren't stated.
-    - Sound like a real chatbot. Never start with "According to…".
-    - If the question is yes/no, lead with Yes or No, then a short reason.
-    - Format for easy reading on EVERY answer: **bold** for key terms, line breaks between points, blank lines between sections; lists as one item per line with - .
-    - If asking for a list, enumerate everything relevant — don't give just one item.
+    - Answer using ONLY the information in the FAQ/source text above. Do not invent names, dates, amounts, or requirements that aren't stated.
+    - Answer ONLY what the student asked. Do NOT paste or restate the entire source text.
+    - For when/what-year/started/founded questions: give the year/date in 1–2 short sentences. Skip long history unless they asked for the full story.
+    - For who/founder questions: name the people in 1–2 short sentences.
+    - For yes/no (okay? allowed? can I?): lead with Yes or No, then a short reason.
+    - Never start with "According to…".
+    - If asking for a full list of items, enumerate the relevant items — still keep it concise.
     - {nlg.STYLE_GUIDE}
     - {lang_instruction}
     {few_shot}{casual_note}
-    - If the FAQ answer doesn't actually contain the information needed to answer the question, respond with exactly: CANNOT_ANSWER
+    - If the source text doesn't actually contain the information needed to answer the question, respond with exactly: CANNOT_ANSWER
 
     Answer:"""
 
     try:
-        response = llm_chat_fn(prompt, max_tokens=250)
+        response = llm_chat_fn(prompt, max_tokens=220)
         if not response or "CANNOT_ANSWER" in response:
             return None
         response = response.strip()

@@ -71,7 +71,7 @@ def _ensure_table(get_db_fn) -> bool:
     return _TABLE_READY
 
 
-def get_correction(get_db_fn, question: str) -> Optional[dict]:
+def get_correction(get_db_fn: object, question: str) -> Optional[dict]:
     """Return {'id', 'question', 'answer', 'faq_id'} for an admin-verified
     correction matching this exact (normalized) question, or None."""
     if not question or not _ensure_table(get_db_fn):

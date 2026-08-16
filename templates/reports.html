@@ -194,6 +194,44 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
   .table-card { overflow-x:auto; }
   .tbl { min-width:600px; }
 }
+  /* Custom scrollbar — works in Chrome, Edge, Safari */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.04);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(77,171,247,0.28);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(77,171,247,0.45);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(77,171,247,0.35) rgba(255,255,255,0.04);
+}
+
+/* Light theme */
+[data-bs-theme="light"] ::-webkit-scrollbar-track { background: rgba(0,0,0,0.04); }
+[data-bs-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(26,115,232,0.28); }
+[data-bs-theme="light"] ::-webkit-scrollbar-thumb:hover { background: rgba(26,115,232,0.45); }
+[data-bs-theme="light"] * {
+  scrollbar-color: rgba(26,115,232,0.35) rgba(0,0,0,0.04);
+}
+
+/* Modal body scroll */
+.modal-body {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(77,171,247,0.35) transparent;
+}
+.modal-body::-webkit-scrollbar { width: 6px; }
+.modal-body::-webkit-scrollbar-thumb {
+  background: rgba(77,171,247,0.3);
+  border-radius: 3px;
+}
 </style>
 </head>
 <body data-admin-page="reports">

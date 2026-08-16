@@ -587,11 +587,22 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
         if correction:
             from ai_providers import llm_chat
             from services.answer_engine import _extract_from_answer
+            # Cap long handbook pastes so extraction + fallback stay short
+            src = (correction.get('answer') or '').strip()
+            src_for_extract = src if len(src) <= 1200 else (src[:1200].rsplit(' ', 1)[0] + '…')
             reworded = _extract_from_answer(
-                question, correction['question'], correction['answer'],
+                question, correction['question'], src_for_extract,
                 llm_chat, detected_lang=detected_lang,
             )
-            final_answer = reworded or correction['answer']
+            if reworded:
+                final_answer = reworded
+            else:
+                # Last resort: 1–2 sentences only — never the whole chunk
+                parts = re.split(r'(?<=[.!?])\s+', src)
+                short = ' '.join(p.strip() for p in parts[:2] if p.strip())
+                if len(short) > 400:
+                    short = short[:397].rsplit(' ', 1)[0] + '…'
+                final_answer = short or src[:400]
             ctx.update(user_msg=question, bot_response=final_answer)
             result = (final_answer, 'Corrected', correction.get('faq_id'), None, detected_lang)
             return result if return_topic else result[0]

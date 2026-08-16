@@ -228,21 +228,12 @@ _FORCED_TOPIC_MATCHES = [
      ['mission'], ['human service', 'personal integrity']),
     (r'\b(philosophy|school.?s? philosophy)\b',
      ['philosophy'], ['source of true education']),
-    (r'\b(jewelry|necklace|ring|earrings|piercing)\b',
+    (r'\b(jewelry|jewellery|necklace|rings?|earrings?|ear\s*rings?|piercing|'
+     r'nose\s*rings?|bracelets?|bangles?|'
+     r'(is|are|can|may|okay|ok|allowed).{0,25}(wear|wearing).{0,20}'
+     r'(earring|jewelry|jewellery|necklace|ring|bracelet))\b',
      ['dress and appearance', 'first-degree', 'first degree'],
-     ['necklace', 'earrings', 'jewelry', 'wedding ring']),
-    # "campus"/"campuses" was already treated as a real topic elsewhere in
-    # this file (HANDBOOK_KEYWORDS, _QUERY_EXPANSIONS, topic_title_cues
-    # below) but had no forced-topic entry, so it fell through to generic
-    # fuzzy retrieval — which grabbed unrelated chunks (Brief History,
-    # Dress and Appearance, Mission) that merely shared generic words
-    # ("college", "page", "PAC") and let the LLM stitch them into a
-    # hallucinated non-sequitur. Pin it to MEETINGS, the section that
-    # actually states the campus address.
-    # NOTE: deliberately does NOT match the bare word "campus" alone -- that
-    # also matched ordinary "is X allowed on campus?" conduct questions and
-    # force-hijacked them to this section too. Only phrasing that actually
-    # asks about the campus's identity/location should force this topic.
+     ['necklace', 'earrings', 'jewelry', 'jewellery', 'wedding ring', 'bracelet']),
     (r'\b(campuses|other campus(es)?|how many campuses|campus locations?|'
      r'where (is|are) the (main )?campus(es)?|which campus(es)?|'
      r'which locations?|names? of the (other )?campuses?|main campus)\b',
@@ -1107,9 +1098,6 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
         except Exception as e:
             logger.error(f"AI handbook answer failed: {e}")
 
-    # Deterministic fallback (always used when LLM fails / drifts).
-    # For forced-topic matches, be aggressive: pull the matching rule lines
-    # even if the generic relevance check is picky.
     forced = _forced_topic_for(question)
     top = chunks[0]
     title = top.get('section_title', 'the Student Handbook')
@@ -1131,18 +1119,16 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
         sentences = re.split(r'(?<=[.!?])\s+', content)
         clean = ' '.join(s.strip() for s in sentences[:3] if len(s.strip()) > 25)
 
-    # Forced topics: never return None if we have any content from the
-    # correct section — the ranking already proved this is the right chunk.
     if forced and content:
         if not clean:
             clean = content[:600].strip()
-        page_note = f" (see page {page})" if page else ""
-        return f"According to the section **{title}**{page_note}:\n\n{clean}"
+        page_note = f"\n\n(More detail is on page {page}.)" if page else ""
+        return f"{clean}{page_note}".strip()
 
     if not clean or not _answer_relevant_to_question(question, clean):
         return None
-    page_note = f" (see page {page})" if page else ""
-    return f"According to the section **{title}**{page_note}:\n\n{clean}"
+    page_note = f"\n\n(More detail is on page {page}.)" if page else ""
+    return f"{clean}{page_note}".strip()
 
 
 def _merge_compound_answers(original_question: str, sub_answers: List[Tuple[str, str]],
