@@ -34,6 +34,8 @@ HANDBOOK_KEYWORDS = [
     'logo', 'emblem', 'symbol', 'hymn', 'alma mater',
     'pwede ba', 'bawal', 'patakaran', 'gawi', 'uniforme', 'damit',
     'absent', 'pagliban', 'disiplina', 'sumbong',
+    'suoton', 'isul-ob', 'pananamit', 'damit', 'bisti', 'tsinelas',
+    'patakaran', 'bawal', 'pwede ba', 'unsaon', 'unsay dapat',
 ]
 
 _STOP = {

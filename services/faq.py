@@ -16,13 +16,37 @@ from services.conversation import (
     resolve_disambiguation_choice,
 )
 from services.embeddings import get_embedding
-
 from utils.text import normalize_input
 
 logger = logging.getLogger("pac_helpdesk.faq")
 
-# Split multi-intent questions so each clause can be answered.
-# Handles: "What is X and where is Y?", "A? B?", "X, and who founded it?"
+_FAQ_ROWS_CACHE = None
+_FAQ_ROWS_TS = 0.0
+_FAQ_CACHE_TTL = 45.0
+
+
+def _get_all_faqs():
+    global _FAQ_ROWS_CACHE, _FAQ_ROWS_TS
+    now = time.time()
+    if _FAQ_ROWS_CACHE is not None and (now - _FAQ_ROWS_TS) < _FAQ_CACHE_TTL:
+        return _FAQ_ROWS_CACHE
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT answer, question, id, topic, intent, keywords,
+                   related_questions, priority_score, image_path, embedding
+            FROM faq
+        """)
+        rows = cur.fetchall()
+        _FAQ_ROWS_CACHE = rows
+        _FAQ_ROWS_TS = now
+        return rows
+    finally:
+        cur.close()
+        conn.close()
+
+
 COMPOUND_SPLIT_RE = re.compile(
     r'(?:'
     r'\s+(?:and|at saka|saka|tas|ug|dayon|unya|,\s*and)\s+'
@@ -35,15 +59,9 @@ COMPOUND_SPLIT_RE = re.compile(
     re.IGNORECASE
 )
 
-CROSS_CHECK_HANDBOOK_BAR = 0.34
-CROSS_CHECK_FAQ_BAR = engine.FUZZY_MIN_SCORE + 0.05
+CROSS_CHECK_HANDBOOK_BAR = 0.58
+CROSS_CHECK_FAQ_BAR = engine.FUZZY_MIN_SCORE + 0.18
 
-# Phrases that mean the follow-up LLM is hedging / admitting it doesn't
-# actually know, rather than giving a real answer. When we see one of
-# these we should NOT treat it as a final answer — we should fall
-# through to the real handbook/FAQ lookup instead, since the model is
-# only reasoning over the last few chat turns and has no idea whether
-# the handbook actually covers the topic.
 _NON_ANSWER_RE = re.compile(
     r"\b(don'?t have (?:the |that |this |complete |full |specific |confirmed )*"
     r"(?:information|details|data|specifics|answer)|"
@@ -68,18 +86,11 @@ def _looks_like_non_answer(text: str) -> bool:
 
 
 def split_compound_question(question: str) -> List[str]:
-    """Split multi-part questions into standalone clauses.
-
-    Handbook topics are included — previously we skipped compound handling
-    when is_handbook_question was true, so "full name and campuses" only
-    answered one half (often the wrong half).
-    """
     q = (question or '').strip()
     if len(q.split()) < 6:
         return [q]
     parts = COMPOUND_SPLIT_RE.split(q)
     parts = [p.strip(' ?.,') for p in parts if p and p.strip(' ?.,')]
-    # Keep only parts that still look like a real question fragment
     cleaned = []
     for p in parts:
         if len(p.split()) < 2:
@@ -89,18 +100,6 @@ def split_compound_question(question: str) -> List[str]:
 
 
 def _answer_followup_via_search(question: str, ctx, detected_lang: str):
-    """A follow-up like "how many demerits is a first degree offense" after
-    talking about third-degree offenses isn't answerable from chat history
-    alone — the bot needs to actually go look up "first degree offense" in
-    the handbook, the same as it would for a brand new question. This
-    resolves the (possibly pronoun-y / elliptical) follow-up into a
-    standalone question using the conversation so far, then runs THAT
-    through the normal handbook/FAQ search — not just a second glance at
-    whatever chunks the previous turn already used.
-
-    Returns (answer, topic, intent) — all None if nothing was found, in
-    which case the caller should fall back to answer_followup_with_ai.
-    """
     from services.conversation import build_context_snapshot
 
     context_snapshot = build_context_snapshot(ctx)
@@ -108,9 +107,6 @@ def _answer_followup_via_search(question: str, ctx, detected_lang: str):
     if context_snapshot and not circuit_breaker.is_open():
         resolved_q = _resolve_standalone_question(question, context_snapshot)
 
-    # Check both the resolved and original phrasing — the rewrite usually
-    # helps ("it" -> "a second-degree offense"), but shouldn't be trusted
-    # blindly if it drifted off-topic.
     looks_handbooky = (
         handbook_service.is_handbook_question(resolved_q)
         or handbook_service.is_handbook_question(question)
@@ -190,45 +186,40 @@ Answer:"""
 
 
 def _lookup_faq_answer(question: str, detected_lang: str) -> Optional[Tuple[str, str, str]]:
-    conn = get_db()
-    cur = conn.cursor()
-    try:
-        cur.execute("""
-            SELECT answer, question, id, topic, intent, keywords,
-                   related_questions, priority_score, image_path, embedding
-            FROM faq
-        """)
-        all_faqs = cur.fetchall()
-        search_q = question.lower()
-        expanded_q = lang_service.expand_abbreviations(search_q)
+    all_faqs = _get_all_faqs()
+    search_q = question.lower()
+    expanded_q = lang_service.expand_abbreviations(search_q)
+    candidates = engine.get_top_faq_candidates(
+        search_q, expanded_q, all_faqs, detected_lang, query_embedding=None
+    )
+    if candidates and candidates[0]['combined'] < 0.75:
         query_embedding = get_embedding(search_q, cache=ai_cache)
-        candidates = engine.get_top_faq_candidates(
-            search_q, expanded_q, all_faqs, detected_lang, query_embedding=query_embedding
-        )
-        if not candidates:
-            return None
-        best = candidates[0]
-        if best['combined'] < engine.FUZZY_MIN_SCORE:
-            if best['fuzzy'] >= 0.60:
-                row = best['faq']
-                return (row[0] or '', row[3], row[4])
-            return None
-        if circuit_breaker.is_open():
-            return None
-        ai_ans, matched = engine.smart_extract_answer(
-            user_question=question,
-            candidates=candidates,
-            detected_lang=detected_lang,
-            llm_chat_fn=llm_chat,
-            ai_cache=ai_cache,
-        )
-        if not ai_ans:
-            return None
-        best_row = (matched or best)['faq']
-        return (ai_ans, best_row[3], best_row[4])
-    finally:
-        cur.close()
-        conn.close()
+        if query_embedding:
+            candidates = engine.get_top_faq_candidates(
+                search_q, expanded_q, all_faqs, detected_lang,
+                query_embedding=query_embedding,
+            )
+    if not candidates:
+        return None
+    best = candidates[0]
+    if best['combined'] < engine.FUZZY_MIN_SCORE:
+        if best['fuzzy'] >= 0.60:
+            row = best['faq']
+            return (row[0] or '', row[3], row[4])
+        return None
+    if circuit_breaker.is_open():
+        return None
+    ai_ans, matched = engine.smart_extract_answer(
+        user_question=question,
+        candidates=candidates,
+        detected_lang=detected_lang,
+        llm_chat_fn=llm_chat,
+        ai_cache=ai_cache,
+    )
+    if not ai_ans:
+        return None
+    best_row = (matched or best)['faq']
+    return (ai_ans, best_row[3], best_row[4])
 
 
 def _log_unanswered(cur, conn, question: str, ctx=None):
@@ -342,18 +333,7 @@ def _handbook_best_score(question: str) -> Tuple[float, list]:
 
 
 def _faq_candidates_and_score(question: str, detected_lang: str) -> Tuple[list, float]:
-    conn = get_db()
-    cur = conn.cursor()
-    try:
-        cur.execute("""
-            SELECT answer, question, id, topic, intent, keywords,
-                   related_questions, priority_score, image_path
-            FROM faq
-        """)
-        all_faqs = cur.fetchall()
-    finally:
-        cur.close()
-        conn.close()
+    all_faqs = _get_all_faqs()
     search_q = question.lower()
     expanded_q = lang_service.expand_abbreviations(search_q)
     candidates = engine.get_top_faq_candidates(search_q, expanded_q, all_faqs, detected_lang)
@@ -399,11 +379,6 @@ def _note_header(kind: str, lang: str) -> str:
 
 
 def _chunk_is_schedule_related(chunk: dict) -> bool:
-    """True when a handbook chunk is plausibly ABOUT schedules/holidays/
-    attendance, not just a chunk that happens to share a few common words
-    (month, week, office...) with a date-shaped question. Used to gate
-    whether a handbook footnote is allowed under a date/schedule answer —
-    see find_answer()'s date_ans branch."""
     title = (chunk.get('section_title') or '').lower()
     content = (chunk.get('content') or '')[:600].lower()
     blob = f"{title} {content}"
@@ -418,33 +393,8 @@ def _chunk_is_schedule_related(chunk: dict) -> bool:
 
 def _ai_pick_best_source(question: str, hb_chunks: list, faq_candidates: list,
                           llm_chat_fn) -> str:
-    """Tie-breaker only — called when handbook and FAQ scores are both
-    'solid' and close enough that the deterministic router (faq_margin /
-    hb_threshold / combine_gap above) can't confidently pick a winner on
-    score alone (see both_solid in find_answer()).
-
-    Score-based routing can't tell the difference between "this chunk is
-    genuinely about the question" and "this chunk just shares a few
-    words with the question" (the exact failure mode behind the
-    MEETINGS/TREASURER handbook mis-routes and the graduation/poster
-    footnotes on date answers). This shows the AI the actual retrieved
-    TEXT — not just the numeric scores — and asks a narrow, cheap
-    classification question about it.
-
-    Returns one of: 'handbook', 'faq', 'both', 'neither'.
-
-    IMPORTANT: this never generates or invents the final answer. It only
-    decides which already-retrieved source(s) the caller should trust;
-    the winning source still goes through the normal extraction +
-    grounding pipeline (services.answer_engine / services.handbook) same
-    as every other path in this file. A wrong pick here can at worst
-    suppress a genuinely relevant source or (in the 'both'/failure-open
-    case) fall back to the pre-existing combine behavior — it can never
-    cause a fabricated fact to reach the student, since grounding is
-    checked downstream regardless of what this function returns.
-    """
     if llm_chat_fn is None:
-        return 'both'  # fail open — behave exactly as before this existed
+        return 'both'
 
     hb_excerpt = ''
     if hb_chunks:
@@ -471,9 +421,7 @@ def _ai_pick_best_source(question: str, hb_chunks: list, faq_candidates: list,
 
 Two candidate sources were retrieved for this question. Some retrieved
 excerpts only SHARE A FEW WORDS with the question without actually
-answering it (e.g. a "Meetings" section that mentions "campus" in a
-location address, retrieved for a question about a dress code that
-also mentions "campus"). Decide which source(s), if any, genuinely
+answering it. Decide which source(s), if any, genuinely
 answer what the student asked — not just resemble it.
 
 --- HANDBOOK EXCERPT ---
@@ -502,7 +450,7 @@ Answer:"""
         return 'faq'
     if raw.startswith('NEITHER'):
         return 'neither'
-    return 'both'  # BOTH, or an unparseable reply — fail open
+    return 'both'
 
 
 def _merge_with_handbook(base_answer: str, question: str, hb_chunks: list,
@@ -535,10 +483,6 @@ def _merge_with_date(base_answer: str, date_ans: str, detected_lang: str) -> str
 
 def _combine_handbook_and_faq(question: str, candidates: list, hb_chunks: list,
                                detected_lang: str) -> Optional[str]:
-    """FAQ often holds the clearer student-facing answer; handbook holds
-    the official wording. Prefer FAQ first, handbook as supporting policy.
-    Either alone is fine when the other is missing.
-    """
     faq_ans, _matched = engine.smart_extract_answer(
         user_question=question,
         candidates=candidates,
@@ -553,7 +497,6 @@ def _combine_handbook_and_faq(question: str, candidates: list, hb_chunks: list,
         )
 
     if faq_ans and hb_ans:
-        # Avoid near-duplicate doubles
         if faq_ans.strip().lower()[:120] == hb_ans.strip().lower()[:120]:
             return faq_ans
         return (
@@ -561,6 +504,63 @@ def _combine_handbook_and_faq(question: str, candidates: list, hb_chunks: list,
             f"{_note_header('handbook', detected_lang)} {hb_ans}"
         )
     return faq_ans or hb_ans
+
+
+def _is_translate_request(question: str) -> bool:
+    q = (question or '').lower().strip()
+    return bool(re.search(
+        r'\b(paki\s*translate|i-?translate|translate\s+(to|into|sa|in)|'
+        r'sa\s+bisaya|in\s+bisaya|sa\s+tagalog|in\s+tagalog|'
+        r'tagalog\s*(version|naman|please)|bisaya\s*(version|naman|please)|'
+        r'cebuano|i-bisaya|i-tagalog|translate\s*(this|that|previous)|'
+        r'pwede\s*(ba\s*)?(i-)?translate)\b',
+        q, re.I,
+    ))
+
+
+def _translate_previous_answer(question: str, ctx, detected_lang: str) -> Optional[str]:
+    prev = (getattr(ctx, 'last_answer', None) or '').strip()
+    if not prev or len(prev) < 20:
+        return None
+    if circuit_breaker.is_open():
+        return None
+
+    q = question.lower()
+    if re.search(r'\b(bisaya|cebuano|i-bisaya|sa\s+bisaya)\b', q):
+        target = 'bisaya'
+    elif re.search(r'\b(tagalog|filipino|i-tagalog|sa\s+tagalog)\b', q):
+        target = 'tagalog'
+    else:
+        target = detected_lang if detected_lang != 'english' else 'bisaya'
+
+    from services.config import bot_identity_line
+    from services.grounding import answer_is_grounded
+
+    prompt = f"""{nlg.now_context()}
+
+{bot_identity_line()}
+
+A student previously received this exact answer:
+\"\"\"{prev[:2500]}\"\"\"
+
+Now they asked: "{question}"
+
+Rephrase the answer above into natural {nlg.lang_name(target)}. Keep every fact identical — do not add, remove, or change any rule, number, name, or policy. Only change the language and make it sound natural and friendly. {nlg.STYLE_GUIDE}
+
+Translated answer:"""
+    try:
+        response = llm_chat(prompt, max_tokens=500)
+        if not response or not response.strip():
+            return None
+        response = response.strip()
+        if not answer_is_grounded(response, prev, min_overlap=0.30):
+            logger.info("translate_previous: grounding failed, returning original")
+            return prev
+        return response
+    except Exception as e:
+        logger.error(f"_translate_previous_answer error: {e}")
+        return None
+
 
 def find_answer(question: str, return_topic: bool = False, session_id: str = None):
     start = time.time()
@@ -572,6 +572,13 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
         resolved = _try_resolve_pending_disambiguation(question, detected_lang, ctx)
         if resolved:
             return resolved if return_topic else resolved[0]
+
+    if _is_translate_request(question) and getattr(ctx, 'last_answer', None):
+        translated = _translate_previous_answer(question, ctx, detected_lang)
+        if translated:
+            ctx.update(user_msg=question, bot_response=translated)
+            result = (translated, 'Translation', None, None, detected_lang)
+            return result if return_topic else result[0]
 
     if ctx and getattr(ctx, 'last_schedule_query', None):
         follow = date_service.answer_schedule_department_followup(question, ctx)
@@ -585,9 +592,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
         from database import get_db as _gdb
         correction = get_correction(_gdb, question)
         if correction:
-            from ai_providers import llm_chat
             from services.answer_engine import _extract_from_answer
-            # Cap long handbook pastes so extraction + fallback stay short
             src = (correction.get('answer') or '').strip()
             src_for_extract = src if len(src) <= 1200 else (src[:1200].rsplit(' ', 1)[0] + '…')
             reworded = _extract_from_answer(
@@ -597,7 +602,6 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             if reworded:
                 final_answer = reworded
             else:
-                # Last resort: 1–2 sentences only — never the whole chunk
                 parts = re.split(r'(?<=[.!?])\s+', src)
                 short = ' '.join(p.strip() for p in parts[:2] if p.strip())
                 if len(short) > 400:
@@ -678,7 +682,6 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             question, detected_lang, ctx=ctx
         )
         if date_ans:
-
             signals = {
                 'hb_score': _hb_score_early,
                 'hb_chunks': _hb_chunks_early,
@@ -686,9 +689,8 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 'faq_score': _faq_score_early,
             }
             final_ans = date_ans
-
             hb_ok = (
-                signals['hb_score'] >= max(CROSS_CHECK_HANDBOOK_BAR, 0.45)
+                signals['hb_score'] >= 0.70
                 and signals['hb_chunks']
                 and _chunk_is_schedule_related(signals['hb_chunks'][0])
                 and not circuit_breaker.is_open()
@@ -697,26 +699,8 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 final_ans = _merge_with_handbook(
                     final_ans, question, signals['hb_chunks'], detected_lang
                 )
-            elif (signals['faq_score'] >= CROSS_CHECK_FAQ_BAR
-                    and signals['faq_candidates']
-                    and not circuit_breaker.is_open()):
-                top_faq_question = ''
-                try:
-                    faq_row = signals['faq_candidates'][0].get('faq') or ()
-                    top_faq_question = (faq_row[1] if len(faq_row) > 1 else '') or ''
-                except Exception:
-                    pass
-                if re.search(
-                    r'\b(holiday|class|schedule|open|closed|pasok|klase|'
-                    r'office hours|suspension)\b',
-                    top_faq_question, re.I,
-                ):
-                    final_ans = _merge_with_faq(
-                        final_ans, question, signals['faq_candidates'], detected_lang
-                    )
             result = (final_ans, 'Schedule', None, 'date_query', detected_lang)
             return result if return_topic else result[0]
-
 
     dept_followup = date_service.answer_schedule_department_followup(question, ctx)
     if dept_followup:
@@ -746,6 +730,24 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 )
                 result = (search_ans, search_topic or 'Handbook', None, search_intent, detected_lang)
                 return result if return_topic else result[0]
+
+            if (ctx.last_faq_answer or ctx.last_answer) and word_count <= 12:
+                prev_src = ctx.last_faq_answer or ctx.last_answer
+                from services.answer_engine import _extract_from_answer
+                try:
+                    re_ans = _extract_from_answer(
+                        question,
+                        ctx.last_faq_question or last_ex.get('user', ''),
+                        prev_src,
+                        llm_chat,
+                        detected_lang=detected_lang,
+                    )
+                    if re_ans and not _looks_like_non_answer(re_ans):
+                        ctx.update(user_msg=question, bot_response=re_ans)
+                        result = (re_ans, 'Follow-up', None, None, detected_lang)
+                        return result if return_topic else result[0]
+                except Exception as e:
+                    logger.debug(f"same-topic follow-up extract failed: {e}")
 
             ai_followup = answer_followup_with_ai(
                 user_question=question,
@@ -804,7 +806,6 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             return result if return_topic else result[0]
 
         if len(sub_answers) == 1 and len(parts) >= 2:
-
             pass
 
     norm_q = normalize_input(question)
@@ -822,19 +823,21 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
     conn = get_db()
     cur = conn.cursor()
     try:
-        cur.execute("""
-            SELECT answer, question, id, topic, intent, keywords,
-                   related_questions, priority_score, image_path, embedding
-            FROM faq
-        """)
-        all_faqs = cur.fetchall()
+        all_faqs = _get_all_faqs()
         search_q = question.lower()
         expanded_q = lang_service.expand_abbreviations(search_q)
-        query_embedding = get_embedding(search_q, cache=ai_cache)
         candidates = engine.get_top_faq_candidates(
-            search_q, expanded_q, all_faqs, detected_lang, query_embedding=query_embedding
+            search_q, expanded_q, all_faqs, detected_lang, query_embedding=None
         )
         faq_best_score = candidates[0]['combined'] if candidates else 0.0
+        if faq_best_score < 0.78:
+            query_embedding = get_embedding(search_q, cache=ai_cache)
+            if query_embedding:
+                candidates = engine.get_top_faq_candidates(
+                    search_q, expanded_q, all_faqs, detected_lang,
+                    query_embedding=query_embedding,
+                )
+                faq_best_score = candidates[0]['combined'] if candidates else 0.0
 
         word_count = len(question.split())
 
@@ -850,7 +853,6 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 row = cand.get('faq') or cand.get('row')
                 faq_q = ''
                 if row is not None:
-                    # faq tuple: answer, question, id, ...
                     faq_q = (row[1] if len(row) > 1 else '') or ''
                 faq_q = faq_q or cand.get('best_q_text') or cand.get('question') or ''
                 u = set(w for w in re.findall(r"[a-z0-9']{4,}", user_q.lower())
@@ -882,7 +884,6 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 candidates = filtered
                 faq_best_score = candidates[0].get('combined', 0.0)
             else:
-
                 candidates = []
                 faq_best_score = 0.0
 
@@ -901,7 +902,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             hb_chunks
             and not faq_clearly_better
             and (
-                (is_hb and hb_score >= 0.08)  # low bar when detector fired
+                (is_hb and hb_score >= 0.08)
                 or (hb_score >= hb_threshold and hb_score >= faq_best_score)
             )
         )
@@ -923,7 +924,8 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             r'incomplete grades?|residency|drug test|sibling|family scholar|'
             r'dormitory fees?|tesda|computer science|information technology|'
             r'business administration|week of spiritual|morphe|2025 edition|'
-            r'social media|ellen white)\b',
+            r'social media|ellen white|'
+            r'unsay (dapat )?suoton|unsaon pagbisti|pananamit|bisti)\b',
             question, re.I,
         ))
 
@@ -944,17 +946,16 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             faq_clearly_better = False
             handbook_should_lead = bool(hb_chunks) or True
 
-        combine_gap = 0.22
+        combine_gap = 0.12
 
         both_solid = (
             (not is_hb)
             and (not pure_handbook_topics)
-            and hb_chunks and hb_score >= 0.28
-            and candidates and faq_best_score >= engine.FUZZY_MIN_SCORE
+            and hb_chunks and hb_score >= 0.48
+            and candidates and faq_best_score >= engine.FUZZY_MIN_SCORE + 0.10
             and abs(hb_score - faq_best_score) < combine_gap
         )
         if both_solid and not circuit_breaker.is_open():
-
             source_pick = _ai_pick_best_source(question, hb_chunks, candidates, llm_chat)
             if source_pick == 'handbook':
                 both_solid = False
@@ -996,8 +997,8 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             )
             if hb_ans:
                 if (not is_hb and not pure_handbook_topics
-                        and faq_best_score >= CROSS_CHECK_FAQ_BAR
-                        and faq_best_score >= hb_score - 0.05
+                        and faq_best_score >= CROSS_CHECK_FAQ_BAR + 0.08
+                        and faq_best_score >= hb_score
                         and candidates and not circuit_breaker.is_open()):
                     hb_ans = _merge_with_faq(
                         hb_ans, question, candidates, detected_lang
@@ -1067,7 +1068,8 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 best_row = (matched_cand or best)['faq']
                 answer, question_text, fid, topic, intent, kw, related, score_val = best_row[:8]
                 img = best_row[8] if len(best_row) > 8 else None
-                if (hb_score >= CROSS_CHECK_HANDBOOK_BAR
+                if (hb_score >= CROSS_CHECK_HANDBOOK_BAR + 0.05
+                        and hb_score >= best['combined']
                         and hb_chunks and not circuit_breaker.is_open()):
                     ai_ans = _merge_with_handbook(ai_ans, question, hb_chunks, detected_lang)
                 ctx.update(

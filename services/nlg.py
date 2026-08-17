@@ -146,25 +146,26 @@ def speak_naturally(canonical_text: str, question: str, detected_lang: str = 'en
     cached = ai_cache.get(cache_key)
     if cached:
         return cached
+        from services.config import bot_identity_line
+        prompt = f"""{now_context()}
 
-    prompt = f"""{now_context()}
+    {bot_identity_line()}
+    A student asked: "{question}"
 
-You are PAC Bot, the student helpdesk assistant for Philippine Advent College (PAC).
-A student asked: "{question}"
+    Here is the exact, factually-correct answer:
+    "{canonical_text}"
 
-Here is the exact, factually-correct answer:
-"{canonical_text}"
+    {extra_note}{casual_tone_note(question)}
 
-{extra_note}{casual_tone_note(question)}
+    Rephrase the answer above so it reads naturally, in {lang_name(detected_lang)}. {STYLE_GUIDE}
+    {("\n" + few_shot_example(detected_lang) + "\n") if detected_lang != 'english' else ""}
+    STRICT RULE: Do not add, remove, or change any fact — no dates, times, names, amounts,
+    department names, or open/closed statuses beyond exactly what's in the answer above.
+    You are only allowed to change wording and tone, never content. If you're not confident
+    you can do that safely, just return the answer above unchanged.
+    When the student asked in Bisaya or Tagalog, reply fully in that language (not English).
 
-Rephrase the answer above so it reads naturally, in {lang_name(detected_lang)}. {STYLE_GUIDE}
-{("\n" + few_shot_example(detected_lang) + "\n") if detected_lang != 'english' else ""}
-STRICT RULE: Do not add, remove, or change any fact — no dates, times, names, amounts,
-department names, or open/closed statuses beyond exactly what's in the answer above.
-You are only allowed to change wording and tone, never content. If you're not confident
-you can do that safely, just return the answer above unchanged.
-
-Rephrased answer:"""
+    Rephrased answer:"""
 
     try:
         response = llm_chat(prompt, max_tokens=200)

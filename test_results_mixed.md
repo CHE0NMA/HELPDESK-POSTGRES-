@@ -1,19 +1,19 @@
 # Chatbot Mixed Test Report
-**Date:** 2026-08-16 14:10
+**Date:** 2026-08-17 22:20
 
-**Session:** mixed_test_20260816_140517
+**Session:** mixed_test_20260817_221348
 
-**Overall Score:** 43/53 passed
+**Overall Score:** 48/53 passed
 
 ## Score by Category
 
 - **Handbook-Identity**: 7/7
-- **Handbook-Vision**: 4/5
+- **Handbook-Vision**: 5/5
 - **Handbook-Conduct**: 9/10
 - **Handbook-Legal**: 4/4
-- **Programs-FAQ**: 7/9
+- **Programs-FAQ**: 9/9
 - **Schedule**: 6/6
-- **Follow-up**: 2/6
+- **Follow-up**: 4/6
 - **Vague**: 4/6
 
 ---
@@ -22,9 +22,7 @@
 
 **Answer:**
 
-The school’s full official name is **Philippine Advent College, Inc.** (as noted in the meetings section, p. 72).
-
-The handbook says meetings are held “within the campus of Philippine Advent College, Inc., in Magsaysay, Sindangan, Zamboanga del Norte.” That’s the campus location mentioned.
+<div class="text"><strong>Philippine Advent College, Inc.</strong>  <br>(usually referred to as Philippine Advent College or PAC)  <br><br>(See page 6 and page 72 for the name.)<br><br><strong>Campus location</strong><br><br>• The meetings are held <strong>within the campus of Philippine Advent College, Inc.</strong>  <br>• It is located in <strong>Magsaysay, Sindangan, Zamboanga del Norte</strong>.<br><br>(That’s the campus mentioned in the handbook.)</div>
 
 ---
 
@@ -32,7 +30,7 @@ The handbook says meetings are held “within the campus of Philippine Advent Co
 
 **Answer:**
 
-Before it became a college, PAC was originally called the Hillside View Elementary School (HVES) — as noted in the Brief History of PAC (p. 6).
+<div class="text"><strong>Before it became a college, PAC was called the <em>Hillside View Elementary School</em> (HVES).</strong>  <br><br><em>(More detail is on page 6.)</em></div>
 
 ---
 
@@ -40,7 +38,7 @@ Before it became a college, PAC was originally called the Hillside View Elementa
 
 **Answer:**
 
-It was founded by former Mayor Mariano J.S. Macias together with his wife, Margie C. Macias (see the Brief History of PAC, p. 6).
+<div class="text"><strong>Founders of PAC</strong><br><br>• <strong>Former Mayor Mariano J.S. Macias</strong>  <br>• <strong>Margie C. Macias</strong><br><br>These two founded the Philippine Advent College (originally Hillside View Elementary School) in 1975, with strong support from their children and the local SDA community.  <br><br><em>(More detail is on page 6.)</em></div>
 
 ---
 
@@ -48,7 +46,7 @@ It was founded by former Mayor Mariano J.S. Macias together with his wife,
 
 **Answer:**
 
-The logo is the official symbol of Philippine Advent College, Inc. It shows an open Bible at the center (the foundation of Christian education) with a torch behind it, representing the light that guides the institution and its people. The year 1975 marks when the school was founded. The blue background stands for royalty, the red lettering for passion, love and power to carry that light, and the white behind the Bible symbolizes the purity of the school’s mission.
+<div class="text">The school logo is packed with symbols that tell the story of Philippine Advent College, Inc.:<br><br>• <strong>Bible</strong> – shown wide‑open in the center, representing the foundation of Christian education.  <br>• <strong>Torch (light)</strong> – placed behind the Bible, it illuminates the book and the institution, showing that <strong>God is the true source of all wisdom</strong> and that the college’s influence extends to its stakeholders.  <br>• <strong>1975</strong> – the year the college was founded and began spreading its light to the community.  <br>• <strong>Blue background</strong> – symbolizes <strong>royalty</strong>.  <br>• <strong>Red lettering</strong> – stands for <strong>passion, love, and the power to carry the light</strong>.  <br>• <strong>White center</strong> – the background behind the Bible, representing the <strong>purity of the college’s mission</strong>.  <br><br>Together, these elements convey a purpose‑driven, Christ‑centered identity that guides students and staff.  <br><br><em>(More detail is on page 10.)</em></div>
 
 ---
 
@@ -56,7 +54,7 @@ The logo is the official symbol of Philippine Advent College, Inc. It shows an
 
 **Answer:**
 
-The PAC hymn’s music was composed by L.V. Pilon, and the lyrics were written by S.L. La Sage.
+<div class="text"><strong>Composer:</strong> L.V. Pilon  <br><strong>Lyricist:</strong> S.L. La Sage  <br><br>(The hymn’s music was composed by L.V. Pilon, and the words were written by S.L. La Sage.)  <br><br><em>(More detail is on page 7.)</em></div>
 
 ---
 
@@ -64,7 +62,7 @@ The PAC hymn’s music was composed by L.V. Pilon, and the lyrics were writt
 
 **Answer:**
 
-The college was founded in 1975. That’s the year the institution—originally the Hillside View Elementary School—was established, became an academy (later a college), and began its mission in the community. (See the logo description and the brief history, p.10 & p.6.)
+<div class="text"><strong>1975 – The founding year of Philippine Advent College (PAC)</strong>  <br><br>• <strong>Establishment:</strong> 1975 is the year PAC was officially founded. The logo even highlights “1975” to mark when the institution began its mission and influence in the community.  <br><br>• <strong>Original name:</strong> At its start it was called <strong>Hillside View Elementary School (HVES)</strong>. In the same year it transitioned from an elementary school to an academy and later grew into a college.  <br><br>• <strong>Founders:</strong> The school was founded by <strong>former Mayor Mariano J.S. Macias and Margie C. Macias</strong>, together with their children, who played a key role in setting up the institution.  <br><br>• <strong>Community support:</strong> The launch was strongly backed by the local Seventh‑day Adventist church and elders from nearby towns, forming the first governing incorporators.  <br><br>So, 1975 marks the birth and early transformation of PAC from a small elementary school into the college it is today.  <br><br><em>(More detail is on page 6 and page 10.)</em></div>
 
 ---
 
@@ -72,7 +70,7 @@ The college was founded in 1975. That’s the year the institution—origina
 
 **Answer:**
 
-Yes! Excerpt 1 tells us that PAC was founded by former Mayor Mariano J.S. Macias and his wife Margie C. Macias, and it even lists several of their children—Marquinjo K.C. Macias, Marictibert C. Macias, Mariano J.C. Macias Jr., Margerald C. Macias, and Maresnena C. Macias—who all played a foundational role in establishing the college.
+<div class="text"><strong>Yes.</strong> The handbook mentions the <strong>Macias family</strong> as the founders of Philippine Advent College.<br><br>• <strong>Founders:</strong> Former Mayor <strong>Mariano J.S. Macias</strong> and <strong>Margie C. Macias</strong>.  <br>• <strong>Children involved:</strong> Marquinjo K.C. Macias, Marictibert C. Macias, Mariano J.C. Macias, Jr., Margerald C. Macias, and Maresnena C. Macias.<br><br>These family members played a key role in establishing the institution and were part of the first governing incorporators.  <br><br><em>(More detail is on page 6.)</em></div>
 
 ---
 
@@ -80,7 +78,7 @@ Yes! Excerpt 1 tells us that PAC was founded by former Mayor Mariano J.S
 
 **Answer:**
 
-The school says that true education comes from God, and it’s all about living out Christ’s example in the daily lives of faculty and students—so they become useful, fruitful citizens now and are prepared for the world to come. (Philosophy, p.8)
+<div class="text"><strong>The school’s philosophy on education</strong><br><br>• <strong>God is the source of true education</strong> – learning is rooted in a divine foundation.  <br>• The college is <strong>committed to reflecting Christ</strong> in the everyday lives of both faculty and students.  <br>• This reflection aims to develop <strong>useful and fruitful citizenship</strong> for today’s world.  <br>• It also prepares students for <strong>fitness in the world to come</strong>, emphasizing spiritual readiness beyond this life.  <br><br>(See more detail on page 8.)</div>
 
 ---
 
@@ -88,7 +86,7 @@ The school says that true education comes from God, and it’s all about living 
 
 **Answer:**
 
-PAC’s future goal is to become “a Center of Excellence in Christian Education,” aiming for world‑class academic and technical excellence while keeping faith at the core (Vision, p. 8).
+<div class="text"><strong>PAC’s future goal</strong><br><br>• The college <strong>envisions becoming a “Center of Excellence in Christian Education.”</strong>  <br>• This vision includes promoting <strong>world‑class academic excellence</strong> and <strong>globally competitive technical education, skills, and learning</strong> while keeping the true Source of Knowledge at the core.  <br><br><em>(More detail is on page 8.)</em></div>
 
 ---
 
@@ -96,15 +94,15 @@ PAC’s future goal is to become “a Center of Excellence in Christian Educatio
 
 **Answer:**
 
-The PAC core values are Purpose‑Driven, Academic Excellence Oriented, and Christ‑Centered (Core Values, p.8). Purpose‑Driven means living and leading with clear objectives that benefit yourself and others. Academic Excellence Oriented is about being motivated, disciplined, curious, and striving for top grades. Christ‑Centered means faculty and students base everything on Christian teachings and love.
+<div class="text"><strong>P – Purpose‑Driven</strong>  <br>Living and leading with a clear objective, using your skills wisely, and engaging in activities that boost both personal growth and the welfare of others.<br><br><strong>A – Academic Excellence Oriented</strong>  <br>Being motivated, disciplined, curious, and consistently working toward top academic results with a strong work ethic and love of learning.<br><br><strong>C – Christ‑Centered</strong>  <br>Putting Christ at the heart of education, letting Christian values guide your actions and recognizing the Almighty as the true source of wisdom.  <br><br><em>(More detail is on page 8.)</em></div>
 
 ---
 
-### ❌ Q11 [Handbook-Vision]: Is there something about Christ-centered living?
+### ✅ Q11 [Handbook-Vision]: Is there something about Christ-centered living?
 
 **Answer:**
 
-<div class="text">I'm not sure about that yet. You can visit the Registrar's Office or ask your academic adviser for more information.</div>
+<div class="text"><strong>Yes.</strong>  <br><br>The handbook states that the <strong>PAC Student Manual</strong> is governed by principles of fairness, respect, accountability, and student welfare, and it specifically requires all members of the academic community to uphold <strong>“discipline, excellence, and Christ‑centered living.”</strong>  <br><br>• This shows that Christ‑centered living is an explicit value in the college’s policies.  <br><br><em>(More detail is on page 14.)</em></div>
 
 ---
 
@@ -112,7 +110,7 @@ The PAC core values are Purpose‑Driven, Academic Excellence Oriented, and Ch
 
 **Answer:**
 
-Yep—there’s a direct citation of Ellen G. White’s book *Education* on page 57 in the “GREATEST WANT OF THE WORLD” excerpt. It even quotes her words verbatim. (Excerpt 1, p.5)
+<div class="text"><strong>Yes.</strong>  <br><br>• <strong>Ellen G. White</strong> is quoted in the handbook.  <br>• The citation references her book <strong>_Education_</strong> (p. 57).  <br><br>(See the excerpt titled “GREATEST WANT OF THE WORLD.”)</div>
 
 ---
 
@@ -120,21 +118,7 @@ Yep—there’s a direct citation of Ellen G. White’s book *Education* on 
 
 **Answer:**
 
-According to the section **OTHER SCHOOL FEES** (see page 41):
-
-Learning Management System 1262.40
-Internship Fee(for Education
-Program) 5207.40
-Practicum (For BSBA/BPA Only) 1052.00
-FS 1 & 2 (for Education Program
-Only) 347.16
-Environmental & Sanitation Fee 115.72
-Student Association 236.94
-Departmental Fee 30.38
-Lyceum Fee 36.45
-Ebooks and Journals 526.00
-Departmental Handbook 105.20
-SDP (Per Semester) 526.00
+<div class="text">Learning Management System 1262.40<br>Internship Fee(for Education<br>Program) 5207.40<br>Practicum (For BSBA/BPA Only) 1052.00<br>FS 1 & 2 (for Education Program<br>Only) 347.16<br>Environmental & Sanitation Fee 115.72<br>Student Association 236.94<br>Departmental Fee 30.38<br>Lyceum Fee 36.45<br>Ebooks and Journals 526.00<br>Departmental Handbook 105.20<br>SDP (Per Semester) 526.00<br><br>(More detail is on page 41.)</div>
 
 ---
 
@@ -142,7 +126,7 @@ SDP (Per Semester) 526.00
 
 **Answer:**
 
-A first‑degree offense carries 5 demerits (see “First‑Degree Offense (5 Demerits)” on p.17).
+<div class="text"><strong>A first‑degree offense carries 5 demerits.</strong>  <br><br>(See page 17 for more detail.)</div>
 
 ---
 
@@ -150,9 +134,7 @@ A first‑degree offense carries 5 demerits (see “First‑Degree Offense
 
 **Answer:**
 
-According to the section **Third-Degree Offense (30 Demerits)** (see page 19):
-
-If students violate the following standards of moral conduct or practice, the school may withdraw or dismiss them for the semester or the remainder of the school year. Immorality: Living together, premarital sex, acts of lasciviousness, fornication, kissing, necking, or engaging in other untactful intimacies, as well as any related cases that degrade the honor and prestige of the school.
+<div class="text"><strong>The heaviest demerit level is 30 demerits</strong> – that’s the <strong>Third‑Degree Offense</strong> listed in the handbook.  <br><br><em>(More detail is on page 19.)</em></div>
 
 ---
 
@@ -160,7 +142,7 @@ If students violate the following standards of moral conduct or practice, the sc
 
 **Answer:**
 
-If you rack up 20 or more demerits (and it’s within a month of the term’s end), you’re put on probation right away (Disciplinary Measures, p. 14). While on probation you can’t hold any office or responsibility, and the Student Disciplinary Committee (with input from the home dean and academic chairs) will review whether the probation stays or gets lifted. No one can stay on probation for more than one semester; if it isn’t lifted, you’re denied admission for the next term.
+<div class="text"><strong>If you reach 20 or more demerits</strong> you are put on <strong>probation</strong> right away (as long as this happens less than one month before the term ends).<br><br><strong>What probation means</strong><br><br>• You <strong>cannot hold any office or responsibility</strong> for the rest of the midterm or the semester‑end period.  <br>• The <strong>Student Disciplinary Committee</strong> reviews your probation status.  <br>• The <strong>home dean and academic chairpersons</strong> can recommend that probation be <strong>maintained or lifted</strong>.  <br><br><strong>Limits on probation</strong><br><br>• <strong>No student may stay on probation for more than one semester.</strong>  <br>• If probation is <strong>not lifted</strong> by the end of that semester, you are <strong>denied admission for the next term</strong>.  <br><br><strong>Other standard measures that accompany any demerits</strong><br><br>• You must <strong>write an explanation of the offense</strong> and acknowledge it.  <br>• <strong>Parents are notified</strong>, and the guidance counselor and faculty adviser help with counseling.  <br>• <strong>Community service or a fine (up to P1,500.00)</strong> may be imposed, depending on the severity.  <br><br>So, hitting 20</div>
 
 ---
 
@@ -168,7 +150,7 @@ If you rack up 20 or more demerits (and it’s within a month of the term’
 
 **Answer:**
 
-You’ve got 15 days from the moment you receive the decision to file an appeal. (See “Prescription and Appeal,” p. 22.)
+<div class="text">You have <strong>15 days</strong> to file an appeal after you receive the disciplinary decision.<br><br>• The appeal must be submitted within that 15‑day window.  <br>• After the first appeal, further appeals (to the Board of Trustees) also have a 15‑day limit, but the initial deadline is the same.<br><br>(See more detail on page 22.)</div>
 
 ---
 
@@ -176,7 +158,7 @@ You’ve got 15 days from the moment you receive the decision to file an appea
 
 **Answer:**
 
-No – the handbook says you can’t wear jewelry (rings, bracelets, necklaces, etc.) on campus, except a wedding ring. (See Dress and Appearance, p. 25; also First‑Degree Offense, rule 9, p. 17.)
+<div class="text"><strong>No.</strong> Jewelry such as rings, bracelets, and necklaces are not allowed on campus, <strong>except for a wedding ring</strong>.<br><br>• All jewelry must be left at home or kept in a box while on campus.  <br>• This rule is reinforced by the dress‑and‑appearance standards and the first‑degree offense list, which both prohibit earrings, necklaces, and other adornments.  <br><br>(See Dress and Appearance, p. 25; First‑Degree Offense list, p. 17.)</div>
 
 ---
 
@@ -184,7 +166,7 @@ No – the handbook says you can’t wear jewelry (rings, bracelets, necklaces
 
 **Answer:**
 
-The school wants you to dress modestly and neatly. No jewelry (except a wedding ring) is allowed on campus. For ladies, jeans and “square” pants are off‑limits for religious or formal events; dresses must cover the knee when you sit or stand, with any slit at least three inches below the knee, and you should avoid transparent, sleeveless or overly snug skirts, plus any T‑shirts with indecent prints. For men, skip indecent T‑shirts and tight‑fitting pants; for religious or formal services wear a suit (or a white/light shirt with tie, a barong Tagalog, or long‑sleeve shirt with necktie). Also, slippers, short or city shorts, backless/crop tops, improper haircuts, piercings, earrings, necklaces and nose rings are prohibited on campus. (Dress and Appearance, p. 25; First‑Degree Offense, p. 17)
+<div class="text"><strong>General student dress code</strong><br><br>• Dress <strong>modestly</strong> and <strong>neatly</strong> in harmony with PAC standards.  <br>• Leave all jewelry (rings, bracelets, necklaces) at home <strong>except a wedding ring</strong>.  <br>• <strong>No slippers, short/city shorts, backless or crop tops</strong> are allowed on campus.  <br>• <strong>No indecent or obscene words/prints</strong> on T‑shirts.  <br>• <strong>No tight‑fitting pants</strong> or clothing with suggestive patches/prints.  <br><br><strong>Ladies</strong><br><br>• Jeans and square pants are <strong>not allowed</strong> during religious or formal services/programs.  <br>• Dresses must <strong>cover the knee</strong> when sitting or standing; any slit must be <strong>at least 3 inches below the knee</strong>.  <br>• Avoid dresses that are <strong>transparent without proper lining</strong>, <strong>sleeveless</strong>, or <strong>snug‑fitting skirts</strong>.  <br><br><strong>Men</strong><br><br>• Wear a <strong>suit, white or light‑colored shirt with tie, barong Tagalog, or long‑sleeve shirt with necktie</strong> for religious and formal services/programs.  <br>• Same restrictions on T‑shirts, tight‑fitting pants, and indecent prints apply.  <br><br><em>(More detail is on pages 25 and 17.)</em></div>
 
 ---
 
@@ -192,10 +174,7 @@ The school wants you to dress modestly and neatly. No jewelry (except a weddin
 
 **Answer:**
 
-According to the section **MEETINGS** (see page 72):
-
-The organization shall have regular meetings of the members, which shall only be held within the campus of Philippine Advent College, Inc., in Magsaysay, Sindangan,
-Zamboanga del Norte, on every last Friday of the month around 1:30 PM.
+<div class="text">The organization shall have regular meetings of the members, which shall only be held within the campus of Philippine Advent College, Inc., in Magsaysay, Sindangan,<br>Zamboanga del Norte, on every last Friday of the month around 1:30 PM.<br><br>(More detail is on page 72.)</div>
 
 ---
 
@@ -203,7 +182,7 @@ Zamboanga del Norte, on every last Friday of the month around 1:30 PM.
 
 **Answer:**
 
-No, it’s not allowed. Showing public displays of affection is listed as a violation in the First‑Degree Offense section (5 demerits) — “excessive…going together of sweethearts…or showing public displays of affection” (Excerpt 1, p.17). It also falls under the “immorality” category in the Third‑Degree Offense list (30 demerits) which includes kissing and other “untactful intimacies” (Excerpt 2, p.19).
+<div class="text"><strong>No.</strong> Public displays of affection are prohibited.<br><br>• <strong>First‑Degree Offense</strong> – listed as a violation for “showing public displays of affection,” punishable by <strong>5 demerits</strong> (Excerpt 1, p.17).  <br>• <strong>Third‑Degree Offense</strong> – the same behavior falls under “Immorality” (kissing, necking, untactful intimacies) and can carry <strong>30 demerits</strong> (Excerpt 2, p.19).<br><br>So displaying affection publicly can lead to disciplinary action and demerits.  <br><br><em>(More detail is on pages 17 and 19.)</em></div>
 
 ---
 
@@ -219,11 +198,7 @@ No, it’s not allowed. Showing public displays of affection is listed as a vi
 
 **Answer:**
 
-According to the section **GRIEVANCE COMMITTEE AND PROCEDURE** (see page 20):
-
-RA 10627 Anti-Bullying Act 2013
-c. All violations such as but not limited to, as the case may be, expressed in the second- and third-degree offense that requires penalty through fines, community service, suspension, exclusion, expulsion or dismissal, restitutions of the damaged property or lost, as well as the payment for hospitalization and other indemnities as a result of, and caused by the respondent. The person in authority may take cognizance of the said violation when it was committed under his or her class or in the plain view of the same, or he or she shall endorse or report the said violation to the guidance counselor when counseling is necessary and practical; the same may be settled by the person in authority when the offense is a first-degree offense. All minor and slight violations of the Student Behavioral Code, such as, but not limited to, the first-degree offense and any forms of violations that are not punitive in nature and do not require restitution of the property lost or damaged, shall be referred to the Guidance and Counseling Office. RA 11053 Anti-Hazing Act of 2018
-d. RA 7877 Anti-Sexual Harassment Act e.
+<div class="text">RA 10627 Anti-Bullying Act 2013<br>c. All violations such as but not limited to, as the case may be, expressed in the second- and third-degree offense that requires penalty through fines, community service, suspension, exclusion, expulsion or dismissal, restitutions of the damaged property or lost, as well as the payment for hospitalization and other indemnities as a result of, and caused by the respondent. The person in authority may take cognizance of the said violation when it was committed under his or her class or in the plain view of the same, or he or she shall endorse or report the said violation to the guidance counselor when counseling is necessary and practical; the same may be settled by the person in authority when the offense is a first-degree offense. All minor and slight violations of the Student Behavioral Code, such as, but not limited to, the first-degree offense and any forms of violations that are not punitive in nature and do not require restitution of the property lost or damaged, shall be referred to the Guidance and Counseling Office. RA 11053 Anti-Hazing Act of 2018<br>d. RA 7877 Anti-Sexual Harassment Act e.<br><br>(More detail is on page 20.)</div>
 
 ---
 
@@ -231,7 +206,7 @@ d. RA 7877 Anti-Sexual Harassment Act e.
 
 **Answer:**
 
-The Safe Spaces Act is Republic Act 11313, enacted in 2019. It’s the law that the college follows to protect everyone from gender‑based sexual harassment.
+<div class="text"><strong>Safe Spaces Act</strong> – a law that protects students and faculty from gender‑based sexual harassment and promotes a safe, respectful, and inclusive learning environment.<br><br><strong>RA number:</strong> <strong>Republic Act 11313</strong> (Safe Spaces Act of 2019)<br><br><em>(More detail is on page 22.)</em></div>
 
 ---
 
@@ -239,7 +214,7 @@ The Safe Spaces Act is Republic Act 11313, enacted in 2019. It’s the law t
 
 **Answer:**
 
-RA 11313, the Safe Spaces Act of 2019, is the legal basis for our Gender‑Based Sexual Harassment policy. It requires the school to protect all students from unwelcome sexual behavior—whether in classrooms, online, on‑campus or off‑campus—and to set up a Gender‑Based Harassment Committee that handles complaints, supports survivors, keeps things confidential, and enforces sanctions. In short, the Act guides how we keep the campus safe and respectful.
+<div class="text"><strong>RA 11313 – the Safe Spaces Act of 2019</strong>  <br><br>• It is the law that guides Philippine Advent College’s policy on <strong>Gender‑Based Sexual Harassment (GBSH)</strong>.  <br><br>• The Act requires the school to create a <strong>safe, respectful, and inclusive learning environment</strong> for all students and faculty.  <br><br>• Under RA 11313, <strong>GBSH</strong> includes any unwelcome sexual behavior—verbal, physical, or online—based on sex, gender, sexual orientation, gender identity, or gender expression. Examples listed are:  <br>  - Catcalling, sexist remarks, intrusive comments or looks  <br>  - Unwanted touching or physical contact  <br>  - Stalking  <br>  - Sharing or posting sexual content without consent (including nude images)  <br>  - Cyber‑harassment, sexual advances online, or inappropriate messages  <br>  - Homophobic or transphobic slurs  <br><br>• <strong>Scope of protection</strong> (as required by the Act) covers:  <br>  - All school premises and facilities  <br>  - Online platforms used for classes or communication  <br>  - School activities, whether on‑ or off‑campus  <br>  - Public spaces within the educational environment  <br><br>• To comply with RA 11313, the college has set up a <strong>Gender‑Based Harassment Committee (GBHC)</strong> that:  <br>  - Manages complaints and investigations  <br>  - Provides support to survivors</div>
 
 ---
 
@@ -247,7 +222,7 @@ RA 11313, the Safe Spaces Act of 2019, is the legal basis for our Gender‑Bas
 
 **Answer:**
 
-Yes—hazing is mentioned, and it’s explicitly prohibited. Excerpt 1 (Third‑Degree Offense, p.19) says: “Fraternity or sorority shall never be allowed…organizing, recruiting, and hazing as a requirement for membership that inflicts pain, both physical and psychological, shall never be allowed.”
+<div class="text"><strong>No</strong> – hazing is explicitly prohibited.<br><br>• The handbook states that <strong>organizing, recruiting, and hazing</strong> as a requirement for membership that inflicts physical or psychological pain <strong>shall never be allowed</strong>.  <br><br>• This rule appears under the list of serious offenses (Third‑Degree Offense, 30 demerits).  <br><br>(See page 19 for the full detail.)</div>
 
 ---
 
@@ -255,7 +230,7 @@ Yes—hazing is mentioned, and it’s explicitly prohibited. Excerpt 1 (Thir
 
 **Answer:**
 
-PAC offers a bunch of degree programs: in Allied Health you can do a Bachelor of Science in Nursing and a Bachelor of Midwifery (both only at the Main Campus); the School of Teacher Education & Arts has Bachelor of Early Childhood Education (Main & Salug), Bachelor of Elementary Education, BS
+<div class="text"><strong>Here’s a quick rundown of the programs PAC currently offers:</strong>  <br><br>---<br><br><strong>School of Allied Health</strong>  <br>• Bachelor of Science in Nursing (Main Campus only)  <br>• Bachelor of Midwifery (Main Campus only)  <br><br><strong>School of Teacher Education & Arts</strong>  <br>• Bachelor of Early Childhood Education (Main & Salug Campus)  <br>• Bachelor of Elementary Education (Main Campus only)  <br>• Bachelor of Science in Secondary Education – English (Main Campus only)  <br>• Bachelor of Science in Secondary Education – Math (Main Campus only)  <br>• Bachelor of Science in Secondary Education – Filipino (Main Campus only)  <br>• Bachelor of Physical Education (Main & LBP Campus)  <br>• Bachelor of Technical‑Vocational Teacher Education (LBP Campus only)  <br>• Bachelor of Science in Social Work (Salug Campus only)  <br><br><strong>School of Business Education</strong>  <br>• Bachelor of Science in Business Administration – Human Resource and Management (Main Campus only)  <br>• Bachelor of Public Administration (Main Campus only)  <br>• Bachelor of Science in Tourism (LBP Campus only)  <br><br><strong>School of Computer Studies</strong>  <br>• Bachelor of Science in Information Technology (Main & Salug Campus)  <br>• Bachelor of Science in Computer Science (Main & Salug Campus)  <br><br><strong>Basic Education – K‑12 Program</strong>  <br>• Kindergarten to Grade 10  <br>• Grades 11 & 12 strands:  <br>  - Science, Technology, Engineering, and Mathematics (<strong>STEM</strong>)  <br>  - Humanities and Social Sciences (<strong>HUMSS</strong>)  <br>  - General Academic Strand (<strong>GAS</strong>)  <br>  - Accountancy, Business, and Management</div>
 
 ---
 
@@ -263,15 +238,15 @@ PAC offers a bunch of degree programs: in Allied Health you can do a Bachelor of
 
 **Answer:**
 
-The senior‑high (Grades 11‑12) program offers four strands: Science, Technology, Engineering, and Mathematics (STEM); Humanities and Social Sciences (HUMSS); General Academic Strand (GAS); and Accountancy, Business, and Management (ABM).
+<div class="text"><strong>Senior high strands you can choose from:</strong>  <br><br>• <strong>Science, Technology, Engineering, and Mathematics (STEM)</strong>  <br>• <strong>Humanities and Social Sciences (HUMSS)</strong>  <br>• <strong>General Academic Strand (GAS)</strong>  <br>• <strong>Accountancy, Business, and Management (ABM)</strong>  <br><br>(These are listed under Grades 11 & 12 in the K‑12 program.)</div>
 
 ---
 
-### ❌ Q29 [Programs-FAQ]: Is there Nursing or Midwifery?
+### ✅ Q29 [Programs-FAQ]: Is there Nursing or Midwifery?
 
 **Answer:**
 
-<div class="text">I'm not sure about that yet. You can visit the Registrar's Office or ask your academic adviser for more information.</div>
+<div class="text"><strong>Yes</strong> – the school offers both programs.<br><br>• <strong>Bachelor of Science in Nursing</strong> (Main Campus only)  <br>• <strong>Bachelor of Midwifery</strong> (Main Campus only)<br><br>(See Academic Program Offerings, p. 11.)</div>
 
 ---
 
@@ -279,15 +254,15 @@ The senior‑high (Grades 11‑12) program offers four strands: Science, Techn
 
 **Answer:**
 
-Yes! The college offers three TESDA NC II programs: Housekeeping NC II, Caregiving NC II, and Food and Beverage Services NC II (see “NC II UNDER TECHNICAL EDUCATION AND SKILLS DEVELOPMENT AUTHORITY (TESDA)” on p. 11).
+<div class="text"><strong>Yes.</strong> The college offers TESDA‑certified <strong>NC II</strong> programs:<br><br>• <strong>Housekeeping NC II</strong>  <br>• <strong>Caregiving NC II</strong>  <br>• <strong>Food and Beverage Services NC II</strong>  <br><br>These are listed under the “NC II UNDER TECHNICAL EDUCATION AND SKILLS DEVELOPMENT AUTHORITY (TESDA)” section.  <br><br><em>(More detail is on page 11.)</em></div>
 
 ---
 
-### ❌ Q31 [Programs-FAQ]: Do they have Education programs?
+### ✅ Q31 [Programs-FAQ]: Do they have Education programs?
 
 **Answer:**
 
-<div class="text">I'm not sure about that yet. You can visit the Registrar's Office or ask your academic adviser for more information.</div>
+<div class="text"><strong>Yes.</strong> PAC offers programs under <strong>Teacher Education</strong>, such as <strong>BEEd</strong>, <strong>BSEd</strong>, and <strong>BPEd</strong>, among other fields.<br><br>From the handbook, for the general policy: <strong>Yes.</strong> The school lists fees specifically for an <strong>Education Program</strong>, such as:<br><br>• <strong>Internship Fee (for Education Program)</strong> – ₱5,207.40  <br>• <strong>FS 1 & 2 (for Education Program Only)</strong> – ₱347.16  <br><br>These items show that Education programs are offered.  <br><br><em>(More detail is on page 41.)</em></div>
 
 ---
 
@@ -295,9 +270,7 @@ Yes! The college offers three TESDA NC II programs: Housekeeping NC II, 
 
 **Answer:**
 
-According to the section **DUTIES AND ACCOUNTABILITIES OF THE TREASURER** (see page 69):
-
-Liquidate all the expenses incurred within the prescribed period set by the business office. All requested funds from the business office shall be automatically charged against her or his personal account, and it shall only be cleared upon the approval of the liquidation process.
+<div class="text">Liquidate all the expenses incurred within the prescribed period set by the business office. All requested funds from the business office shall be automatically charged against her or his personal account, and it shall only be cleared upon the approval of the liquidation process.<br><br>(More detail is on page 69.)</div>
 
 ---
 
@@ -305,7 +278,7 @@ Liquidate all the expenses incurred within the prescribed period set by the busi
 
 **Answer:**
 
-Yes! The Family Scholar Program (p.79) gives a tuition‑fee discount to the youngest sibling when you have multiple kids enrolled. Four siblings get Php 5,000 off, three siblings Php 3,500 off, and two siblings Php 2,000 off – but it only applies to the sibling in the lowest year.
+<div class="text"><strong>Yes.</strong> The college offers a <strong>Family Scholar Program</strong> that gives tuition discounts to siblings.<br><br>• <strong>Four siblings</strong> – Php 5,000 discount for the youngest sibling  <br>• <strong>Three siblings</strong> – Php 3,500 discount for the youngest sibling  <br>• <strong>Two siblings</strong> – Php 2,000 discount for the youngest sibling  <br><br><em>The discount applies only to the sibling enrolled in the lowest year.</em>  <br><br>(See page 79 for more details.)</div>
 
 ---
 
@@ -313,7 +286,7 @@ Yes! The Family Scholar Program (p.79) gives a tuition‑fee discount to the y
 
 **Answer:**
 
-The dormitory costs are listed in the “DORMITORY CHARGES” section (p. 42): an Old‑room is ₱717.99 per month, a New‑room ₱938.91, a Bed‑space ₱331.38, plus a monthly electricity charge of ₱165.69. Also, the pledge notes you can’t use any electrical equipment in the dorm without the Home Dean’s permission, which could add extra charges.
+<div class="text"><strong>Dormitory Fees (per month)</strong>  <br><br>• <strong>Old‑room dormitory fee:</strong> $717.99  <br>• <strong>New‑room dormitory fee:</strong> $938.91  <br>• <strong>Bed‑space fee:</strong> $331.38  <br><br><strong>Additional charge</strong>  <br><br>• <strong>Electricity:</strong> $165.69  <br><br><em>(If you need to use any electrical equipment in the dorm, you must get permission from the Home Dean, which may involve extra charges.)</em>  <br><br>(Details are on page 42.)</div>
 
 ---
 
@@ -321,7 +294,7 @@ The dormitory costs are listed in the “DORMITORY CHARGES” section (p. 42):
 
 **Answer:**
 
-All first‑year students must take a drug test. The policy says it’s “not punitive,” and the school will help any student who tests positive with the withdrawal process. If the same student tests positive again the next semester, they will no longer be eligible for admission (Excerpt 2 – Admission Policies, p.27).
+<div class="text"><strong>Yes – first‑year students must take a drug test.</strong>  <br><br>• <strong>Requirement:</strong> Every incoming first‑year student is required to undergo a drug test.  <br>• <strong>Purpose:</strong> The program is <strong>not punitive</strong>; it’s meant to ensure a healthy campus environment.  <br>• <strong>If you test positive:</strong>  <br>  - The school will <strong>assist you with the withdrawal process</strong>.  <br>  - Should you test positive for the <strong>same substance again in the next semester</strong>, you will <strong>not be eligible for admission</strong>.  <br><br>• <strong>Additional support:</strong>  <br>  - If you have used harmful substances (tobacco, alcohol, prohibited drugs, etc.) in the past two years, you’ll be required to join a <strong>counseling program</strong> to help you withdraw from those substances.<br><br><em>(More detail is on page 27.)</em></div>
 
 ---
 
@@ -329,7 +302,7 @@ All first‑year students must take a drug test. The policy says it’s “not
 
 **Answer:**
 
-<div class="text">This week (August 16‑22, 2026) the only scheduled event is Friday, August 21, which is Ninoy Aquino Day, so the campus will be closed.</div>
+<div class="text">For August 17–August 23, 2026, here's what's scheduled:<br>• Friday, August 21: Ninoy Aquino Day (closed)</div>
 
 ---
 
@@ -337,7 +310,7 @@ All first‑year students must take a drug test. The policy says it’s “not
 
 **Answer:**
 
-<div class="text">Yep, there’s class as usual tomorrow—Monday, August 17, 2026—for all departments.</div>
+<div class="text">On Tuesday, August 18, 2026, all departments — there's class as usual.</div>
 
 ---
 
@@ -345,7 +318,7 @@ All first‑year students must take a drug test. The policy says it’s “not
 
 **Answer:**
 
-<div class="text">We’ve got two holidays in August: Ninoy Aquino Day on Friday the 21st and National Heroes Day on Monday the 31st, and the college will be closed on both days.</div>
+<div class="text">For August 2026, here's what's scheduled:<br>• Friday, August 21: Ninoy Aquino Day (closed)<br>• Monday, August 31: National Heroes Day (closed)</div>
 
 ---
 
@@ -353,7 +326,7 @@ All first‑year students must take a drug test. The policy says it’s “not
 
 **Answer:**
 
-<div class="text">This week (Aug 16‑22), the only scheduled event is Ninoy Aquino Day on Friday, Aug 21, so the school will be closed.</div>
+<div class="text">For August 17–August 23, 2026, here's what's scheduled:<br>• Friday, August 21: Ninoy Aquino Day (closed)</div>
 
 ---
 
@@ -361,10 +334,7 @@ All first‑year students must take a drug test. The policy says it’s “not
 
 **Answer:**
 
-Which office/department did you mean?
-
-1. Registrar's Office
-2. Business Office
+<div class="text">Which office/department did you mean?<br><br>1. Registrar's Office<br>2. Business Office</div>
 
 ---
 
@@ -372,14 +342,7 @@ Which office/department did you mean?
 
 **Answer:**
 
-According to the section **B. Students** (see page 23):
-
-Refrain from any form of harassment
-3. Participate in required orientations and seminars
-Reporting and Complaint Procedures
-Students may report GBSH through any of the following:
-1. Suspension, Dismissal/Expulsion under the Student Behavioral Code
-4.
+<div class="text">Refrain from any form of harassment<br>3. Participate in required orientations and seminars<br>Reporting and Complaint Procedures<br>Students may report GBSH through any of the following:<br>1. Suspension, Dismissal/Expulsion under the Student Behavioral Code<br>4.<br><br>(More detail is on page 23.)</div>
 
 ---
 
@@ -387,15 +350,15 @@ Students may report GBSH through any of the following:
 
 **Answer:**
 
-Only students who are in the 3rd‑ or 4th‑year level can run for the elected executive posts. The qualifications section says you “must be officially enrolled in college, either at the 3rd or 4th year level” (Qualifications, p.66). So it’s not open to all year levels.
+<div class="text"><strong>No.</strong> Only students in the <strong>3rd‑ or 4th‑year level</strong> are eligible for the positions and representations mentioned in the handbook.<br><br>• <strong>Executive officer qualifications</strong> (Excerpt 2, Sec. 2) require you to be officially enrolled in college at the <strong>3rd or 4th year level</strong>.  <br>• <strong>Student election committee representation</strong> (Excerpt 1, Sec. 4) says that if a program has fewer than 100 students, the single representative must be <strong>at either a third‑ or fourth‑year level</strong>.  <br><br>So the rules do <strong>not</strong> apply to first‑ or second‑year students.  <br><br><em>(More detail is on pages 66‑67.)</em></div>
 
 ---
 
-### ❌ Q43 [Follow-up]: college too?
+### ✅ Q43 [Follow-up]: college too?
 
 **Answer:**
 
-<div class="text">I'm not sure about that yet. You can visit the Registrar's Office or ask your academic adviser for more information.</div>
+<div class="text">Yes. Late enrollment is usually permitted within the first 1-2 weeks of classes but carries an additional late enrollment fee. Exact deadlines are announced by the Registrar each term.</div>
 
 ---
 
@@ -403,10 +366,7 @@ Only students who are in the 3rd‑ or 4th‑year level can run for the elected 
 
 **Answer:**
 
-According to the section **FEES** (see page 61):
-
-2012, also known as the "Enhanced Policies, Guidelines, and Procedures Governing Increases in Tuition and Other School Fees, Introduction of New Fees, and for Other Purposes."
-2.
+<div class="text">2012, also known as the "Enhanced Policies, Guidelines, and Procedures Governing Increases in Tuition and Other School Fees, Introduction of New Fees, and for Other Purposes."<br>2.<br><br>(More detail is on page 61.)</div>
 
 ---
 
@@ -418,11 +378,11 @@ According to the section **FEES** (see page 61):
 
 ---
 
-### ❌ Q46 [Follow-up]: for everyone?
+### ✅ Q46 [Follow-up]: for everyone?
 
 **Answer:**
 
-<div class="text">That's a good question — I don't have a confirmed answer for it yet, but I've saved it so our staff can add it soon. Feel free to ask me something else in the meantime!</div>
+[ERROR] HTTPConnectionPool(host='127.0.0.1', port=5000): Read timed out. (read timeout=50)
 
 ---
 
@@ -438,7 +398,7 @@ According to the section **FEES** (see page 61):
 
 **Answer:**
 
-The handbook lists the Gender‑Based Harassment Committee for the 2025‑2026 school year. It’s chaired by Doris M. Mansueto, Associate Dean of the School of Nursing, with Marites A. Rabaca as Vice‑Chair and Shelim Y. as Secretary (Excerpt 1, p.22).
+<div class="text"><strong>Gender‑Based Harassment Committee – SY 2025‑2026</strong><br><br>• <strong>Chair:</strong> Doris M. Mansueto, MAN, DM – Associate Dean, School of Nursing  <br>• <strong>Vice‑Chair:</strong> Marites A. Rabaca, JD, EDD (candidate) – High School Quality Assurance/Research Director, Associate Principal  <br>• <strong>Secretary:</strong> Shelim Y.  <br><br>This committee is the body that manages complaints, provides support to survivors, ensures confidentiality, implements sanctions, and runs preventive programs for the 2025‑2026 school year.  <br><br><em>(More detail is on page 22.)</em></div>
 
 ---
 
@@ -454,7 +414,7 @@ The handbook lists the Gender‑Based Harassment Committee for the 2025‑2026 s
 
 **Answer:**
 
-The college holds a “Week of Spiritual Emphasis” every semester – it’s a scheduled, faculty‑ and student‑led program that’s part of PAC’s multifaith services (see VII. Multifaith Services, p.91). Because it’s a required activity, not showing up is listed as a first‑degree offense (5 demerits) under the disciplinary rules (see First‑Degree Offense, p.17).
+<div class="text"><strong>Week of Spiritual Emphasis</strong><br><br>• <strong>What it is</strong> – A <strong>semester‑long</strong> program that the college <strong>sponsors every semester</strong>.  <br>• <strong>Who runs it</strong> – It is <strong>handled by faculty and student leaders</strong> as part of PAC’s multifaith services.  <br>• <strong>Purpose</strong> – Provides a focused time for <strong>spiritual development, worship, reflection, and sharing</strong> of personal faith experiences.<br><br><strong>Attendance</strong><br><br>• Not attending the Week of Spiritual Emphasis (or other religious meetings) is listed as a <strong>first‑degree offense</strong>.  <br>• The penalty is <strong>5 demerits</strong> and may result in disciplinary action such as labor service or a fine.<br><br>So, the Week of Spiritual Emphasis is a required, faculty‑ and student‑led spiritual program each semester, and missing it carries a disciplinary penalty.  <br><br><em>(More detail is on pages 17 and 91.)</em></div>
 
 ---
 
@@ -462,7 +422,7 @@ The college holds a “Week of Spiritual Emphasis” every semester – it’s a
 
 **Answer:**
 
-Yes—an “INC” can’t hang around forever. According to the **F. Grading System** (p. 32), an incomplete mark must be resolved within one (1) academic year; after that it can’t remain.
+<div class="text"><strong>Yes.</strong> An <strong>incomplete (INC)</strong> grade cannot stay on your record for longer than <strong>one (1) academic year</strong>. After that period it must be resolved or it will be removed.  <br><br><em>(More detail is on page 32.)</em></div>
 
 ---
 
@@ -470,9 +430,7 @@ Yes—an “INC” can’t hang around forever. According to the **F. Grading 
 
 **Answer:**
 
-According to the section **POSTER AND ANNOUNCEMENT POLICY** (see page 65):
-
-Students may not use department or dormitory bulletin boards without first obtaining permission from the department or dormitory in question. Unauthorized bulletin boards and billboards are not permitted on any campus property. Any violation of the provisions shall cause the removal of the posters by authorized persons, or if it constitutes damage to the facility, the one who put the announcement or poster without permission shall pay the damages. Announcements regarding activities of organizations must first secure permission from the VPSAS office to ensure that these activities have been duly approved.
+<div class="text">Students may not use department or dormitory bulletin boards without first obtaining permission from the department or dormitory in question. Unauthorized bulletin boards and billboards are not permitted on any campus property. Any violation of the provisions shall cause the removal of the posters by authorized persons, or if it constitutes damage to the facility, the one who put the announcement or poster without permission shall pay the damages. Announcements regarding activities of organizations must first secure permission from the VPSAS office to ensure that these activities have been duly approved.<br><br>(More detail is on page 65.)</div>
 
 ---
 

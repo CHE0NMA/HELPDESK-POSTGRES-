@@ -21,7 +21,8 @@ LANGUAGE_CONFIG = {
             "at Philippine Advent College."
         ),
         'instruction': (
-            "Answer in natural, conversational English. Be warm and helpful."
+            "Answer in natural, conversational English. Be warm and helpful. "
+            "When the student asks for a policy or definition, give the full clear answer."
         ),
         'greeting': (
             "Hello! I'm PAC Bot, your student helpdesk assistant. "
@@ -45,7 +46,8 @@ LANGUAGE_CONFIG = {
         ),
         'instruction': (
             "Sumagot sa TAGALOG nang natural at palakaibigan. "
-            "Maging mainit at matulungin."
+            "Maging mainit at matulungin. Kung patakaran o definition ang "
+            "tinatanong, ibigay ang buong malinaw na sagot."
         ),
         'greeting': (
             "Kumusta! Ako si PAC Bot, ang inyong student helpdesk assistant. "
@@ -69,8 +71,9 @@ LANGUAGE_CONFIG = {
             "assistant sa Philippine Advent College."
         ),
         'instruction': (
-            "Tubaga sa BISAYA nga natural ug mainit. "
-            "Pagkamahigalaon ug matabangon."
+            "Tubaga sa BISAYA/CEBUANO nga natural ug mainit. "
+            "Pagkamahigalaon ug matabangon. Kung policy o definition ang "
+            "pangutana, ihatag ang kompleto ug klaro nga tubag."
         ),
         'greeting': (
             "Kumusta! Ako si PAC Bot, ang imong student helpdesk assistant. "

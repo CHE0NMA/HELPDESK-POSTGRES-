@@ -373,12 +373,19 @@ _SEED_ALIASES: List[dict] = [
             r"slippers|short pants|crop tops|tsinelas|damit|"
             r"ano ang damit|pananamit|bisti|pwede ba mag jewelry|"
             r"pwede ba magdala ug singsing|allowed to wear|"
-            r"slippers allowed|are slippers)\b"
+            r"slippers allowed|are slippers|"
+            # Bisaya / Tagalog natural phrasings
+            r"unsay (dapat )?suoton|unsaon pagbisti|unsa ang (dapat )?isul-ob|"
+            r"unsa (man )?ang dress code|dress code diri|suoton diri|"
+            r"ano ang (dapat )?isuot|paano magdamit|anong damit|"
+            r"mga lalaki|sa lalaki|for (the )?men|for (the )?guys|"
+            r"mga babae|sa babae|for (the )?ladies|for (the )?girls)\b"
         ),
         "title_needles": ["dress and appearance", "first-degree", "first degree", "school uniform"],
         "content_needles": [
             "necklace", "earrings", "jewelry", "wedding ring", "slippers",
-            "short pants", "crop tops", "uniform", "attire"
+            "short pants", "crop tops", "uniform", "attire",
+            "ladies", "men", "dress modestly", "simple but neat"
         ],
         "source_priority": "handbook_only",
         "priority": 100,
