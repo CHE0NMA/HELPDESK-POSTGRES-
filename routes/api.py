@@ -773,3 +773,135 @@ def api_public_reviews():
     finally:
         cur.close()
         conn.close()
+
+
+# ---- Public typeahead search (FAQ + handbook) ----------------------------
+# Lightweight IP rate limit so the chat input can call this on every keystroke
+# without opening us up to scraping / DoS. Window is generous enough for a
+# normal typer (debounce ~220ms on the client) but tight enough to stop a
+# script hammering the endpoint.
+_SUGGEST_LIMIT = 40          # max requests
+_SUGGEST_WINDOW = 60.0       # per seconds
+_suggest_hits = {}           # ip -> [timestamps]
+
+
+def _suggest_rate_ok(ip: str) -> bool:
+    import time
+    now = time.time()
+    bucket = _suggest_hits.get(ip) or []
+    bucket = [t for t in bucket if now - t < _SUGGEST_WINDOW]
+    if len(bucket) >= _SUGGEST_LIMIT:
+        _suggest_hits[ip] = bucket
+        return False
+    bucket.append(now)
+    _suggest_hits[ip] = bucket
+    # opportunistic cleanup so the dict doesn't grow forever
+    if len(_suggest_hits) > 5000:
+        cutoff = now - _SUGGEST_WINDOW
+        dead = [k for k, v in _suggest_hits.items() if not v or v[-1] < cutoff]
+        for k in dead[:500]:
+            _suggest_hits.pop(k, None)
+    return True
+
+
+@bp.route('/api/suggest')
+def api_suggest():
+    """Public typeahead: FAQ questions + handbook section titles.
+
+    Query params:
+      q      – search string (min 2 chars)
+      limit  – max items per source (default 6, max 10)
+
+    Returns only short labels (no full answer/content bodies) so the
+    payload stays small and we don't leak long handbook text to every
+    keystroke. Shape:
+      {
+        "faqs": [{"question": "...", "category": "..."}],
+        "handbook": [{"section_title": "...", "chapter": "...", "page_start": 12}]
+      }
+    """
+    ip = (request.headers.get('X-Forwarded-For') or request.remote_addr or 'unknown').split(',')[0].strip()
+    if not _suggest_rate_ok(ip):
+        return jsonify({'error': 'rate_limited', 'faqs': [], 'handbook': []}), 429
+
+    q = (request.args.get('q') or '').strip()
+    if len(q) < 2:
+        return jsonify({'faqs': [], 'handbook': []})
+
+    try:
+        limit = min(10, max(1, int(request.args.get('limit', 6))))
+    except (TypeError, ValueError):
+        limit = 6
+
+    # Cap query length to keep ILIKE plans sane
+    q = q[:80]
+    like = f'%{q}%'
+    prefix = f'{q}%'
+
+    conn = get_db()
+    cur = conn.cursor()
+    faqs, handbook = [], []
+    try:
+        try:
+            cur.execute("""
+                SELECT question, COALESCE(category, topic, 'General') AS cat
+                FROM faq
+                WHERE question IS NOT NULL AND question != ''
+                  AND (question ILIKE %s
+                       OR COALESCE(keywords, '') ILIKE %s
+                       OR COALESCE(category, '') ILIKE %s
+                       OR COALESCE(topic, '') ILIKE %s)
+                ORDER BY
+                  CASE WHEN question ILIKE %s THEN 0
+                       WHEN question ILIKE %s THEN 1
+                       ELSE 2 END,
+                  priority_score DESC NULLS LAST,
+                  id DESC
+                LIMIT %s
+            """, (like, like, like, like, prefix, like, limit))
+            for r in cur.fetchall():
+                text = (r[0] or '').strip()
+                if not text:
+                    continue
+                faqs.append({
+                    'question': text[:120],
+                    'category': (r[1] or 'General')[:40],
+                })
+        except Exception as e:
+            logger.warning(f"api_suggest faq: {e}")
+            conn.rollback()
+
+        try:
+            cur.execute("""
+                SELECT section_title, chapter, page_start
+                FROM handbook_chunks
+                WHERE is_active = 1
+                  AND (section_title ILIKE %s
+                       OR chapter ILIKE %s
+                       OR COALESCE(keywords, '') ILIKE %s
+                       OR content ILIKE %s)
+                ORDER BY
+                  CASE WHEN section_title ILIKE %s THEN 0
+                       WHEN section_title ILIKE %s THEN 1
+                       ELSE 2 END,
+                  chunk_order ASC NULLS LAST,
+                  id ASC
+                LIMIT %s
+            """, (like, like, like, like, prefix, like, limit))
+            for r in cur.fetchall():
+                title = (r[0] or '').strip()
+                if not title:
+                    continue
+                handbook.append({
+                    'section_title': title[:120],
+                    'chapter': (r[1] or '')[:60],
+                    'page_start': r[2],
+                })
+        except Exception as e:
+            logger.warning(f"api_suggest handbook: {e}")
+            conn.rollback()
+
+        return jsonify({'faqs': faqs, 'handbook': handbook})
+    finally:
+        cur.close()
+        conn.close()

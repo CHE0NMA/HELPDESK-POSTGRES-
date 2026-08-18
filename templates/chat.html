@@ -372,8 +372,7 @@
   .typing-dot:nth-child(3) { animation-delay:.4s; }
   @keyframes tdot { 0%,100%{opacity:.4;transform:translateY(0)} 50%{opacity:1;transform:translateY(-4px)} }
 
-  .msg-time { font-size:.68rem;color:var(--text-muted);margin-top:.2rem;padding:0 .25rem; }
-  .message.user .msg-time { text-align:right; }
+  .msg-time { display: none; /* timestamps removed for cleaner mobile + faster layout */ }
 
   .feedback-row { display:flex;align-items:center;flex-wrap:wrap;gap:.4rem;margin-top:.1rem; }
 
@@ -488,11 +487,48 @@
   }
 
   .legal-hint {
+    display: none; /* already linked in sidebar footer */
     font-size: .66rem; color: var(--text-muted); text-align: center;
     padding: .4rem .25rem 0; max-width: 760px; margin: 0 auto;
   }
   .legal-hint a { color: var(--text-muted); text-decoration: underline; transition: color .2s; }
   .legal-hint a:hover { color: var(--accent2); }
+
+  /* Typeahead autocomplete (search-style while typing) */
+  .typeahead-wrap {
+    position: relative; max-width: 760px; margin: 0 auto .3rem;
+  }
+  .typeahead-dropdown {
+    display: none;
+    background: rgba(8,18,36,.97); border: 1px solid var(--border2);
+    border-radius: 14px; overflow: hidden;
+    box-shadow: 0 10px 32px rgba(0,0,0,.45);
+    max-height: 220px; overflow-y: auto;
+  }
+  .typeahead-dropdown.show { display: block; }
+  .typeahead-item {
+    display: flex; align-items: flex-start; gap: .55rem;
+    width: 100%; padding: .52rem .85rem; border: none; background: transparent;
+    color: var(--text); font-size: .82rem; font-family: 'DM Sans', sans-serif;
+    text-align: left; cursor: pointer; line-height: 1.4;
+    border-bottom: 1px solid rgba(66,165,245,.08);
+    transition: background .15s;
+  }
+  .typeahead-item:last-child { border-bottom: none; }
+  .typeahead-item:hover, .typeahead-item.active {
+    background: rgba(21,101,192,.22);
+  }
+  .typeahead-item i {
+    color: var(--accent2); font-size: .78rem; margin-top: 2px; flex-shrink: 0;
+  }
+  .typeahead-item .ta-label {
+    flex: 1; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .typeahead-item .ta-src {
+    font-size: .62rem; color: var(--text-muted); flex-shrink: 0;
+    text-transform: uppercase; letter-spacing: .04em; padding-top: 2px;
+  }
 
   .toast {
     position:fixed;bottom:5.5rem;left:50%;transform:translateX(-50%) translateY(10px);
@@ -608,34 +644,60 @@
   }
 
   @media (max-width: 640px) {
-    .header { padding: 0 .65rem; height: 52px; }
-    .rate-limit-counter { padding: .25rem .5rem; font-size: .68rem; }
+    .header { padding: 0 .55rem; height: 46px; }
+    .menu-btn { width: 32px; height: 32px; border-radius: 8px; font-size: .9rem; }
+    .logo-img, .logo-orb { width: 26px; height: 26px; }
+    .logo-wrap { gap: .45rem; font-size: .88rem; }
+    .rate-limit-counter { padding: .2rem .45rem; font-size: .62rem; }
     .hdr-btn span { display: none; }
-    .hdr-btn { padding: 0 .65rem; }
+    .hdr-btn { height: 28px; padding: 0 .55rem; font-size: .7rem; }
+    .status-bar { padding: .28rem .7rem; }
+    .status-text { font-size: .65rem; }
+    .status-badge { font-size: .6rem; padding: .12rem .45rem; }
     .status-badge span { display: none; }
-    .input-area { padding: .55rem .65rem max(.85rem, env(safe-area-inset-bottom)); }
-    .suggestions-wrap { padding: .45rem .65rem .35rem; }
-    .message.user .bubble { max-width: 88%; font-size: .85rem; }
-    .message.bot .text { font-size: .85rem; }
-    .bot-content { max-width: calc(100% - 36px); }
-    .bot-image-container img { max-height: 200px; }
-    .chat-area { padding: 1rem .85rem; }
+    .status-dot { width: 6px; height: 6px; }
+    .input-area { padding: .4rem .55rem max(.7rem, env(safe-area-inset-bottom)); }
+    .input-row { border-radius: 18px; padding: .28rem .3rem .28rem .75rem; }
+    #msg { font-size: .84rem; padding: .28rem 0; }
+    .mic-btn, .send-btn { width: 32px; height: 32px; font-size: .95rem; }
+    .suggestions-wrap { padding: .35rem .55rem .25rem; }
+    .sugg-label { font-size: .6rem; margin-bottom: .25rem; }
+    .sugg-btn { padding: .35rem .7rem; font-size: .7rem; min-height: 30px; border-radius: 16px; }
+    .message.user .bubble { max-width: 88%; font-size: .82rem; padding: .55rem .9rem; border-radius: 14px 14px 4px 14px; }
+    .message.bot .text { font-size: .82rem; padding: .6rem .9rem; border-radius: 4px 14px 14px 14px; }
+    .bot-avatar { width: 26px; height: 26px; font-size: .7rem; }
+    .bot-content { max-width: calc(100% - 32px); gap: .25rem; }
+    .bot-image-container img { max-height: 180px; border-radius: 10px; }
+    .chat-area { padding: .75rem .7rem; gap: .65rem; }
+    .fb-btn { width: 26px; height: 26px; font-size: .72rem; border-radius: 7px; }
+    .msg-time { display: none; }
+    .welcome-orb { width: 56px; height: 56px; font-size: 1.55rem; margin-bottom: 1rem; }
+    #welcome h2 { font-size: clamp(1.05rem, 3.8vw, 1.4rem); margin-bottom: .35rem; }
+    #welcome p { font-size: .8rem; }
+    .chip { padding: .35rem .7rem; font-size: .7rem; min-height: 30px; }
+    .scroll-btn { width: 30px; height: 30px; bottom: 4.6rem; right: .75rem; font-size: .8rem; }
+    .toast { bottom: 4.6rem; font-size: .76rem; padding: .45rem 1rem; }
+    .typeahead-dropdown { max-height: 180px; border-radius: 12px; }
+    .typeahead-item { padding: .45rem .7rem; font-size: .76rem; }
   }
 
   @media (max-width: 380px) {
     .rate-limit-counter span:not(#msg-remaining) { display: none; }
-    .logo-wrap span { max-width: 110px; }
+    .logo-wrap span { max-width: 100px; }
+    .header { height: 44px; }
   }
 
   @media (max-width: 480px) {
-    .header { height: 52px; padding: 0 .65rem; }
+    .header { height: 46px; padding: 0 .5rem; }
     .hdr-btn span { display: none; }
     .rate-limit-counter { display: none; }
-    .message.user .bubble { max-width: 88%; }
-    .bot-content { max-width: calc(100% - 36px); }
-    .chat-area { padding: .85rem .75rem; gap: .7rem; }
-    .input-area { padding: .55rem .65rem max(.85rem, env(safe-area-inset-bottom)); }
+    .message.user .bubble { max-width: 90%; font-size: .8rem; }
+    .message.bot .text { font-size: .8rem; }
+    .bot-content { max-width: calc(100% - 30px); }
+    .chat-area { padding: .65rem .6rem; gap: .55rem; }
+    .input-area { padding: .35rem .5rem max(.65rem, env(safe-area-inset-bottom)); }
     #welcome { width: min(96vw, 520px); }
+    .status-bar { padding: .22rem .55rem; }
   }
 
 </style>
@@ -768,8 +830,11 @@
       </div>
 
       <div class="input-area" id="inputArea">
+        <div class="typeahead-wrap" id="typeaheadWrap">
+          <div class="typeahead-dropdown" id="typeaheadDropdown" role="listbox" aria-label="Suggestions"></div>
+        </div>
         <div class="input-row">
-          <textarea id="msg" placeholder="Type or speak your question…" rows="1" aria-label="Message"></textarea>
+          <textarea id="msg" placeholder="Type or speak your question…" rows="1" aria-label="Message" autocomplete="off"></textarea>
           <div class="input-actions">
             <button type="button" class="mic-btn" id="micBtn" title="Speak your question" onclick="toggleSpeechInput()" aria-label="Voice input">
               <i class="bi bi-mic"></i>
@@ -780,10 +845,6 @@
           </div>
         </div>
         <div class="char-hint" id="charHint"></div>
-        <div class="legal-hint">
-          By chatting you agree to our <a href="/terms" target="_blank">Terms of Use</a> and
-          <a href="/privacy" target="_blank">Privacy Policy</a>.
-        </div>
       </div>
     </div>
   </div>
@@ -1096,7 +1157,7 @@ function processReplyHtml(rawHtml) {
 function appendUserMsg(msg) {
   const d = document.createElement('div');
   d.className = 'message user';
-  d.innerHTML = `<div class="bubble">${escapeHtml(msg)}</div><div class="msg-time">${getTime()}</div>`;
+  d.innerHTML = `<div class="bubble">${escapeHtml(msg)}</div>`;
   chatArea.appendChild(d);
   return d;
 }
@@ -1155,26 +1216,44 @@ async function typeReply(container, html) {
   const { images, cleanedHtml } = extractImagesFromHtml(html);
 
   if (cleanedHtml) {
-    const temp = document.createElement('div');
-    temp.innerHTML = cleanedHtml;
-    async function typeNode(node) {
-      if (node.nodeType === Node.TEXT_NODE) {
-        for (const ch of node.textContent) {
-          container.appendChild(document.createTextNode(ch));
-          chatArea.scrollTop = chatArea.scrollHeight;
-          await delay(12);
+    // Fast path: short replies or plain text — paint immediately
+    const plainLen = cleanedHtml.replace(/<[^>]*>/g, '').length;
+    if (plainLen < 80 || !cleanedHtml.includes('<')) {
+      container.innerHTML = cleanedHtml;
+      chatArea.scrollTop = chatArea.scrollHeight;
+    } else {
+      // Chunk-type for longer answers (much faster than per-character)
+      const temp = document.createElement('div');
+      temp.innerHTML = cleanedHtml;
+      const chunks = [];
+      function collect(node) {
+        if (node.nodeType === Node.TEXT_NODE) {
+          const t = node.textContent || '';
+          for (let i = 0; i < t.length; i += 6) chunks.push({ type: 'text', text: t.slice(i, i + 6) });
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+          chunks.push({ type: 'open', el: node.cloneNode(false) });
+          for (const child of node.childNodes) collect(child);
+          chunks.push({ type: 'close' });
         }
-      } else if (node.nodeType === Node.ELEMENT_NODE) {
-        const el = node.cloneNode(false);
-        container.appendChild(el);
-        for (const child of node.childNodes) await typeNode(child);
+      }
+      for (const node of temp.childNodes) collect(node);
+      const stack = [container];
+      for (const c of chunks) {
+        if (c.type === 'text') {
+          stack[stack.length - 1].appendChild(document.createTextNode(c.text));
+          chatArea.scrollTop = chatArea.scrollHeight;
+          await delay(4);
+        } else if (c.type === 'open') {
+          stack[stack.length - 1].appendChild(c.el);
+          stack.push(c.el);
+        } else if (c.type === 'close' && stack.length > 1) {
+          stack.pop();
+        }
       }
     }
-    for (const node of temp.childNodes) await typeNode(node);
   }
 
   if (images.length > 0) {
-    await delay(100);
     const imageContainer = document.createElement('div');
     imageContainer.className = 'bot-image-container';
     images.forEach(imgData => {
@@ -1190,10 +1269,6 @@ async function typeReply(container, html) {
 }
 
 function addFeedbackRow(content, userMsg, botReply) {
-  const time = document.createElement('div');
-  time.className = 'msg-time';
-  time.textContent = getTime();
-
   const row = document.createElement('div');
   row.className = 'feedback-row';
   row.innerHTML = `
@@ -1208,7 +1283,6 @@ function addFeedbackRow(content, userMsg, botReply) {
   copyBtn.onclick = () => copyToClipboard(copyBtn, botReply);
   ttsBtn.onclick = () => speakText(botReply, ttsBtn);
 
-  content.appendChild(time);
   content.appendChild(row);
 }
 
@@ -1262,6 +1336,7 @@ async function send() {
   if (firstMessage) hideWelcome();
   sending = true;
   sendBtn.disabled = true;
+  hideTypeahead();
 
   const userDiv = appendUserMsg(msg);
   msgInput.value = '';
@@ -1697,6 +1772,8 @@ function renderSuggestions(data, isRelated) {
   });
 }
 
+let _topSuggestionCache = [];
+
 function loadTopSuggestions() {
   fetch('/suggested_questions')
     .then(r => {
@@ -1708,11 +1785,133 @@ function loadTopSuggestions() {
         suggestionsWrap.style.display = 'none';
         return;
       }
+      _topSuggestionCache = data.map(q => (typeof q === 'string' ? q : (q.user_message || q.question || ''))).filter(Boolean);
       suggLabel.innerHTML = '<i class="bi bi-fire"></i> Most Asked';
       suggLabel.className = 'sugg-label';
       renderSuggestions(data, false);
     })
     .catch(() => { suggestionsWrap.style.display = 'none'; });
+}
+
+/* ---------- typeahead (search-style while typing) ---------- */
+const typeaheadDropdown = document.getElementById('typeaheadDropdown');
+let _taTimer = null;
+let _taActive = -1;
+let _taItems = [];
+
+function hideTypeahead() {
+  if (!typeaheadDropdown) return;
+  typeaheadDropdown.classList.remove('show');
+  typeaheadDropdown.innerHTML = '';
+  _taActive = -1;
+  _taItems = [];
+}
+
+function renderTypeahead(items) {
+  if (!typeaheadDropdown) return;
+  _taItems = items.slice(0, 8);
+  _taActive = -1;
+  if (!_taItems.length) {
+    hideTypeahead();
+    return;
+  }
+  typeaheadDropdown.innerHTML = '';
+  _taItems.forEach((it, idx) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'typeahead-item';
+    btn.setAttribute('role', 'option');
+    btn.dataset.idx = String(idx);
+    const icon = it.source === 'handbook' ? 'journal-bookmark'
+      : (it.source === 'faq' ? 'question-circle'
+      : (it.source === 'popular' ? 'lightning-charge' : 'search'));
+    const display = it.label || it.text;
+    btn.innerHTML = `<i class="bi bi-${icon}"></i><span class="ta-label">${escapeHtml(display)}</span><span class="ta-src">${escapeHtml(it.source || 'faq')}</span>`;
+    btn.onclick = () => {
+      msgInput.value = it.text;
+      autoResize(msgInput);
+      hideTypeahead();
+      send();
+    };
+    typeaheadDropdown.appendChild(btn);
+  });
+  typeaheadDropdown.classList.add('show');
+}
+
+function runTypeahead(query) {
+  const q = (query || '').trim();
+  if (q.length < 2) { hideTypeahead(); return; }
+  const qLower = q.toLowerCase();
+
+  // 1) Instant local filter from Most Asked cache (shows while network is in flight)
+  const local = _topSuggestionCache
+    .filter(t => t.toLowerCase().includes(qLower) && t.toLowerCase() !== qLower)
+    .map(t => ({ text: t, source: 'popular' }));
+  if (local.length) renderTypeahead(local);
+
+  // 2) Real FAQ + handbook search (public, rate-limited)
+  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  if (runTypeahead._abort) {
+    try { runTypeahead._abort.abort(); } catch (e) {}
+  }
+  runTypeahead._abort = ctrl;
+
+  fetch('/api/suggest?q=' + encodeURIComponent(q) + '&limit=6', {
+    signal: ctrl ? ctrl.signal : undefined,
+  })
+    .then(r => r.ok ? r.json() : { faqs: [], handbook: [] })
+    .then(data => {
+      // Ignore stale responses if the input has moved on
+      if (msgInput.value.trim().toLowerCase() !== qLower) return;
+
+      const faqs = (data.faqs || []).map(f => ({
+        text: f.question || '',
+        source: 'faq',
+      })).filter(x => x.text && x.text.toLowerCase() !== qLower);
+
+      const handbook = (data.handbook || []).map(h => {
+        const title = h.section_title || '';
+        const page = h.page_start ? ` (p.${h.page_start})` : '';
+        // Send a natural question so the bot answers that section
+        return {
+          text: title ? `What does the handbook say about ${title}?` : '',
+          label: title + page,
+          source: 'handbook',
+        };
+      }).filter(x => x.text);
+
+      const seen = new Set();
+      const merged = [];
+      for (const it of [...faqs, ...handbook, ...local]) {
+        const k = (it.text || '').toLowerCase();
+        if (!k || seen.has(k)) continue;
+        seen.add(k);
+        merged.push(it);
+      }
+      merged.sort((a, b) => {
+        const rank = { faq: 0, handbook: 1, popular: 2 };
+        const ar = rank[a.source] ?? 3;
+        const br = rank[b.source] ?? 3;
+        if (ar !== br) return ar - br;
+        const as = a.text.toLowerCase().startsWith(qLower) ? 0 : 1;
+        const bs = b.text.toLowerCase().startsWith(qLower) ? 0 : 1;
+        return as - bs;
+      });
+      if (merged.length) renderTypeahead(merged);
+      else hideTypeahead();
+    })
+    .catch(err => {
+      if (err && err.name === 'AbortError') return;
+      if (local.length) renderTypeahead(local);
+      else hideTypeahead();
+    });
+}
+
+function scheduleTypeahead() {
+  clearTimeout(_taTimer);
+  const q = msgInput.value.trim();
+  if (q.length < 2) { hideTypeahead(); return; }
+  _taTimer = setTimeout(() => runTypeahead(q), 220);
 }
 
 function loadRelatedSuggestions(userMsg, category) {
@@ -1902,13 +2101,41 @@ msgInput.addEventListener('input', () => {
   const len = msgInput.value.length;
   charHint.textContent = len > MAX_CHARS * 0.75 ? `${len}/${MAX_CHARS}` : '';
   charHint.style.color = len > MAX_CHARS ? '#ff5252' : 'var(--text-muted)';
+  scheduleTypeahead();
 });
 
 msgInput.addEventListener('keydown', e => {
+  const open = typeaheadDropdown && typeaheadDropdown.classList.contains('show') && _taItems.length;
+  if (open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+    e.preventDefault();
+    if (e.key === 'ArrowDown') _taActive = Math.min(_taActive + 1, _taItems.length - 1);
+    else _taActive = Math.max(_taActive - 1, 0);
+    typeaheadDropdown.querySelectorAll('.typeahead-item').forEach((el, i) => {
+      el.classList.toggle('active', i === _taActive);
+    });
+    return;
+  }
+  if (open && e.key === 'Enter' && !e.shiftKey && _taActive >= 0) {
+    e.preventDefault();
+    const pick = _taItems[_taActive];
+    if (pick) {
+      msgInput.value = pick.text;
+      autoResize(msgInput);
+      hideTypeahead();
+      send();
+    }
+    return;
+  }
+  if (e.key === 'Escape') { hideTypeahead(); return; }
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
+    hideTypeahead();
     send();
   }
+});
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#typeaheadWrap') && !e.target.closest('#msg')) hideTypeahead();
 });
 
 chatArea.addEventListener('scroll', () => {

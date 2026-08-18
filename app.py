@@ -159,15 +159,28 @@ def create_app():
             "rules": [str(r) for r in app.url_map.iter_rules()][:40],
         }
 
-    init_pool()
-    ensure_core_tables()
-    ensure_admin_exists()
-    ensure_schedule_schema()
-    migrate_create_chat_sessions()
-    migrate_add_uuid_to_faq()
-    ensure_handbook_fulltext_search()
-    ensure_faq_embedding_column()
-    ensure_learning_layer()
+    # On Vercel every cold start re-imports this module. Schema ensures must
+    # NEVER raise — a transient DB blip would otherwise 500 the whole site
+    # (new chat, tab return, landing) until the next successful warm start.
+    try:
+        init_pool()
+    except Exception as e:
+        app.logger.error(f"init_pool failed (will retry on request): {e}")
+
+    for _name, _fn in (
+        ("ensure_core_tables", ensure_core_tables),
+        ("ensure_admin_exists", ensure_admin_exists),
+        ("ensure_schedule_schema", ensure_schedule_schema),
+        ("migrate_create_chat_sessions", migrate_create_chat_sessions),
+        ("migrate_add_uuid_to_faq", migrate_add_uuid_to_faq),
+        ("ensure_handbook_fulltext_search", ensure_handbook_fulltext_search),
+        ("ensure_faq_embedding_column", ensure_faq_embedding_column),
+        ("ensure_learning_layer", ensure_learning_layer),
+    ):
+        try:
+            _fn()
+        except Exception as e:
+            app.logger.error(f"{_name} failed (non-fatal on startup): {e}")
 
     if not _is_vercel():
         from threading import Thread
