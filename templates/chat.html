@@ -331,6 +331,18 @@
     backdrop-filter:blur(10px);box-shadow:0 4px 18px rgba(0,0,0,.25);
   }
   .message.bot .text:empty { display:none !important; }
+  /* Server wraps reply in <div class="text"> — never style nested copies as a second bubble */
+  .message.bot .text .text {
+    background: transparent; border: none; border-radius: 0;
+    padding: 0; margin: 0; box-shadow: none; backdrop-filter: none;
+  }
+  .message.bot .text.reveal {
+    animation: textReveal .28s ease;
+  }
+  @keyframes textReveal {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
 
   .bot-image-container {
     margin: 6px 0 4px 0;
@@ -1210,48 +1222,38 @@ function extractImagesFromHtml(html) {
   return { images, cleanedHtml: cleanedHtml.trim() };
 }
 
+/** Server returns reply already wrapped as <div class="text">…</div>.
+ *  Client already has a .text node — strip the outer wrapper so we don't
+ *  nest a second bubble inside the first. */
+function unwrapReplyHtml(html) {
+  const s = String(html || '').trim();
+  if (!s) return '';
+  const tmp = document.createElement('div');
+  tmp.innerHTML = s;
+  // If the only top-level child is a .text div, use its inner HTML
+  if (tmp.children.length === 1 && tmp.children[0].classList
+      && tmp.children[0].classList.contains('text')) {
+    return tmp.children[0].innerHTML;
+  }
+  // Also handle a leading wrapper even if whitespace/siblings exist
+  const inner = tmp.querySelector(':scope > .text');
+  if (inner && tmp.children.length === 1) return inner.innerHTML;
+  return s;
+}
+
 async function typeReply(container, html) {
   if (!container) return;
-  container.innerHTML = '';
-  const { images, cleanedHtml } = extractImagesFromHtml(html);
+  const unwrapped = unwrapReplyHtml(html);
+  const { images, cleanedHtml } = extractImagesFromHtml(unwrapped);
 
-  if (cleanedHtml) {
-    // Fast path: short replies or plain text — paint immediately
-    const plainLen = cleanedHtml.replace(/<[^>]*>/g, '').length;
-    if (plainLen < 80 || !cleanedHtml.includes('<')) {
-      container.innerHTML = cleanedHtml;
-      chatArea.scrollTop = chatArea.scrollHeight;
-    } else {
-      // Chunk-type for longer answers (much faster than per-character)
-      const temp = document.createElement('div');
-      temp.innerHTML = cleanedHtml;
-      const chunks = [];
-      function collect(node) {
-        if (node.nodeType === Node.TEXT_NODE) {
-          const t = node.textContent || '';
-          for (let i = 0; i < t.length; i += 6) chunks.push({ type: 'text', text: t.slice(i, i + 6) });
-        } else if (node.nodeType === Node.ELEMENT_NODE) {
-          chunks.push({ type: 'open', el: node.cloneNode(false) });
-          for (const child of node.childNodes) collect(child);
-          chunks.push({ type: 'close' });
-        }
-      }
-      for (const node of temp.childNodes) collect(node);
-      const stack = [container];
-      for (const c of chunks) {
-        if (c.type === 'text') {
-          stack[stack.length - 1].appendChild(document.createTextNode(c.text));
-          chatArea.scrollTop = chatArea.scrollHeight;
-          await delay(4);
-        } else if (c.type === 'open') {
-          stack[stack.length - 1].appendChild(c.el);
-          stack.push(c.el);
-        } else if (c.type === 'close' && stack.length > 1) {
-          stack.pop();
-        }
-      }
-    }
-  }
+  // Single paint + soft fade — no per-chunk scroll (that caused the
+  // violent jump up/down). Content is visible immediately.
+  container.classList.remove('reveal');
+  container.innerHTML = cleanedHtml || '';
+  // Force reflow so the reveal animation restarts
+  void container.offsetWidth;
+  container.classList.add('reveal');
+  scrollToBottom();
 
   if (images.length > 0) {
     const imageContainer = document.createElement('div');
@@ -1265,6 +1267,7 @@ async function typeReply(container, html) {
       imageContainer.appendChild(img);
     });
     container.parentNode.insertBefore(imageContainer, container.nextSibling);
+    scrollToBottom();
   }
 }
 
@@ -1363,7 +1366,6 @@ async function send() {
     const rawReply = data.reply || 'Sorry, I could not process that.';
     const category = data.category || null;
 
-    showResponseTimeBadge(performance.now() - t0);
     removeBotTyping(botRow);
     handleServerSessionChange(data, userDiv, botRow);
 
@@ -1393,9 +1395,12 @@ async function send() {
       contentDiv.appendChild(box);
       addFeedbackRow(contentDiv, msg, '[Related topics shown]');
     } else if (category === 'Disambiguation' || rawReply.includes('suggestions-container') || rawReply.includes('suggestion-btn')) {
-      const processed = processReplyHtml(rawReply);
+      const processed = processReplyHtml(unwrapReplyHtml(rawReply));
       const textDiv = botRow.querySelector('.text');
-      if (textDiv) textDiv.innerHTML = processed;
+      if (textDiv) {
+        textDiv.innerHTML = processed;
+        textDiv.classList.add('reveal');
+      }
       addFeedbackRow(botRow.querySelector('.bot-content'), msg, rawReply);
     } else {
       await typeReply(botRow.querySelector('.text'), rawReply);
@@ -1805,6 +1810,10 @@ function hideTypeahead() {
   typeaheadDropdown.innerHTML = '';
   _taActive = -1;
   _taItems = [];
+  // Restore the related/most-asked bar if it has content
+  if (suggestionsWrap && suggestScroll && suggestScroll.children.length) {
+    suggestionsWrap.style.display = 'block';
+  }
 }
 
 function renderTypeahead(items) {
@@ -1836,6 +1845,8 @@ function renderTypeahead(items) {
     typeaheadDropdown.appendChild(btn);
   });
   typeaheadDropdown.classList.add('show');
+  // Hide the horizontal related/most-asked chips while search-style typeahead is open
+  if (suggestionsWrap) suggestionsWrap.style.display = 'none';
 }
 
 function runTypeahead(query) {
@@ -1910,7 +1921,12 @@ function runTypeahead(query) {
 function scheduleTypeahead() {
   clearTimeout(_taTimer);
   const q = msgInput.value.trim();
-  if (q.length < 2) { hideTypeahead(); return; }
+  if (q.length < 2) {
+    hideTypeahead();
+    return;
+  }
+  // Immediately hide related chips while the user is searching
+  if (suggestionsWrap) suggestionsWrap.style.display = 'none';
   _taTimer = setTimeout(() => runTypeahead(q), 220);
 }
 
