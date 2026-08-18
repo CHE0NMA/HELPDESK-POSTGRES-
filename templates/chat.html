@@ -293,12 +293,15 @@
 
   .chat-area {
     flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:.85rem;
-    scroll-behavior:smooth;
+    /* auto (not smooth) — smooth + programmatic scrollToBottom was fighting the user
+       and felt like violent up/down jumps while replies rendered */
+    scroll-behavior: auto;
     padding:1.25rem calc(max(1rem,(100% - 760px) / 2));
     overflow-wrap: anywhere; word-break: break-word;
   }
-  .chat-area::-webkit-scrollbar { width:4px; }
-  .chat-area::-webkit-scrollbar-thumb { background:rgba(66,165,245,.15);border-radius:4px; }
+  .chat-area::-webkit-scrollbar { width:5px; }
+  .chat-area::-webkit-scrollbar-thumb { background:rgba(66,165,245,.22);border-radius:4px; }
+  .chat-area::-webkit-scrollbar-track { background: transparent; }
 
   .message { display:flex;flex-direction:column;max-width:100%;animation:msgIn .3s ease; }
   @keyframes msgIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
@@ -331,10 +334,15 @@
     backdrop-filter:blur(10px);box-shadow:0 4px 18px rgba(0,0,0,.25);
   }
   .message.bot .text:empty { display:none !important; }
-  /* Server wraps reply in <div class="text"> — never style nested copies as a second bubble */
-  .message.bot .text .text {
-    background: transparent; border: none; border-radius: 0;
-    padding: 0; margin: 0; box-shadow: none; backdrop-filter: none;
+  /* Flatten any nested .text the server (or storage) still wraps — never a second bubble */
+  .message.bot .text .text,
+  .message.bot .text div.text {
+    all: unset;
+    display: block;
+    white-space: inherit;
+    color: inherit;
+    font: inherit;
+    line-height: inherit;
   }
   .message.bot .text.reveal {
     animation: textReveal .28s ease;
@@ -513,9 +521,21 @@
   .typeahead-dropdown {
     display: none;
     background: rgba(8,18,36,.97); border: 1px solid var(--border2);
-    border-radius: 14px; overflow: hidden;
+    border-radius: 14px;
     box-shadow: 0 10px 32px rgba(0,0,0,.45);
-    max-height: 220px; overflow-y: auto;
+    max-height: 240px; overflow-y: auto; overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(66,165,245,.4) rgba(14,32,64,.5);
+  }
+  .typeahead-dropdown::-webkit-scrollbar { width: 6px; }
+  .typeahead-dropdown::-webkit-scrollbar-track {
+    background: rgba(14,32,64,.55); border-radius: 0 14px 14px 0;
+  }
+  .typeahead-dropdown::-webkit-scrollbar-thumb {
+    background: rgba(66,165,245,.4); border-radius: 6px;
+  }
+  .typeahead-dropdown::-webkit-scrollbar-thumb:hover {
+    background: rgba(66,165,245,.65);
   }
   .typeahead-dropdown.show { display: block; }
   .typeahead-item {
@@ -832,7 +852,7 @@
         {% endfor %}
       </div>
 
-      <div class="scroll-btn" id="scrollBtn" onclick="scrollToBottom()" aria-label="Scroll to bottom">
+      <div class="scroll-btn" id="scrollBtn" onclick="_stickToBottom=true;scrollToBottom(true)" aria-label="Scroll to bottom">
         <i class="bi bi-chevron-down"></i>
       </div>
 
@@ -1102,8 +1122,18 @@ function showWelcome() {
   applyWelcomeGreeting();
 }
 
-function scrollToBottom(smooth = true) {
-  chatArea.scrollTo({ top: chatArea.scrollHeight, behavior: smooth ? 'smooth' : 'instant' });
+/* Sticky-bottom: only auto-scroll when the user is already near the bottom.
+   If they scrolled up to read older messages, leave them alone — this was
+   the main cause of the violent jump while replies rendered. */
+let _stickToBottom = true;
+
+function isNearBottom(threshold = 100) {
+  return chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight < threshold;
+}
+
+function scrollToBottom(force = false) {
+  if (!force && !_stickToBottom) return;
+  chatArea.scrollTop = chatArea.scrollHeight;
 }
 
 function getTime() {
@@ -1222,23 +1252,36 @@ function extractImagesFromHtml(html) {
   return { images, cleanedHtml: cleanedHtml.trim() };
 }
 
-/** Server returns reply already wrapped as <div class="text">…</div>.
- *  Client already has a .text node — strip the outer wrapper so we don't
- *  nest a second bubble inside the first. */
+/** Server often returns reply already wrapped as <div class="text">…</div>.
+ *  Client already has a .text node — strip outer (and nested) wrappers so we
+ *  never render a bubble inside a bubble. */
 function unwrapReplyHtml(html) {
-  const s = String(html || '').trim();
+  let s = String(html || '').trim();
   if (!s) return '';
-  const tmp = document.createElement('div');
-  tmp.innerHTML = s;
-  // If the only top-level child is a .text div, use its inner HTML
-  if (tmp.children.length === 1 && tmp.children[0].classList
-      && tmp.children[0].classList.contains('text')) {
-    return tmp.children[0].innerHTML;
+  // Peel outer .text wrappers repeatedly (in case of double-wrap from storage)
+  for (let i = 0; i < 3; i++) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = s;
+    const only = tmp.children.length === 1 ? tmp.children[0] : null;
+    if (only && only.classList && only.classList.contains('text')) {
+      s = only.innerHTML.trim();
+      continue;
+    }
+    break;
   }
-  // Also handle a leading wrapper even if whitespace/siblings exist
-  const inner = tmp.querySelector(':scope > .text');
-  if (inner && tmp.children.length === 1) return inner.innerHTML;
   return s;
+}
+
+/** After insert: promote children of any leftover nested .text so styles don't stack */
+function flattenNestedText(root) {
+  if (!root) return;
+  root.querySelectorAll('.text').forEach(nested => {
+    if (nested === root) return;
+    const parent = nested.parentNode;
+    if (!parent) return;
+    while (nested.firstChild) parent.insertBefore(nested.firstChild, nested);
+    nested.remove();
+  });
 }
 
 async function typeReply(container, html) {
@@ -1246,14 +1289,13 @@ async function typeReply(container, html) {
   const unwrapped = unwrapReplyHtml(html);
   const { images, cleanedHtml } = extractImagesFromHtml(unwrapped);
 
-  // Single paint + soft fade — no per-chunk scroll (that caused the
-  // violent jump up/down). Content is visible immediately.
+  // Single paint + soft fade. Never force-scroll if the user scrolled up.
   container.classList.remove('reveal');
   container.innerHTML = cleanedHtml || '';
-  // Force reflow so the reveal animation restarts
+  flattenNestedText(container);
   void container.offsetWidth;
   container.classList.add('reveal');
-  scrollToBottom();
+  scrollToBottom(); // respects _stickToBottom
 
   if (images.length > 0) {
     const imageContainer = document.createElement('div');
@@ -1344,10 +1386,12 @@ async function send() {
   const userDiv = appendUserMsg(msg);
   msgInput.value = '';
   autoResize(msgInput);
-  scrollToBottom();
+  // User just sent — pin to bottom so the new reply stays in view
+  _stickToBottom = true;
+  scrollToBottom(true);
 
   const botRow = appendBotTyping();
-  scrollToBottom();
+  scrollToBottom(true);
   const t0 = performance.now();
 
   try {
@@ -1399,6 +1443,7 @@ async function send() {
       const textDiv = botRow.querySelector('.text');
       if (textDiv) {
         textDiv.innerHTML = processed;
+        flattenNestedText(textDiv);
         textDiv.classList.add('reveal');
       }
       addFeedbackRow(botRow.querySelector('.bot-content'), msg, rawReply);
@@ -1417,7 +1462,7 @@ async function send() {
       addFeedbackRow(botRow.querySelector('.bot-content'), msg, rawReply);
     }
 
-    scrollToBottom();
+    scrollToBottom(); // still respects stick flag
     loadRelatedSuggestions(msg, category);
     if (category && category !== 'Unknown') showContextUsed();
     _maybeShowRatingPopup();
@@ -1762,7 +1807,7 @@ function renderSuggestions(data, isRelated) {
     suggestionsWrap.style.display = 'none';
     return;
   }
-  suggestionsWrap.style.display = 'block';
+  // Fill chips, but stay hidden while typeahead search is open
   unique.forEach(q => {
     const text = q.user_message || q.question;
     const btn = document.createElement('button');
@@ -1775,6 +1820,11 @@ function renderSuggestions(data, isRelated) {
     };
     suggestScroll.appendChild(btn);
   });
+  if (_typeaheadOpen) {
+    suggestionsWrap.style.display = 'none';
+  } else {
+    suggestionsWrap.style.display = 'block';
+  }
 }
 
 let _topSuggestionCache = [];
@@ -1803,6 +1853,7 @@ const typeaheadDropdown = document.getElementById('typeaheadDropdown');
 let _taTimer = null;
 let _taActive = -1;
 let _taItems = [];
+let _typeaheadOpen = false;
 
 function hideTypeahead() {
   if (!typeaheadDropdown) return;
@@ -1810,7 +1861,8 @@ function hideTypeahead() {
   typeaheadDropdown.innerHTML = '';
   _taActive = -1;
   _taItems = [];
-  // Restore the related/most-asked bar if it has content
+  _typeaheadOpen = false;
+  // Restore the related/most-asked bar if it has chips ready
   if (suggestionsWrap && suggestScroll && suggestScroll.children.length) {
     suggestionsWrap.style.display = 'block';
   }
@@ -1845,7 +1897,8 @@ function renderTypeahead(items) {
     typeaheadDropdown.appendChild(btn);
   });
   typeaheadDropdown.classList.add('show');
-  // Hide the horizontal related/most-asked chips while search-style typeahead is open
+  _typeaheadOpen = true;
+  // Always hide related/most-asked while typeahead is open
   if (suggestionsWrap) suggestionsWrap.style.display = 'none';
 }
 
@@ -1926,6 +1979,7 @@ function scheduleTypeahead() {
     return;
   }
   // Immediately hide related chips while the user is searching
+  _typeaheadOpen = true;
   if (suggestionsWrap) suggestionsWrap.style.display = 'none';
   _taTimer = setTimeout(() => runTypeahead(q), 220);
 }
@@ -2072,8 +2126,14 @@ function applyWelcomeGreeting() {
 /* ---------- events ---------- */
 window.addEventListener('DOMContentLoaded', () => {
   syncInputHeight();
-  if (chatArea.children.length > 0) scrollToBottom(false);
-  else applyWelcomeGreeting();
+  if (chatArea.children.length > 0) {
+    // Flatten any nested .text from server-rendered history
+    chatArea.querySelectorAll('.message.bot .text').forEach(flattenNestedText);
+    _stickToBottom = true;
+    scrollToBottom(true);
+  } else {
+    applyWelcomeGreeting();
+  }
   loadTopSuggestions();
   loadSidebarHistory();
 
@@ -2155,8 +2215,8 @@ document.addEventListener('click', (e) => {
 });
 
 chatArea.addEventListener('scroll', () => {
-  const atBottom = chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight < 80;
-  scrollBtn.classList.toggle('visible', !atBottom);
+  _stickToBottom = isNearBottom(120);
+  scrollBtn.classList.toggle('visible', !_stickToBottom);
 });
 
 if ('serviceWorker' in navigator) {
