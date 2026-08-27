@@ -1,13 +1,28 @@
+"""
+database/pool.py — Vercel + Render Postgres safe connection pool.
+
+Designed for:
+- Serverless cold starts / idle freezes on Vercel
+- Render Postgres killing idle connections
+- Multiple concurrent students (chat + admin)
+"""
+
 from contextlib import contextmanager
+import logging
 import os
+import time
 
 import psycopg2
 import psycopg2.extensions
 from dbutils.pooled_db import PooledDB
+from psycopg2 import OperationalError, InterfaceError
 
 from config import DATABASE_CONFIG
 
+logger = logging.getLogger("pac_helpdesk.database.pool")
+
 _pool = None
+_IS_VERCEL = bool(os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"))
 
 
 def init_pool():
@@ -15,30 +30,29 @@ def init_pool():
     if _pool is not None:
         return _pool
 
+    # Vercel: keep the pool tiny (each concurrent function instance
+    # gets its own pool). Non-Vercel (local / long-running) can be larger.
+    max_conn = 2 if _IS_VERCEL else 8
+    max_cached = 1 if _IS_VERCEL else 3
+
     kwargs = {
         "creator": psycopg2,
-        "maxconnections": 10,
-        "mincached": 0,
-        "maxcached": 5,
+        "maxconnections": max_conn,
+        "mincached": 0,          # never keep idle connections
+        "maxcached": max_cached,
         "maxshared": 0,
-        "blocking": True,
+        "blocking": True,        # wait instead of exploding under load
         "host": DATABASE_CONFIG["host"],
         "user": DATABASE_CONFIG["user"],
         "password": DATABASE_CONFIG["password"],
         "database": DATABASE_CONFIG["database"],
         "port": DATABASE_CONFIG["port"],
-        # BUG FIX: every NOW()/CURRENT_DATE/CURRENT_TIMESTAMP call in the
-        # app (90+ call sites across schedule.py, alerts.py, admin.py,
-        # chat.py...) was implicitly evaluated in the DB server's own
-        # timezone -- UTC on most managed Postgres hosts. For a
-        # Philippines-based school (UTC+8), "today" on the DB side lagged
-        # real PH local time by up to 8 hours: still "yesterday" from
-        # 12:00am-7:59am PH time, exactly when students ask "is there
-        # class today" before heading to school. Setting the session
-        # timezone here fixes it for every query, everywhere, without
-        # touching each call site individually. See services/tz.py for
-        # the matching fix on the Python side.
         "options": "-c timezone=Asia/Manila",
+        "keepalives": 1,
+        "keepalives_idle": 30,
+        "keepalives_interval": 10,
+        "keepalives_count": 5,
+        "connect_timeout": 8,
     }
 
     sslmode = DATABASE_CONFIG.get("sslmode") or os.environ.get("DB_SSLMODE", "require")
@@ -46,19 +60,89 @@ def init_pool():
         kwargs["sslmode"] = sslmode
 
     _pool = PooledDB(**kwargs)
+    logger.info(
+        "DB pool ready (vercel=%s maxconnections=%s)",
+        _IS_VERCEL,
+        max_conn,
+    )
     return _pool
 
 
-def get_db():
-    """Return a connection from the pool. Caller must close it."""
+def _is_connection_alive(conn) -> bool:
+    try:
+        if conn.closed:
+            return False
+        old = conn.autocommit
+        conn.autocommit = True
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+                cur.fetchone()
+        finally:
+            conn.autocommit = old
+        return True
+    except (OperationalError, InterfaceError, psycopg2.Error):
+        return False
+    except Exception:
+        return False
+
+
+def get_db(retries: int = 2):
+    """
+    Return a *live* connection.
+    Automatically discards dead connections and retries.
+    Caller MUST call conn.close() when finished.
+    """
     if _pool is None:
         init_pool()
-    return _pool.connection()
+
+    last_err = None
+    for attempt in range(retries + 1):
+        conn = None
+        try:
+            conn = _pool.connection()
+            if _is_connection_alive(conn):
+                return conn
+
+            logger.warning(
+                "Discarding dead DB connection (attempt %s/%s)",
+                attempt + 1, retries + 1,
+            )
+            try:
+                conn.close()
+            except Exception:
+                pass
+            if attempt < retries:
+                time.sleep(0.12 * (attempt + 1))
+        except (OperationalError, InterfaceError) as e:
+            last_err = e
+            logger.warning(
+                "Pool get failed (attempt %s/%s): %s",
+                attempt + 1, retries + 1, e,
+            )
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+            if attempt < retries:
+                time.sleep(0.18 * (attempt + 1))
+        except Exception as e:
+            last_err = e
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+            raise
+
+    raise OperationalError(
+        f"Could not obtain a live database connection after {retries + 1} attempts"
+    ) from last_err
 
 
 @contextmanager
-def get_db_cursor(commit=False):
-    """Optional convenience context manager (used by some services)."""
+def get_db_cursor(commit: bool = False):
     conn = get_db()
     try:
         cur = conn.cursor()
@@ -69,14 +153,17 @@ def get_db_cursor(commit=False):
         finally:
             cur.close()
     finally:
-        conn.close()
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 def pool_stats():
-    """Simple diagnostics (optional, used by health checks / admin)."""
     if _pool is None:
         return {"status": "not_initialized"}
     return {
         "status": "ok",
         "maxconnections": getattr(_pool, "_maxconnections", None),
+        "vercel": _IS_VERCEL,
     }

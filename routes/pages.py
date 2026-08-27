@@ -308,3 +308,18 @@ def terms_of_use():
         return render_template("terms.html")
     except Exception:
         return redirect("/")
+
+@bp.route("/api/health")
+def health():
+    """Lightweight liveness check used by cron keep-alive and monitoring."""
+    try:
+        from database import get_db
+        conn = get_db()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+            return {"status": "ok", "db": "alive"}, 200
+        finally:
+            conn.close()
+    except Exception as e:
+        return {"status": "error", "db": str(e)}, 503

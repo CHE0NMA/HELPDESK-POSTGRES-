@@ -1072,6 +1072,80 @@ textarea.form-control { resize:vertical; min-height:60px; }
   .date-preview-grid { gap:.2rem; }
   .day-cell { padding:.3rem .15rem; font-size:.65rem; }
 }
+
+/* ===== MOBILE MODAL FIX: always reach footer buttons ===== */
+.modal-dialog {
+  max-height: calc(100dvh - 1rem);
+  margin: 0.5rem auto;
+  display: flex;
+  align-items: center;
+}
+.modal-dialog .modal-content {
+  max-height: calc(100dvh - 1rem);
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+.modal-dialog .modal-header,
+.modal-dialog .modal-footer {
+  flex-shrink: 0;
+}
+.modal-dialog .modal-body {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.modal-dialog .modal-footer {
+  position: sticky;
+  bottom: 0;
+  background: var(--modal-bg);
+  z-index: 2;
+}
+@media (max-width: 576px) {
+  .modal-dialog {
+    margin: 0.25rem;
+    max-width: calc(100% - 0.5rem);
+    max-height: calc(100dvh - 0.5rem);
+  }
+  .modal-dialog .modal-content {
+    max-height: calc(100dvh - 0.5rem);
+    border-radius: 14px;
+  }
+  .modal-dialog .modal-body { padding: 1rem; }
+  .modal-dialog .modal-footer {
+    padding: 0.75rem 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .modal-dialog .modal-footer .btn-save,
+  .modal-dialog .modal-footer .btn-del-confirm,
+  .modal-dialog .modal-footer .btn-cancel {
+    flex: 1 1 auto;
+    min-width: 110px;
+    justify-content: center;
+  }
+}
+/* Row remove animation + bulk UI */
+.sched-table tbody tr { transition: opacity .28s ease, transform .28s ease; }
+.sched-table tbody tr.row-removing { opacity: 0; transform: translateX(12px); pointer-events: none; }
+.sched-table th.chk-col, .sched-table td.chk-col { width: 40px; text-align: center; }
+.faq-check { width: 16px; height: 16px; accent-color: var(--brand); cursor: pointer; }
+.btn-bulk-del {
+  display: none; align-items: center; gap: .4rem; padding: .45rem .9rem; border-radius: 11px;
+  background: rgba(255,82,82,.12); border: 1.5px solid rgba(255,82,82,.35); color: #ff8a80;
+  font-weight: 600; font-size: .8rem; cursor: pointer;
+}
+.btn-bulk-del.show { display: inline-flex; }
+.btn-bulk-del:disabled { opacity: .55; cursor: not-allowed; }
+.selection-bar {
+  display: none; align-items: center; gap: .75rem; padding: .5rem 1rem; margin: 0 0 .75rem;
+  background: rgba(26,115,232,.12); border: 1px solid var(--border2); border-radius: 12px; font-size: .82rem; color: var(--text-dim);
+}
+.selection-bar.show { display: flex; flex-wrap: wrap; }
+.act-btn:disabled, .btn-del-confirm:disabled { opacity: .5; cursor: not-allowed; }
+.toast-el.leaving { opacity: 0; transition: opacity .2s; }
+
 </style>
 </head>
 <body data-admin-page="holidays">
@@ -1201,8 +1275,11 @@ textarea.form-control { resize:vertical; min-height:60px; }
     <div class="card">
       <div class="card-header">
         <span><i class="bi bi-list-ul" style="color:var(--accent2)"></i> Upcoming Entries</span>
-        <div style="display:flex;gap:.5rem;align-items:center">
+        <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
           <span id="schedCount" style="font-size:.75rem;color:var(--text-dim)"></span>
+          <button type="button" class="btn-bulk-del" id="btnBulkDeleteSched" onclick="openBulkDeleteSched()">
+            <i class="bi bi-trash"></i> Delete selected (<span id="bulkSchedCount">0</span>)
+          </button>
           <div class="form-tabs" style="border:none;padding:0;margin:0">
             <div class="form-tab active" id="listTabAll" onclick="setListTab('all',this)">All</div>
             <div class="form-tab" id="listTabGlobal" onclick="setListTab('global',this)">🌐 Global</div>
@@ -1215,6 +1292,7 @@ textarea.form-control { resize:vertical; min-height:60px; }
         <table class="sched-table">
           <thead>
             <tr>
+              <th class="chk-col"><input type="checkbox" class="faq-check" id="selectAllSched" title="Select all visible" onchange="toggleSelectAllSched(this.checked)"></th>
               <th>Title</th>
               <th>Scope</th>
               <th>Dept</th>
@@ -1228,7 +1306,7 @@ textarea.form-control { resize:vertical; min-height:60px; }
             </tr>
           </thead>
           <tbody id="schedulesList">
-            <tr class="no-data"><td colspan="10"><i class="bi bi-hourglass-split"></i> Loading…</td></tr>
+            <tr class="no-data"><td colspan="11"><i class="bi bi-hourglass-split"></i> Loading…</td></tr>
           </tbody>
         </table>
       </div>
@@ -1713,7 +1791,9 @@ let isSubmitting = false;
 let currentMode  = 'global';
 let globalStatus = 'closed';
 let deleteTargetId = null;
-let deleteTargetType = 'schedule'; // 'schedule' | 'emergency'
+let deleteTargetType = 'schedule'; // 'schedule' | 'emergency' | 'bulk'
+let deleteInFlight = false;
+let deleteBulkIds = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
   setTodayAsDefault();
@@ -2242,7 +2322,7 @@ function renderSchedules() {
   if(listTab==='emergency') filtered=filtered.filter(s=>s.content_type==='closure');
   if(activeDept!=='all')    filtered=filtered.filter(s=>s.is_exception?s.exception_dept===activeDept:(s.departments.includes(activeDept)||s.departments.includes('all')));
 
-  if(!filtered.length){tbody.innerHTML='<tr class="no-data"><td colspan="10">No entries for selected filter.</td></tr>';return;}
+  if(!filtered.length){tbody.innerHTML='<tr class="no-data"><td colspan="11">No entries for selected filter.</td></tr>';updateSchedSelectionUI();return;}
 
   tbody.innerHTML=filtered.map(s=>{
     const isExc=s.is_exception;
@@ -2258,6 +2338,7 @@ function renderSchedules() {
       :s.exception_status==='no_class'?'<span class="badge-nclass">NO CLASS</span>'
       :s.is_closed?'<span class="badge-closed">CLOSED</span>':'<span class="badge-open">OPEN</span>';
     return `<tr data-id="${s.id}">
+      <td class="chk-col"><input type="checkbox" class="faq-check row-check" value="${s.id}" onchange="updateSchedSelectionUI()"></td>
       <td style="color:var(--text);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(s.title)}">${escHtml(s.title)}</td>
       <td>${scopePill}</td>
       <td>${deptCell}</td>
@@ -2273,6 +2354,7 @@ function renderSchedules() {
       </td>
     </tr>`;
   }).join('');
+  updateSchedSelectionUI();
 }
 
 function deptPills(depts){return(depts||['all']).map(d=>`<span class="dept-pill dept-${d}">${deptLabel(d)}</span>`).join(' ');}
@@ -2446,40 +2528,166 @@ function editSchedule(id) {
 // DELETE (with confirm modal)
 // ============================================================
 function confirmDeleteSchedule(id) {
+  if (deleteInFlight) return;
   deleteTargetId = id;
   deleteTargetType = 'schedule';
+  deleteBulkIds = null;
+  const body = document.querySelector('#deleteModal .modal-body');
+  if (body) body.textContent = 'Are you sure you want to delete this entry? This action cannot be undone.';
+  const conf = document.getElementById('confirmDeleteBtn');
+  conf.disabled = false;
+  conf.innerHTML = '<i class="bi bi-trash"></i> Delete';
   new bootstrap.Modal(document.getElementById('deleteModal')).show();
 }
 
 function confirmDeleteEmergency(id) {
+  if (deleteInFlight) return;
   deleteTargetId = id;
   deleteTargetType = 'emergency';
+  deleteBulkIds = null;
+  const body = document.querySelector('#deleteModal .modal-body');
+  if (body) body.textContent = 'Delete this emergency closure permanently?';
+  const conf = document.getElementById('confirmDeleteBtn');
+  conf.disabled = false;
+  conf.innerHTML = '<i class="bi bi-trash"></i> Delete';
   new bootstrap.Modal(document.getElementById('deleteModal')).show();
 }
 
-document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
-  if (!deleteTargetId) return;
+document.getElementById('confirmDeleteBtn').addEventListener('click', async function() {
+  if (deleteInFlight) return;
+  if (deleteTargetType !== 'bulk' && !deleteTargetId) return;
+  if (deleteTargetType === 'bulk' && (!deleteBulkIds || !deleteBulkIds.length)) return;
+
+  deleteInFlight = true;
+  const conf = this;
+  conf.disabled = true;
+  conf.innerHTML = '<span class="spinner"></span> Deleting…';
+
   try {
-    let url;
-    if (deleteTargetType === 'emergency') {
-      url = `/api/emergency_closures/${deleteTargetId}`;
+    if (deleteTargetType === 'bulk') {
+      const ids = deleteBulkIds.slice();
+      const deleted = [];
+      for (const id of ids) {
+        try {
+          const r = await fetch(`/api/dynamic_schedules/${id}`, { method: 'DELETE' });
+          if (r.ok) deleted.push(id);
+        } catch (_) {}
+      }
+      bootstrap.Modal.getInstance(document.getElementById('deleteModal'))?.hide();
+      if (deleted.length) {
+        allSchedules = allSchedules.filter(s => !deleted.includes(s.id));
+        await removeScheduleRows(deleted);
+        clearSchedSelection();
+        showToast(deleted.length === 1 ? 'Deleted' : `${deleted.length} entries deleted`, 'success');
+        renderWeekCalendar();
+        document.getElementById('schedCount').textContent = allSchedules.length + ' entries';
+      } else {
+        showToast('Nothing was deleted', 'warning');
+      }
     } else {
-      url = `/api/dynamic_schedules/${deleteTargetId}`;
-    }
-    const r = await fetch(url, { method: 'DELETE' });
-    bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
-    if (r.ok) {
-      showToast(deleteTargetType === 'emergency' ? 'Emergency deleted' : 'Deleted', 'success');
-      refreshAll();
-    } else {
-      const e = await r.json().catch(() => ({}));
-      showToast(e.error || 'Delete failed', 'danger');
+      const url = deleteTargetType === 'emergency'
+        ? `/api/emergency_closures/${deleteTargetId}`
+        : `/api/dynamic_schedules/${deleteTargetId}`;
+      const id = deleteTargetId;
+      const typ = deleteTargetType;
+      const r = await fetch(url, { method: 'DELETE' });
+      bootstrap.Modal.getInstance(document.getElementById('deleteModal'))?.hide();
+      if (r.ok) {
+        if (typ === 'emergency') {
+          allEmergencies = allEmergencies.filter(e => e.id !== id);
+          showToast('Emergency deleted', 'success');
+          loadEmergencyClosures();
+          renderWeekCalendar();
+        } else {
+          allSchedules = allSchedules.filter(s => s.id !== id);
+          await removeScheduleRows([id]);
+          showToast('Deleted', 'success');
+          renderWeekCalendar();
+          document.getElementById('schedCount').textContent = allSchedules.length + ' entries';
+        }
+      } else {
+        const e = await r.json().catch(() => ({}));
+        showToast(e.error || 'Delete failed', 'danger');
+      }
     }
   } catch (e) {
     showToast('Network error', 'danger');
+  } finally {
+    deleteInFlight = false;
+    deleteTargetId = null;
+    deleteBulkIds = null;
+    conf.disabled = false;
+    conf.innerHTML = '<i class="bi bi-trash"></i> Delete';
   }
-  deleteTargetId = null;
 });
+
+function removeScheduleRows(ids) {
+  const set = new Set(ids.map(String));
+  const rows = [...document.querySelectorAll('#schedulesList tr[data-id]')].filter(r => set.has(String(r.dataset.id)));
+  if (!rows.length) {
+    renderSchedules();
+    return Promise.resolve();
+  }
+  return new Promise(resolve => {
+    rows.forEach(r => r.classList.add('row-removing'));
+    setTimeout(() => {
+      rows.forEach(r => r.remove());
+      if (!document.querySelector('#schedulesList tr[data-id]')) {
+        renderSchedules();
+      }
+      updateSchedSelectionUI();
+      resolve();
+    }, 280);
+  });
+}
+
+function getVisibleSchedChecks() {
+  return [...document.querySelectorAll('#schedulesList tr[data-id]')].filter(r => r.style.display !== 'none')
+    .map(r => r.querySelector('.row-check')).filter(Boolean);
+}
+function getSelectedSchedIds() {
+  return [...document.querySelectorAll('#schedulesList .row-check:checked')].map(c => parseInt(c.value, 10)).filter(Boolean);
+}
+function toggleSelectAllSched(checked) {
+  getVisibleSchedChecks().forEach(c => { c.checked = checked; });
+  updateSchedSelectionUI();
+}
+function updateSchedSelectionUI() {
+  const n = getSelectedSchedIds().length;
+  const btn = document.getElementById('btnBulkDeleteSched');
+  const cnt = document.getElementById('bulkSchedCount');
+  if (cnt) cnt.textContent = n;
+  if (btn) btn.classList.toggle('show', n > 0);
+  const all = document.getElementById('selectAllSched');
+  const checks = getVisibleSchedChecks();
+  if (all) {
+    if (!checks.length) { all.checked = false; all.indeterminate = false; }
+    else {
+      const on = checks.filter(c => c.checked).length;
+      all.checked = on === checks.length;
+      all.indeterminate = on > 0 && on < checks.length;
+    }
+  }
+}
+function clearSchedSelection() {
+  document.querySelectorAll('#schedulesList .row-check').forEach(c => { c.checked = false; });
+  const all = document.getElementById('selectAllSched');
+  if (all) { all.checked = false; all.indeterminate = false; }
+  updateSchedSelectionUI();
+}
+function openBulkDeleteSched() {
+  const ids = getSelectedSchedIds();
+  if (!ids.length || deleteInFlight) return;
+  deleteTargetType = 'bulk';
+  deleteBulkIds = ids;
+  deleteTargetId = null;
+  const body = document.querySelector('#deleteModal .modal-body');
+  if (body) body.textContent = `Delete ${ids.length} selected entr${ids.length > 1 ? 'ies' : 'y'} permanently?`;
+  const conf = document.getElementById('confirmDeleteBtn');
+  conf.disabled = false;
+  conf.innerHTML = `<i class="bi bi-trash"></i> Delete ${ids.length}`;
+  new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
 
 // ============================================================
 // SUBMIT FORM
@@ -2812,11 +3020,17 @@ function toDateStr(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStar
 function escHtml(s){ if(!s)return''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function setTableMsg(id,cols,msg){ document.getElementById(id).innerHTML=`<tr class="no-data"><td colspan="${cols}">${msg}</td></tr>`; }
 
+const _recentToasts = new Map();
 function showToast(msg,type='success'){
+  const key = type + '|' + msg;
+  const now = Date.now();
+  if (_recentToasts.has(key) && now - _recentToasts.get(key) < 1800) return;
+  _recentToasts.set(key, now);
   const el=document.createElement('div'); el.className='toast-el';
   el.style.color=type==='success'?'var(--success)':type==='danger'?'var(--danger)':'var(--warning)';
   el.innerHTML=`<i class="bi bi-${type==='success'?'check-circle-fill':type==='danger'?'x-circle-fill':'exclamation-circle-fill'}"></i> ${escHtml(msg)}`;
-  document.body.appendChild(el); setTimeout(()=>el.remove(),3200);
+  document.body.appendChild(el);
+  setTimeout(()=>{ el.classList.add('leaving'); setTimeout(()=>el.remove(),220); }, 3000);
 }
 function exportData(){ window.location.href='/api/export/faq'; showToast('Export started...','info'); }
 </script>

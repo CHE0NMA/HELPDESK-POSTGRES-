@@ -1298,3 +1298,56 @@ def api_admin_search_sources():
     finally:
         cur.close()
         conn.close()
+
+@bp.route('/api/admin/delete_faqs', methods=['POST'])
+@csrf.exempt
+def delete_faqs_bulk():
+    if not admin_required():
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.get_json(silent=True) or {}
+    uuids = data.get('uuids') or data.get('ids') or []
+    if not isinstance(uuids, list):
+        return jsonify({'error': 'uuids must be a list'}), 400
+    uuids = [str(u).strip() for u in uuids if u and str(u).strip() not in ('None', 'null')]
+    if not uuids:
+        return jsonify({'error': 'No valid UUIDs provided'}), 400
+    if len(uuids) > 200:
+        return jsonify({'error': 'Max 200 FAQs per request'}), 400
+
+    conn = get_db()
+    cur = conn.cursor()
+    deleted = []
+    try:
+        for public_uuid in uuids:
+            cur.execute("DELETE FROM faq WHERE public_uuid = %s", (public_uuid,))
+            if cur.rowcount > 0:
+                deleted.append(public_uuid)
+        conn.commit()
+        if deleted:
+            faq_cache.invalidate()
+            invalidate_response_tables()
+            invalidate_dashboard_cache()
+        return jsonify({'success': True, 'deleted': deleted, 'count': len(deleted)})
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Bulk delete FAQ error: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+
+@bp.route("/api/health")
+def health():
+    """Lightweight liveness check used by cron keep-alive and monitoring."""
+    try:
+        from database import get_db
+        conn = get_db()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+            return {"status": "ok", "db": "alive"}, 200
+        finally:
+            conn.close()
+    except Exception as e:
+        return {"status": "error", "db": str(e)}, 503

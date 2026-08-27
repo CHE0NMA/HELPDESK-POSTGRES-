@@ -276,3 +276,18 @@ def api_missing_date_queries():
         'asked_count': r[3],
         'last_asked': r[4].strftime('%Y-%m-%d %H:%M') if r[4] else None
     } for r in rows]})
+
+@bp.route("/api/health")
+def health():
+    """Lightweight liveness check used by cron keep-alive and monitoring."""
+    try:
+        from database import get_db
+        conn = get_db()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+            return {"status": "ok", "db": "alive"}, 200
+        finally:
+            conn.close()
+    except Exception as e:
+        return {"status": "error", "db": str(e)}, 503
