@@ -187,8 +187,15 @@ Answer:"""
 
 def _lookup_faq_answer(question: str, detected_lang: str) -> Optional[Tuple[str, str, str]]:
     all_faqs = _get_all_faqs()
-    search_q = question.lower()
-    expanded_q = lang_service.expand_abbreviations(search_q)
+    # normalize_vernacular_spelling fixes common misspellings/variants
+    # (bulan/bulana/buwan, semana/simana, suoton -> isuot, sinina/bisti ->
+    # uniform, haxing -> hazing, ...) BEFORE fuzzy-scoring against FAQ
+    # question text, so e.g. "unsa dapat suoton" scores against an FAQ
+    # phrased "unsay uniform sa skwelahan" the same way "unsay uniform..."
+    # would. expand_query additionally unwraps hypothetical ("what would
+    # happen if I ___") framing for the expanded/keyword-boosted copy.
+    search_q = lang_service.normalize_vernacular_spelling(question.lower())
+    expanded_q = lang_service.expand_query(search_q)
     candidates = engine.get_top_faq_candidates(
         search_q, expanded_q, all_faqs, detected_lang, query_embedding=None
     )
@@ -326,24 +333,47 @@ def _try_resolve_pending_disambiguation(question: str, detected_lang: str, ctx):
     return None
 
 
-def _handbook_best_score(question: str) -> Tuple[float, list]:
-    chunks = handbook_service.get_top_handbook_chunks(question)
+def _get_query_embedding(question: str):
+    """Compute (or fetch from cache) ONE embedding for this question,
+    shared between FAQ scoring and handbook-chunk scoring so a single
+    message costs at most one embeddings API call, not one per lookup
+    site. get_embedding() already caches by normalized text (ai_cache),
+    so calling this more than once with the same question is free after
+    the first real call -- but computing it once up front and threading
+    it through makes that explicit rather than relying on cache timing.
+    Returns None (never raises) if embeddings aren't configured
+    (GEMINI_API_KEY unset) -- every caller already treats None as "skip
+    semantic scoring, fuzzy/keyword-only like before this feature"."""
+    search_q = lang_service.normalize_vernacular_spelling((question or '').lower())
+    try:
+        return get_embedding(search_q, cache=ai_cache)
+    except Exception:
+        return None
+
+
+def _handbook_best_score(question: str, query_embedding=None) -> Tuple[float, list]:
+    chunks = handbook_service.get_top_handbook_chunks(question, query_embedding=query_embedding)
     score = chunks[0]['score'] if chunks else 0.0
     return score, chunks
 
 
-def _faq_candidates_and_score(question: str, detected_lang: str) -> Tuple[list, float]:
+def _faq_candidates_and_score(question: str, detected_lang: str, query_embedding=None) -> Tuple[list, float]:
     all_faqs = _get_all_faqs()
-    search_q = question.lower()
-    expanded_q = lang_service.expand_abbreviations(search_q)
-    candidates = engine.get_top_faq_candidates(search_q, expanded_q, all_faqs, detected_lang)
+    search_q = lang_service.normalize_vernacular_spelling(question.lower())
+    expanded_q = lang_service.expand_query(search_q)
+    candidates = engine.get_top_faq_candidates(
+        search_q, expanded_q, all_faqs, detected_lang, query_embedding=query_embedding
+    )
     best_score = candidates[0]['combined'] if candidates else 0.0
     return candidates, best_score
 
 
 def _cross_check_sources(question: str, detected_lang: str, ctx=None) -> dict:
-    hb_score, hb_chunks = _handbook_best_score(question)
-    faq_candidates, faq_score = _faq_candidates_and_score(question, detected_lang)
+    q_embedding = _get_query_embedding(question)
+    hb_score, hb_chunks = _handbook_best_score(question, query_embedding=q_embedding)
+    faq_candidates, faq_score = _faq_candidates_and_score(
+        question, detected_lang, query_embedding=q_embedding
+    )
     is_date_q = date_service.is_date_question(question, ctx=ctx)
     return {
         'hb_score': hb_score,
@@ -371,11 +401,21 @@ _NOTE_HEADERS = {
         'bisaya': "Bahin pud sa iskedyul:",
     },
 }
+# Mixed Tagalog/English, Bisaya/English, and Tagalog/Bisaya speakers used to
+# fall through to the English connector phrase here (see _note_header's
+# .get(lang, ...english) fallback) even though their actual answer text on
+# both sides of it was already correctly in Bisaya/Tagalog -- an English
+# sentence sandwiched between two vernacular ones. Route each mixed variant
+# to its closest full-vernacular header instead of straight to English.
+_NOTE_HEADER_LANG_FALLBACK = {
+    'mixed_te': 'tagalog', 'mixed_be': 'bisaya', 'mixed_tb': 'tagalog',
+}
 
 
 def _note_header(kind: str, lang: str) -> str:
     d = _NOTE_HEADERS.get(kind, {})
-    return d.get(lang, d.get('english', ''))
+    lookup_lang = _NOTE_HEADER_LANG_FALLBACK.get(lang, lang)
+    return d.get(lookup_lang, d.get('english', ''))
 
 
 def _chunk_is_schedule_related(chunk: dict) -> bool:
@@ -657,6 +697,29 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             _faq_cands_early = []
             _faq_score_early = 0.0
 
+        # Lazy: only spend an embeddings call when the cheap fuzzy/keyword
+        # pass came back weak on BOTH sources -- exactly the situation a
+        # hypothetical ("what if I ___") or paraphrased question with no
+        # matching alias/keywords produces. A normal, clearly-matched
+        # question costs zero embedding calls, same as before this
+        # feature existed. See _get_query_embedding docstring for why one
+        # call here covers both scorers.
+        if _hb_score_early < 0.45 and _faq_score_early < 0.78:
+            _q_embedding = _get_query_embedding(question)
+            if _q_embedding:
+                try:
+                    _hb_score_early, _hb_chunks_early = _handbook_best_score(
+                        question, query_embedding=_q_embedding
+                    )
+                except Exception:
+                    pass
+                try:
+                    _faq_cands_early, _faq_score_early = _faq_candidates_and_score(
+                        question, detected_lang, query_embedding=_q_embedding
+                    )
+                except Exception:
+                    pass
+
     _hb_clearly_better = (
         _looks_hb and _hb_score_early >= 0.12
     ) or (
@@ -824,13 +887,21 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
     cur = conn.cursor()
     try:
         all_faqs = _get_all_faqs()
-        search_q = question.lower()
-        expanded_q = lang_service.expand_abbreviations(search_q)
+        search_q = lang_service.normalize_vernacular_spelling(question.lower())
+        expanded_q = lang_service.expand_query(search_q)
         candidates = engine.get_top_faq_candidates(
             search_q, expanded_q, all_faqs, detected_lang, query_embedding=None
         )
         faq_best_score = candidates[0]['combined'] if candidates else 0.0
-        if faq_best_score < 0.78:
+        # Lazy: only pay for an embeddings call when the fuzzy/keyword
+        # score wasn't already decisive -- an easy, clearly-matched
+        # question costs zero embedding calls, same as before this
+        # feature. When we DO compute it, reuse it for handbook chunk
+        # scoring too (free semantic boost, not a second API call) so a
+        # hypothetical/paraphrased question that fuzzy-matched neither
+        # source well gets a real shot at both via meaning instead of
+        # just re-trying FAQ alone.
+        if faq_best_score < 0.78 or hb_score < 0.45:
             query_embedding = get_embedding(search_q, cache=ai_cache)
             if query_embedding:
                 candidates = engine.get_top_faq_candidates(
@@ -838,6 +909,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                     query_embedding=query_embedding,
                 )
                 faq_best_score = candidates[0]['combined'] if candidates else 0.0
+                hb_score, hb_chunks = _handbook_best_score(question, query_embedding=query_embedding)
 
         word_count = len(question.split())
 

@@ -12,8 +12,9 @@ from services.disambiguation import (
     select_contenders,
     should_disambiguate,
 )
-from services.grounding import answer_is_grounded, combined_source_text
-from services.language import verify_output_language
+from services.embeddings import cosine_similarity
+from services.grounding import answer_is_grounded, combined_source_text, grounding_ratio
+from services.language import expand_query, normalize_vernacular_spelling, verify_output_language
 from services.rerank import get_idf_index, rarity_rerank
 from utils.text import fuzzy_score, normalize_input
 
@@ -26,7 +27,7 @@ HANDBOOK_KEYWORDS = [
     'dress code', 'uniform', 'attire', 'appearance', 'jewelry', 'jewellery',
     'attendance', 'absent', 'absence', 'tardiness', 'tardy',
     'suspension', 'expulsion', 'grounds for', 'prohibited', 'allowed',
-    'fraternity', 'sorority', 'hazing', 'bullying',
+    'fraternity', 'sorority', 'hazing', 'bullying', 'bully', 'bullies', 'bullied',
     'vision', 'mission', 'philosophy', 'core values', 'values',
     'merit', 'demerit', 'points', 'curfew', 'dormitory', 'dorm',
     'motto', 'tagline', 'slogan', 'campus', 'campuses',
@@ -173,14 +174,20 @@ def _content_words(text: str) -> set:
 
 
 def expand_query_for_retrieval(question: str) -> str:
-    q = question
+    # Fix vernacular spelling (bulan/bulana -> buwan, suoton -> isuot,
+    # sinina/bisti -> uniform, haxing -> hazing, ...) and unwrap
+    # hypothetical "what would happen if I ___" / "kung ako ___" framing
+    # into direct-question keywords BEFORE running the topic expansions
+    # below, so both benefit without needing to hand-write vernacular/
+    # hypothetical variants into every single pattern in this file.
+    q = expand_query(question)
     extra = []
     for pattern, terms in _QUERY_EXPANSIONS:
         if re.search(pattern, q, re.I):
             extra.append(terms)
     if extra:
-        return question + ' ' + ' '.join(extra)
-    return question
+        return q + ' ' + ' '.join(extra)
+    return q
 
 
 # Deterministic topic → required section-title substrings.
@@ -218,8 +225,18 @@ _FORCED_TOPIC_MATCHES = [
     (r'\b(safe spaces|ra.?11313|safe spaces act|11313)\b',
      ['gender-based sexual harassment', 'gender-based', 'safe spaces'],
      ['11313', 'safe spaces act']),
-    (r'\b(anti.?bullying|ra.?10627|bullying law|10627)\b',
-     ['grievance', 'anti-bullying', 'bullying'], ['10627', 'anti-bullying']),
+    # BUG FIX: this used to only match "anti-bullying"/"bullying law"/the
+    # RA number, so a bare mention of the act ("if I bully someone",
+    # "what happens if I bully him") never matched at all -- it needed
+    # the literal word "bullying" plus a law-reference word next to it.
+    # Added bare bully/bullies/bullied/bullying (+ common Filipino
+    # phrasing) so any form of the word routes here on its own.
+    (r'\b(anti.?bullying|ra.?10627|bullying law|10627|'
+     r'bully|bullies|bullied|bullying|'
+     r'nambu-?bully|nanbu-?bully|pambu-?bully|bina-?bully|'
+     r'nanintimidar|pagdaugdaug)\b',
+     ['grievance', 'anti-bullying', 'bullying', 'third-degree'],
+     ['10627', 'anti-bullying', 'bullying']),
     (r'\b(senior high|strands?|shs|what strands)\b',
      ['academic program offerings', 'academic program', 'program offerings'],
      ['stem', 'humss', 'abm', 'grades 11']),
@@ -254,21 +271,27 @@ def _forced_topic_for(question: str):
     Prefers data-driven aliases from handbook_topic_aliases (admin-editable).
     Falls back to the in-module _FORCED_TOPIC_MATCHES seed so ranking still
     works before the migration has run.
+
+    `question` is run through vernacular-spelling normalization + hypothetical
+    ("what would happen if I ___") unwrapping before any pattern is tried, so
+    both the DB-driven aliases and the in-module fallback benefit without
+    each pattern needing its own spelling/framing variants hand-written in.
     """
+    normalized_q = expand_query(question or '')
     try:
         from services.topic_aliases import forced_topic_for as _db_forced
-        hit = _db_forced(question)
+        hit = _db_forced(normalized_q)
         if hit:
             return hit
     except Exception:
         try:
             from topic_aliases import forced_topic_for as _db_forced
-            hit = _db_forced(question)
+            hit = _db_forced(normalized_q)
             if hit:
                 return hit
         except Exception:
             pass
-    q = (question or '').lower()
+    q = normalized_q.lower()
     for pattern, titles, content_kws in _FORCED_TOPIC_MATCHES:
         if re.search(pattern, q, re.I):
             return titles, content_kws
@@ -328,8 +351,21 @@ def is_handbook_question(question: str) -> bool:
     Safe across handbook re-ingests: matches *kinds* of questions the
     student manual covers, not particular years/names/numbers.
     """
-    q = question.lower()
+    q = normalize_vernacular_spelling(question.lower())
     if any(kw in q for kw in HANDBOOK_KEYWORDS):
+        return True
+    # Hypothetical consequence framing ("what would happen if I ___",
+    # "paano kung ako ___", "unsay mahitabo kung ako ___") is inherently
+    # asking about a rule/violation/penalty even when it never uses any
+    # of those words itself. Deliberately topic-agnostic — covers
+    # bullying, hazing, curfew, or any other rule, not just one topic.
+    if re.search(
+        r'\b(what (?:would|will) happen(?:s)? if i|what happens if i|what if i|'
+        r'ano (?:ang |po ang )?mangyayari (?:kung|kapag) ako|paano kung ako|'
+        r'kung ako(?:y|\s+ay)?|unsa(?:y)? (?:ang )?mahitabo kung ako|'
+        r'unsaon (?:kung|kon) ako|kon ako)\b',
+        q, re.I,
+    ):
         return True
     if re.search(
         r'\b(minimum|maximum|how many|how much).{0,50}'
@@ -413,7 +449,27 @@ def _title_similarity(question: str, title: str) -> float:
     ) / 100.0
 
 
-def get_top_handbook_chunks(question: str, max_chunks: int = 8) -> List[Dict]:
+def get_top_handbook_chunks(question: str, max_chunks: int = 8,
+                             query_embedding: Optional[List[float]] = None) -> List[Dict]:
+    """`query_embedding`: optional, from services.embeddings.get_embedding()
+    on the raw user question -- SAME embedding the caller already computed
+    for FAQ matching can be reused here (see faq.py), so this costs zero
+    extra API calls in the common case.
+
+    WHY THIS MATTERS FOR HYPOTHETICAL / UNALIASED QUESTIONS: everything
+    else in this function (fulltext search, fuzzy title matching, the
+    _FORCED_TOPIC_MATCHES/topic_aliases keyword patterns) is a *keyword*
+    match -- it only finds a chunk if the question and the chunk share
+    literal words. A hypothetical question about an offense nobody wrote
+    an alias for ("what if I skip the flag ceremony") or a paraphrase
+    that shares no vocabulary with the handbook's own wording will score
+    near zero on all of that, even though the right chunk exists. Cosine
+    similarity between the question's embedding and each chunk's own
+    (precomputed, cached) embedding catches the MEANING match instead,
+    with zero new code needed per topic/offense -- this is what lets the
+    bot generalize past bullying/hazing to "any other type" of
+    hypothetical without hand-writing a new alias for each one.
+    """
     conn = get_db()
     cur = conn.cursor()
     try:
@@ -438,12 +494,15 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8) -> List[Dict]:
             logger.warning(f"handbook fulltext query failed, falling back to fuzzy: {e}")
             conn.rollback()
 
+        emb_by_id: Dict[int, Optional[list]] = {}
         try:
             cur.execute("""
-                SELECT id, chapter, section_title, page_start, page_end, content, 0.0
+                SELECT id, chapter, section_title, page_start, page_end, content, 0.0, embedding
                 FROM handbook_chunks WHERE is_active = 1
             """)
-            all_rows = list(cur.fetchall())
+            all_rows_raw = list(cur.fetchall())
+            all_rows = [r[:7] for r in all_rows_raw]
+            emb_by_id = {int(r[0]): r[7] for r in all_rows_raw}
         except Exception as e:
             logger.error(f"handbook title scan failed: {e}")
             all_rows = []
@@ -496,6 +555,9 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8) -> List[Dict]:
                 hid, chapter, title, ps, pe, content = r[0], r[1], r[2], r[3], r[4], r[5]
                 blob = f"{title} {content[:600]}"
                 score = float(fuzzy_score(q_norm, normalize_input(blob)))
+                if query_embedding and emb_by_id.get(hid):
+                    sem = max(0.0, cosine_similarity(query_embedding, emb_by_id[hid]))
+                    score = max(score, sem * 0.9)
                 scored.append({
                     'id': hid, 'chapter': chapter, 'section_title': title,
                     'page_start': ps, 'page_end': pe, 'content': content,
@@ -806,6 +868,25 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8) -> List[Dict]:
         except Exception as e:
             logger.warning(f"rarity_rerank skipped: {e}")
 
+        # Semantic (embedding) blend -- see the docstring above for why
+        # this is the mechanism that lets hypothetical/paraphrased
+        # questions about ANY topic surface the right chunk without a
+        # hand-written alias. Applied as a floor-raise (max, not
+        # replace) so it can only ever pull an under-scored-by-keywords
+        # chunk UP toward what its meaning deserves, never punish a
+        # chunk that already won on keyword grounds. Skipped entirely
+        # (no cost, no behavior change) when no query_embedding was
+        # passed in or a chunk has no cached embedding yet.
+        if query_embedding:
+            for s in scored:
+                chunk_emb = emb_by_id.get(s.get('id'))
+                if not chunk_emb:
+                    continue
+                sem = max(0.0, cosine_similarity(query_embedding, chunk_emb))
+                if sem >= 0.72:
+                    s['score'] = max(float(s.get('score') or 0), sem)
+                    s['_semantic_score'] = sem
+
         # Re-apply forced boost after rarity_rerank
         if forced and scored:
             title_needles, content_needles = forced
@@ -933,6 +1014,13 @@ def chunk_is_relevant_hard(question: str, chunk: Dict) -> bool:
     if chunk.get('_forced') or chunk.get('_forced_content'):
         return True
 
+    # High-confidence semantic (embedding) match -- meaning-based, so this
+    # covers hypothetical/paraphrased questions on topics with no keyword
+    # overlap and no hand-written alias, without needing the expensive
+    # llm_hard_relevance() LLM call below.
+    if chunk.get('_semantic_score', 0.0) >= 0.80:
+        return True
+
     hits, required = _content_word_overlap_score(question, chunk)
     title_score = _title_match_score(question, chunk)
     expanded = expand_query_for_retrieval(question)
@@ -985,6 +1073,35 @@ def chunk_is_relevant_hard(question: str, chunk: Dict) -> bool:
     return False
 
 
+def _trim_to_close_contenders(chunks: List[Dict], score_key: str = 'score',
+                               max_gap: float = 0.12, max_n: int = 4) -> List[Dict]:
+    """Cross-contamination guard: `hard`/`semantic_ok` used to hand the LLM
+    up to 4 chunks just because each individually cleared a bar, even when
+    they're about unrelated offenses/topics that happen to share vocabulary
+    or land in similar embedding space (e.g. a broad "what's the penalty
+    for X" pulling in both the section that actually covers X AND a
+    same-severity-tier section listing a completely different offense).
+    _build_handbook_answer_from_chunks concatenates every returned chunk
+    into ONE prompt, so the more chunks go in, the more surface area there
+    is for the model to blend facts across them. This keeps the leader
+    plus only genuine close contenders (within max_gap of the top score),
+    same "don't ask about a mediocre #2 just because it's non-zero"
+    principle as services.disambiguation -- not the same use case, but the
+    same shape of bug."""
+    if not chunks:
+        return []
+    ordered = sorted(chunks, key=lambda c: c.get(score_key, 0.0), reverse=True)
+    top_score = ordered[0].get(score_key, 0.0)
+    out = []
+    for c in ordered:
+        if (top_score - c.get(score_key, 0.0)) > max_gap:
+            break
+        out.append(c)
+        if len(out) >= max_n:
+            break
+    return out
+
+
 def get_relevant_chunks(question: str, candidates: List[Dict]) -> List[Dict]:
     if not candidates:
         return []
@@ -996,7 +1113,22 @@ def get_relevant_chunks(question: str, candidates: List[Dict]) -> List[Dict]:
         return forced_content[:2]
     hard = [c for c in candidates if chunk_is_relevant_hard(question, c)]
     if hard:
-        return hard[:4]
+        return _trim_to_close_contenders(hard, max_n=4)
+    # Moderate-confidence semantic match: still meaning-based (so it still
+    # generalizes past keyword/alias coverage), just not decisive enough
+    # for chunk_is_relevant_hard's >=0.80 bar. Worth trusting ahead of the
+    # expensive per-chunk llm_hard_relevance() loop below rather than
+    # paying for LLM calls when embeddings already have a good answer.
+    # Trimmed tighter (max_gap=0.06, max_n=2) than the keyword/hard path
+    # above: semantic similarity is fuzzier than keyword overlap, so a
+    # "moderate confidence" match is more likely to be a same-topic
+    # neighbor than the actual answer -- better to hand the LLM one
+    # precise excerpt (or two genuinely tied ones) than several plausible
+    # but different offenses it might blend together.
+    semantic_ok = [c for c in candidates if c.get('_semantic_score', 0.0) >= 0.68]
+    if semantic_ok:
+        return _trim_to_close_contenders(semantic_ok, score_key='_semantic_score',
+                                          max_gap=0.06, max_n=2)
     llm_kept = []
     for c in candidates[:4]:
         if llm_hard_relevance(question, c):
@@ -1061,12 +1193,30 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
                 )
             context = "\n\n".join(context_parts)
 
+            # BUG FIX: this prompt used to have NO language instruction at
+            # all -- detected_lang was accepted as a parameter but never
+            # once referenced inside the prompt, so every handbook-sourced
+            # answer (which is most of what covers offenses/policies,
+            # including all the hypothetical-question cases) relied
+            # entirely on the model guessing the reply language from the
+            # question text on its own, with no verification and no
+            # retry. Same bug class already fixed in answer_engine.py's
+            # _extract_from_answer and nlg.py's speak_naturally -- adding
+            # the same explicit instruction + few-shot + post-generation
+            # language check (with one retry) here too, so a student
+            # asking in Bisaya/Tagalog actually gets answered in
+            # Bisaya/Tagalog instead of English by default.
+            lang_instruction = (
+                f"Reply in {nlg.lang_name(detected_lang)}." if detected_lang != 'english' else ""
+            )
+            few_shot = nlg.few_shot_example(detected_lang) if detected_lang != 'english' else ""
             casual_note = nlg.casual_tone_note(question)
             prompt = f"""{nlg.now_context()}
 
             You are a friendly student helpdesk chatbot. Answer the student's question using ONLY the handbook excerpts below.
             Do not invent any facts, names, numbers, or rules that are not present in the excerpts.
             If the excerpts do not contain enough information to answer the question, reply with exactly: CANNOT_ANSWER
+            {"If more than one excerpt is given below and they cover DIFFERENT topics/offenses, use only the excerpt that actually answers the student's question -- never combine a fact, number, or penalty from one excerpt with a fact from a different excerpt about something else." if len(context_parts) > 1 else ""}
 
             Student question: {question}
 
@@ -1080,7 +1230,11 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
             - Format for easy reading on EVERY answer: use **bold** for key terms, line breaks between points, blank lines between sections. For lists put one item per line with - . For lyrics/hymns put each line on its own line and **bold** labels like **Chorus:**.
             - State numbers (demerits, days, fines) clearly.
             - Optional: a light page note at the end only, e.g. (More detail is on page 7.)
-            - {nlg.STYLE_GUIDE}{casual_note}
+            - {nlg.STYLE_GUIDE}
+            - {lang_instruction}
+            {few_shot}{casual_note}
+            When the student asked in Bisaya or Tagalog, reply fully in that language (not English) --
+            translate/paraphrase the excerpt content into it, don't just answer in English.
 
             Answer:"""
 
@@ -1095,7 +1249,50 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
                     logger.info(f"handbook grounding rejected for q={question[:80]!r}")
                 elif (not is_forced) and not _answer_relevant_to_question(question, response, min_overlap=1):
                     logger.info(f"handbook answer-relevance REJECTED for q={question[:80]!r}")
-                else:
+                elif not verify_output_language(response, detected_lang):
+                    logger.info(
+                        f"handbook answer drifted language (wanted {detected_lang}), "
+                        f"retrying once for q={question[:80]!r}"
+                    )
+                    retry_prompt = prompt + (
+                        f"\n\nYour previous attempt was not in {nlg.lang_name(detected_lang)} — "
+                        f"try again, and make sure the reply is actually in "
+                        f"{nlg.lang_name(detected_lang)} this time, not English."
+                    )
+                    try:
+                        retry_response = llm_chat(retry_prompt, max_tokens=480)
+                    except Exception:
+                        retry_response = None
+                    retry_ok = (
+                        retry_response and retry_response.strip()
+                        and "CANNOT_ANSWER" not in retry_response.upper()
+                        and answer_is_grounded(retry_response.strip(), source_blob, min_overlap=min_ov)
+                        and verify_output_language(retry_response.strip(), detected_lang)
+                    )
+                    if retry_ok:
+                        response = retry_response.strip()
+                    else:
+                        logger.info(
+                            "handbook answer retry still didn't land in the right language; "
+                            "falling through to the deterministic excerpt-extraction path below."
+                        )
+                        response = None
+                if response and "CANNOT_ANSWER" not in response.upper():
+                    if len(chunks) > 1:
+                        # Diagnostic only (not a reject -- ranking isn't
+                        # perfect, so excerpt #2 being the real source is
+                        # sometimes correct). Logged so cross-contamination
+                        # between excerpts covering different topics/
+                        # offenses is visible for review rather than
+                        # silently possible. See _trim_to_close_contenders
+                        # above for the main structural guard against this.
+                        top_only_ratio = grounding_ratio(response, chunks[0].get('content', ''))
+                        if top_only_ratio < 0.15:
+                            logger.info(
+                                f"handbook answer for q={question[:80]!r} grounds mostly in a "
+                                f"NON-top excerpt ({len(chunks)} excerpts offered, top-excerpt "
+                                f"overlap={top_only_ratio:.2f}) -- worth a look if this looks wrong."
+                            )
                     return response
         except Exception as e:
             logger.error(f"AI handbook answer failed: {e}")
@@ -1125,12 +1322,25 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
         if not clean:
             clean = content[:600].strip()
         page_note = f"\n\n(More detail is on page {page}.)" if page else ""
-        return f"{clean}{page_note}".strip()
+        final = f"{clean}{page_note}".strip()
+        # This fallback only runs when the AI-composed answer above failed
+        # (circuit breaker open, grounding/relevance rejected, or language
+        # drift retry also failed) -- `clean` is raw English excerpt text
+        # pulled straight from the handbook, with no language handling of
+        # its own. Route it through speak_naturally so a Bisaya/Tagalog
+        # question still gets a Bisaya/Tagalog reply here too, instead of
+        # silently dropping back to English only in the degraded path.
+        if detected_lang != 'english':
+            final = nlg.speak_naturally(final, question, detected_lang=detected_lang)
+        return final
 
     if not clean or not _answer_relevant_to_question(question, clean):
         return None
     page_note = f"\n\n(More detail is on page {page}.)" if page else ""
-    return f"{clean}{page_note}".strip()
+    final = f"{clean}{page_note}".strip()
+    if detected_lang != 'english':
+        final = nlg.speak_naturally(final, question, detected_lang=detected_lang)
+    return final
 
 
 def _merge_compound_answers(original_question: str, sub_answers: List[Tuple[str, str]],

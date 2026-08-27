@@ -131,7 +131,20 @@ GROQ_API_KEY_17 = os.environ.get("GROQ_API_KEY_17", "")
 GROQ_API_KEY_18 = os.environ.get("GROQ_API_KEY_18", "")
 GROQ_API_KEY_19 = os.environ.get("GROQ_API_KEY_19", "")
 GROQ_API_KEY_20 = os.environ.get("GROQ_API_KEY_20", "")
-GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+# BUG FIX (critical, live as of this deploy): Groq announced deprecation of
+# llama-3.3-70b-versatile on June 17, 2026 alongside llama-3.1-8b-instant
+# (see console.groq.com/docs/deprecations) with a shutdown date of
+# August 16, 2026 -- already passed. Every chat-facing AI call using the
+# old default (classification, extraction, disambiguation, hypothetical
+# unwrapping via nlg.py/answer_engine.py/handbook.py, etc.) would now get
+# a 400 "model_decommissioned" error from Groq, return "" from
+# _call_groq(), and silently fall through to the Gemini fallback (or fail
+# entirely if AI_PROVIDER='groq' and Gemini isn't configured) --
+# repeatedly, tripping the circuit breaker in the process. Groq's own
+# recommended replacement for llama-3.3-70b-versatile is
+# openai/gpt-oss-120b (or qwen/qwen3.6-27b) -- same pattern already
+# applied to INGEST_GROQ_MODEL below for the 8b-instant deprecation.
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 
 # Gemini
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")

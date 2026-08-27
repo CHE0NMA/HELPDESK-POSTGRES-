@@ -148,3 +148,164 @@ def store_embedding_for_faq(get_db_fn, question: str, keywords: str = "",
     finally:
         cur.close()
         conn.close()
+
+
+def embedding_text_for_chunk(section_title: str, content: str, keywords: str = "") -> str:
+    """What gets embedded for a handbook chunk. Title + keywords + a
+    generous slice of content -- long enough to capture the section's
+    actual meaning (unlike the FAQ case, a handbook section is often a
+    paragraph or more, so a title alone underrepresents it), capped so
+    one section doesn't blow the embedding API's input size."""
+    parts = [section_title or ""]
+    if keywords:
+        parts.append(keywords)
+    if content:
+        parts.append(content[:2000])
+    return ". ".join(p.strip() for p in parts if p and p.strip())
+
+
+def store_embedding_for_chunk(get_db_fn, section_title: str, content: str,
+                               keywords: str = "", chunk_id: int = None) -> bool:
+    """Best-effort: compute + store an embedding for one handbook_chunks
+    row. Same "nice to have, never blocks the caller" contract as
+    store_embedding_for_faq above."""
+    if chunk_id is None:
+        return False
+    text = embedding_text_for_chunk(section_title, content, keywords)
+    vector = get_embedding(text)
+    if vector is None:
+        return False
+
+    conn = get_db_fn()
+    cur = conn.cursor()
+    try:
+        cur.execute("UPDATE handbook_chunks SET embedding = %s::jsonb WHERE id = %s",
+                    (list(vector), chunk_id))
+        conn.commit()
+        return True
+    except Exception as e:
+        logger.error(f"store_embedding_for_chunk error: {e}")
+        conn.rollback()
+        return False
+    finally:
+        cur.close()
+        conn.close()
+
+
+def backfill_faq_embeddings(get_db_fn, batch_size: int = 200, limit: Optional[int] = None) -> int:
+    """One-shot (or periodic) pass over every FAQ row that doesn't have an
+    embedding yet and computes+stores one. This is the "let the AI
+    process it instead of hand-tuning per FAQ" path for bulk FAQ imports
+    (e.g. adding 500+ FAQs at once) -- run this once after a bulk import
+    (or wire it into the import itself, see handbook_ingest.mass_insert_faqs)
+    and every one of those FAQs immediately gets semantic-similarity
+    matching with zero manual alias work. Safe to re-run any time; only
+    touches rows where embedding IS NULL. Returns count actually updated.
+    """
+    if not is_configured():
+        logger.warning("backfill_faq_embeddings: GEMINI_API_KEY not set, nothing to do")
+        return 0
+    conn = get_db_fn()
+    cur = conn.cursor()
+    try:
+        q = "SELECT id, question, keywords FROM faq WHERE embedding IS NULL"
+        if limit:
+            q += f" LIMIT {int(limit)}"
+        cur.execute(q)
+        rows = cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
+
+    updated = 0
+    for i in range(0, len(rows), batch_size):
+        for faq_id, question, keywords in rows[i:i + batch_size]:
+            if store_embedding_for_faq(get_db_fn, question or "", keywords or "", faq_id=faq_id):
+                updated += 1
+    logger.info(f"backfill_faq_embeddings: updated {updated}/{len(rows)} FAQ rows")
+    return updated
+
+
+def backfill_chunk_embeddings(get_db_fn, batch_size: int = 200, limit: Optional[int] = None) -> int:
+    """Same idea as backfill_faq_embeddings, for handbook_chunks. Run this
+    once after any handbook re-ingest/import (or wire it into
+    handbook_ingest.import_chunks_json / ingest_handbook directly) so
+    every section immediately participates in semantic matching -- this
+    is what lets hypothetical/paraphrased questions about a section find
+    it by meaning even when the section's own wording shares no keywords
+    with how a student happened to phrase the question."""
+    if not is_configured():
+        logger.warning("backfill_chunk_embeddings: GEMINI_API_KEY not set, nothing to do")
+        return 0
+    conn = get_db_fn()
+    cur = conn.cursor()
+    try:
+        q = ("SELECT id, section_title, content, keywords FROM handbook_chunks "
+             "WHERE is_active = 1 AND embedding IS NULL")
+        if limit:
+            q += f" LIMIT {int(limit)}"
+        cur.execute(q)
+        rows = cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
+
+    updated = 0
+    for i in range(0, len(rows), batch_size):
+        for chunk_id, title, content, keywords in rows[i:i + batch_size]:
+            if store_embedding_for_chunk(get_db_fn, title or "", content or "",
+                                          keywords or "", chunk_id=chunk_id):
+                updated += 1
+    logger.info(f"backfill_chunk_embeddings: updated {updated}/{len(rows)} handbook chunks")
+    return updated
+
+
+def backfill_correction_embeddings(get_db_fn, batch_size: int = 200,
+                                    limit: Optional[int] = None) -> int:
+    """Same idea again, for answer_corrections. Needed because corrections
+    saved before services/corrections.py's paraphrase-matching feature
+    existed have no embedding, and without one, find_similar_correction()
+    can only paraphrase-match those older corrections by fuzzy string
+    similarity (near-identical wording only) instead of by meaning. Run
+    once after upgrading; every new correction gets its embedding
+    automatically at save time (see corrections.save_correction) from
+    then on."""
+    if not is_configured():
+        logger.warning("backfill_correction_embeddings: GEMINI_API_KEY not set, nothing to do")
+        return 0
+    conn = get_db_fn()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT id, question FROM answer_corrections WHERE embedding IS NULL")
+        rows = cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
+    if limit:
+        rows = rows[:limit]
+
+    from services.language import normalize_vernacular_spelling
+
+    updated = 0
+    for i in range(0, len(rows), batch_size):
+        for correction_id, question in rows[i:i + batch_size]:
+            vector = get_embedding(normalize_vernacular_spelling((question or "").lower()))
+            if vector is None:
+                continue
+            conn2 = get_db_fn()
+            cur2 = conn2.cursor()
+            try:
+                cur2.execute(
+                    "UPDATE answer_corrections SET embedding = %s::jsonb WHERE id = %s",
+                    (list(vector), correction_id),
+                )
+                conn2.commit()
+                updated += 1
+            except Exception as e:
+                logger.error(f"backfill_correction_embeddings row {correction_id} failed: {e}")
+                conn2.rollback()
+            finally:
+                cur2.close()
+                conn2.close()
+    logger.info(f"backfill_correction_embeddings: updated {updated}/{len(rows)} corrections")
+    return updated

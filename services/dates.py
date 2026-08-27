@@ -30,6 +30,7 @@ from ai_providers import circuit_breaker, llm_chat
 from services import nlg
 from services import schedule as sched
 from services.disambiguation import DATE_POLICY, select_contenders, should_disambiguate
+from services.language import normalize_vernacular_spelling
 from utils.text import fuzzy_contains
 from services.grounding import answer_is_grounded
 
@@ -70,6 +71,34 @@ LAST_MONTH_WORDS = [
     'niaging bulan', 'miaging buwan', 'nilabay nga bulan',
     'sa milabay nga bulan', 'kaniadtong bulan',
 ]
+
+# BUG FIX: "unsay holiday nga naa karon nga bulan/bulana" ("what holiday
+# is there this month") used to come back as if answering about TODAY,
+# open-for-business and all -- two compounding bugs:
+#   1. "bulan"/"bulana" (Bisaya for "month") was never recognized at all;
+#      only the Tagalog spelling "buwan" was, and only in the narrow forms
+#      "ngayong buwan" / "karong buwana" -- "karon nga bulan" matched
+#      neither wording.
+#   2. Even when a broader month wording is used, "karon" ("now"/"today")
+#      is *also* a TODAY_WORDS hit, and the TODAY_WORDS check ran BEFORE
+#      the this-month check in parse_date_with_regex(), so "karon nga
+#      bulan" short-circuited to "today" before month-detection ever ran.
+# Fixed by (a) normalizing bulan/buwan spelling variants up front (see
+# services.language.normalize_vernacular_spelling) and (b) moving the
+# broadened this/next-month checks ahead of the bare TODAY_WORDS check
+# below, mirroring how the this-week check already precedes it.
+THIS_MONTH_RE = re.compile(
+    r'\b(this\s+month|this\s+mo\.?|ngayong\s+buwan|ngayon\s+(?:na\s+)?buwan|'
+    r'karon(?:g)?\s+(?:nga\s+)?buwan(?:a)?|'
+    r'niini(?:ng)?\s+(?:nga\s+)?buwan(?:a)?|'
+    r'ning\s+buwan(?:a)?|buwan\s+(?:ni|karon|ngayon))\b',
+    re.IGNORECASE,
+)
+NEXT_MONTH_RE = re.compile(
+    r'\b(next\s+month|susunod\s+na\s+buwan|sunod\s+nga\s+buwan|'
+    r'sunod\s+buwan|umaabot\s+na\s+buwan)\b',
+    re.IGNORECASE,
+)
 
 DATE_KEYWORDS = [
     'today', 'tomorrow', 'this week', 'next week', 'last week', 'previous week',
@@ -239,7 +268,7 @@ def is_date_question(question: str, ctx=None) -> bool:
     """Return True when the user is clearly asking about a day/schedule,
     OR when they are continuing a previous schedule conversation with a
     new day (e.g. "how about wednesday")."""
-    q = question.lower().strip()
+    q = normalize_vernacular_spelling(question.lower().strip())
 
     if (_has_day_word(q, TOMORROW_WORDS)
             or _has_day_word(q, TODAY_WORDS)
@@ -305,6 +334,9 @@ def is_date_question(question: str, ctx=None) -> bool:
             return True
 
     if re.search(r'\b(this|next|last|previous)\s+(week|month)\b', q, re.I) and schedule_context:
+        return True
+
+    if (THIS_MONTH_RE.search(q) or NEXT_MONTH_RE.search(q)) and schedule_context:
         return True
 
     # Class / weather suspension only — NOT disciplinary "grounds for suspension".
@@ -468,7 +500,11 @@ Only respond with the JSON, nothing else."""
 
 
 def parse_date_with_regex(question: str) -> Tuple[datetime.date, str, str]:
-    q = question.lower()
+    # normalize_vernacular_spelling folds "bulan"/"bulana" (Bisaya) into
+    # "buwan" so every "this month" pattern below works regardless of
+    # which spelling the student used -- see THIS_MONTH_RE/NEXT_MONTH_RE
+    # comment above for the full bug writeup.
+    q = normalize_vernacular_spelling(question.lower())
     today = ph_today()
     current_year, next_year = today.year, today.year + 1
 
@@ -506,6 +542,21 @@ def parse_date_with_regex(question: str) -> Tuple[datetime.date, str, str]:
                 return target, 'specific', target.strftime('%B %d, %Y')
         return today, 'this_week', 'this week'
 
+    # BUG FIX: this/next-month detection MUST run before the bare
+    # TOMORROW/YESTERDAY/TODAY_WORDS check further down -- "karon" ("now")
+    # is itself a TODAY_WORDS hit, so a question like "karon nga bulan"
+    # ("this month") used to get short-circuited to plain "today" before
+    # ever reaching the month check that used to live near the bottom of
+    # this function. Checking month-scope first (mirroring how the
+    # this-week check above already runs before the today check) fixes
+    # "unsay holiday nga naa karon nga bulan/bulana" replying with
+    # today's single-day status instead of the month's holidays.
+    if NEXT_MONTH_RE.search(q):
+        nm = (today.replace(day=1) + timedelta(days=32)).replace(day=1)
+        return nm, 'next_month', nm.strftime('%B %Y')
+    if THIS_MONTH_RE.search(q):
+        return today, 'this_month', today.strftime('%B %Y')
+
     for name, wd in WEEKDAY_NAMES.items():
         if re.search(rf'\b{name}\b', q, re.IGNORECASE):
             if re.search(r'(next|sunod|susunod)', q, re.IGNORECASE):
@@ -537,11 +588,8 @@ def parse_date_with_regex(question: str) -> Tuple[datetime.date, str, str]:
     ):
         next_week = today + timedelta(days=7)
         return next_week, 'next_week', 'next week'
-    if re.search(r'(this\s+month|ngayong\s+buwan|karong\s+buwana)', q, re.IGNORECASE):
-        return today, 'this_month', today.strftime('%B %Y')
-    if re.search(r'(next\s+month|susunod\s+na\s+buwan)', q, re.IGNORECASE):
-        nm = (today.replace(day=1) + timedelta(days=32)).replace(day=1)
-        return nm, 'next_month', nm.strftime('%B %Y')
+    # (this_month/next_month already handled earlier, before the bare
+    # TODAY_WORDS check -- see the BUG FIX comment above.)
 
     dm = re.search(r'\b(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})\b', q)
     if dm:
@@ -608,7 +656,7 @@ def parse_date_from_question(question: str) -> Tuple[datetime.date, str, str]:
 
 
 def _has_explicit_date_signal(question: str) -> bool:
-    q = question.lower()
+    q = normalize_vernacular_spelling(question.lower())
     if (_has_day_word(q, TODAY_WORDS)
             or _has_day_word(q, TOMORROW_WORDS)
             or _has_day_word(q, YESTERDAY_WORDS)):
@@ -625,6 +673,8 @@ def _has_explicit_date_signal(question: str) -> bool:
     ):
         return True
     if re.search(r'(this|next)\s+(week|month)', q, re.IGNORECASE):
+        return True
+    if THIS_MONTH_RE.search(q) or NEXT_MONTH_RE.search(q):
         return True
     return False
 
@@ -911,5 +961,3 @@ def answer_date_question(
         ctx.update(user_msg=question, bot_response=final_answer)
 
     return final_answer
-
-

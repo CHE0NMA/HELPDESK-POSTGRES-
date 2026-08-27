@@ -20,6 +20,21 @@ correction didn't say.
 Table is created lazily on first use (same pattern as
 services/conversation.py's conversation_state table) so no separate
 schema-migration wiring is required at app startup.
+
+PARAPHRASE/LANGUAGE MATCHING
+------------------------------
+get_correction() used to only match the EXACT normalized question text —
+an admin fixing "what would happen if I bully someone" did NOT
+automatically fix "ano ang mangyayari kung ako mang-bully" or "unsay
+silot sa bully", even though they mean the same thing, because the
+literal strings differ. That meant every paraphrase/language variant of
+a wrong question had to be individually reported and individually fixed
+before the system actually "learned" from it -- the opposite of what an
+admin doing this work would expect. Fixed by falling back to fuzzy +
+semantic (embedding) matching against every stored correction's question
+when there's no exact hit, with a deliberately HIGH bar (corrections are
+authoritative and skip every other check, so a wrong match here is worse
+than a wrong FAQ match) -- see find_similar_correction() below.
 """
 from __future__ import annotations
 
@@ -27,9 +42,21 @@ import logging
 import re
 from typing import List, Optional
 
+from services.language import expand_query, normalize_vernacular_spelling
+from utils.text import fuzzy_score
+
 logger = logging.getLogger("pac_helpdesk.corrections")
 
 _TABLE_READY = False
+
+# Deliberately high -- unlike FAQ/handbook matching (which has grounding
+# checks, relevance checks, and disambiguation as backstops), a
+# correction hit skips ALL of those and is trusted outright. A false
+# positive here means a student gets an admin-authored answer to a
+# DIFFERENT question than the one they asked. Only fire on a paraphrase
+# match this confident.
+FUZZY_MATCH_THRESHOLD = 0.90
+SEMANTIC_MATCH_THRESHOLD = 0.90
 
 
 def normalize_question(q: str) -> str:
@@ -61,6 +88,10 @@ def _ensure_table(get_db_fn) -> bool:
                     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
                 )
             """)
+            # Best-effort -- older deployments already have this table
+            # without the column. Same "nice to have, never block" pattern
+            # as services/embeddings.py.
+            cur.execute("ALTER TABLE answer_corrections ADD COLUMN IF NOT EXISTS embedding JSONB")
             conn.commit()
             _TABLE_READY = True
         finally:
@@ -71,9 +102,98 @@ def _ensure_table(get_db_fn) -> bool:
     return _TABLE_READY
 
 
+def _bump_hit(get_db_fn, correction_id: int) -> None:
+    try:
+        conn = get_db_fn()
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                "UPDATE answer_corrections SET hit_count = hit_count + 1 WHERE id = %s",
+                (correction_id,),
+            )
+            conn.commit()
+        finally:
+            cur.close()
+            conn.close()
+    except Exception as e:
+        logger.debug(f"_bump_hit failed: {e}")
+
+
+def find_similar_correction(get_db_fn, question: str) -> Optional[dict]:
+    """Fuzzy + semantic fallback used when no EXACT normalized match
+    exists (see get_correction below). Scans every stored correction --
+    fine at the scale this table actually runs at (admin-authored fixes,
+    not a bulk FAQ table) -- and returns the best match only if it clears
+    FUZZY_MATCH_THRESHOLD or SEMANTIC_MATCH_THRESHOLD. Question text is
+    run through the same vernacular-spelling-fix pipeline used everywhere
+    else (services.language.expand_query) before comparing, so a
+    misspelled or hypothetically-framed repeat of an already-corrected
+    question still finds it.
+    """
+    try:
+        conn = get_db_fn()
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT id, question, answer, faq_id, embedding FROM answer_corrections")
+            rows = cur.fetchall()
+        finally:
+            cur.close()
+            conn.close()
+    except Exception as e:
+        logger.debug(f"find_similar_correction scan failed: {e}")
+        return None
+
+    if not rows:
+        return None
+
+    q_norm = normalize_vernacular_spelling((question or '').lower())
+    q_expanded = expand_query(question or '')
+
+    q_embedding = None
+    try:
+        from services.embeddings import get_embedding, cosine_similarity
+        q_embedding = get_embedding(q_norm)
+    except Exception:
+        cosine_similarity = None  # noqa: F841
+
+    best_row = None
+    best_score = 0.0
+    for row in rows:
+        cid, stored_q, answer, faq_id, stored_embedding = row
+        stored_norm = normalize_vernacular_spelling((stored_q or '').lower())
+
+        fscore = max(
+            fuzzy_score(q_norm, stored_norm),
+            fuzzy_score(q_expanded, stored_norm),
+        )
+        sscore = 0.0
+        if q_embedding and stored_embedding:
+            try:
+                sscore = max(0.0, cosine_similarity(q_embedding, stored_embedding))
+            except Exception:
+                sscore = 0.0
+
+        score = max(fscore, sscore)
+        if (fscore >= FUZZY_MATCH_THRESHOLD or sscore >= SEMANTIC_MATCH_THRESHOLD) and score > best_score:
+            best_score = score
+            best_row = (cid, stored_q, answer, faq_id)
+
+    if not best_row:
+        return None
+    logger.info(
+        f"find_similar_correction: paraphrase match (score={best_score:.2f}) "
+        f"q={question[:80]!r} -> stored={best_row[1][:80]!r}"
+    )
+    _bump_hit(get_db_fn, best_row[0])
+    return {"id": best_row[0], "question": best_row[1], "answer": best_row[2], "faq_id": best_row[3]}
+
+
 def get_correction(get_db_fn: object, question: str) -> Optional[dict]:
     """Return {'id', 'question', 'answer', 'faq_id'} for an admin-verified
-    correction matching this exact (normalized) question, or None."""
+    correction matching this question, or None. Tries an exact
+    (normalized) match first -- fast, unambiguous -- then falls back to
+    find_similar_correction() for paraphrases/misspellings/hypothetical
+    framing/other languages of an already-corrected question."""
     if not question or not _ensure_table(get_db_fn):
         return None
     qn = normalize_question(question)
@@ -89,20 +209,17 @@ def get_correction(get_db_fn: object, question: str) -> Optional[dict]:
                 LIMIT 1
             """, (qn,))
             row = cur.fetchone()
-            if not row:
-                return None
-            cur.execute(
-                "UPDATE answer_corrections SET hit_count = hit_count + 1 WHERE id = %s",
-                (row[0],),
-            )
-            conn.commit()
-            return {"id": row[0], "question": row[1], "answer": row[2], "faq_id": row[3]}
         finally:
             cur.close()
             conn.close()
+        if row:
+            _bump_hit(get_db_fn, row[0])
+            return {"id": row[0], "question": row[1], "answer": row[2], "faq_id": row[3]}
     except Exception as e:
         logger.debug(f"get_correction failed: {e}")
         return None
+
+    return find_similar_correction(get_db_fn, question)
 
 
 def save_correction(get_db_fn, question: str, answer: str, created_by: str = None,
@@ -117,22 +234,36 @@ def save_correction(get_db_fn, question: str, answer: str, created_by: str = Non
     qn = normalize_question(question)
     if not qn:
         return False
+
+    # Best-effort, never blocks the save -- see services.embeddings'
+    # "nice to have" contract. This is what lets find_similar_correction()
+    # catch a paraphrase of this exact question later.
+    embedding = None
+    try:
+        from services.embeddings import get_embedding
+        embedding = get_embedding(normalize_vernacular_spelling(question.lower()))
+    except Exception as e:
+        logger.debug(f"save_correction: embedding skipped: {e}")
+
     try:
         conn = get_db_fn()
         cur = conn.cursor()
         try:
             cur.execute("""
                 INSERT INTO answer_corrections
-                    (question_norm, question, answer, faq_id, created_by, source_report_id, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                    (question_norm, question, answer, faq_id, created_by, source_report_id,
+                     embedding, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, NOW())
                 ON CONFLICT (question_norm) DO UPDATE SET
                     question = EXCLUDED.question,
                     answer = EXCLUDED.answer,
                     faq_id = EXCLUDED.faq_id,
                     created_by = EXCLUDED.created_by,
                     source_report_id = EXCLUDED.source_report_id,
+                    embedding = COALESCE(EXCLUDED.embedding, answer_corrections.embedding),
                     updated_at = NOW()
-            """, (qn, question[:500], answer[:4000], faq_id, created_by, source_report_id))
+            """, (qn, question[:500], answer[:4000], faq_id, created_by, source_report_id,
+                  list(embedding) if embedding else None))
             conn.commit()
             return True
         finally:

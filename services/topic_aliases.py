@@ -524,13 +524,24 @@ _SEED_ALIASES: List[dict] = [
         "priority": 100,
     },
     {
+        # BUG FIX: only matched "anti-bullying"/"bullying law"/the RA
+        # number -- a bare "bully"/"bullies"/"bullied" (e.g. "what would
+        # happen if I bully someone") never matched at all. Added bare
+        # word forms + common Filipino phrasing. NOTE: if this alias set
+        # was already seeded into handbook_topic_aliases, this in-code
+        # seed change alone won't update the live DB rows -- re-run
+        # seed_default_aliases(force=True) or edit the row from the
+        # admin dashboard for it to take effect.
         "topic_key": "anti_bullying",
         "match_pattern": (
             r"\b(anti.?bullying|ra.?10627|bullying law|10627|"
-            r"batas anti-bullying|anti bullying)\b"
+            r"batas anti-bullying|anti bullying|"
+            r"bully|bullies|bullied|bullying|"
+            r"nambu-?bully|nanbu-?bully|pambu-?bully|bina-?bully|"
+            r"nanintimidar|pagdaugdaug)\b"
         ),
         "title_needles": ["grievance", "anti-bullying", "bullying", "third-degree"],
-        "content_needles": ["10627", "anti-bullying"],
+        "content_needles": ["10627", "anti-bullying", "bullying"],
         "source_priority": "handbook_only",
         "priority": 90,
     },
@@ -835,7 +846,19 @@ def match_aliases(question: str, get_db_fn=None) -> List[dict]:
     aliases = _load_aliases(get_db_fn) if get_db_fn else [
         {"id": -(i + 1), **a} for i, a in enumerate(_SEED_ALIASES)
     ]
-    q = question.lower()
+    # Callers (e.g. handbook._forced_topic_for) already normalize before
+    # calling in, but normalize here too -- defense in depth for any other
+    # caller, and cheap/idempotent if already done. Fixes vernacular
+    # spelling (bulan/bulana, suoton, haxing, ...) and unwraps hypothetical
+    # ("what would happen if I ___") framing into direct-question keywords.
+    try:
+        from services.language import expand_query as _expand_query
+    except Exception:
+        try:
+            from language import expand_query as _expand_query
+        except Exception:
+            _expand_query = None
+    q = (_expand_query(question) if _expand_query else question).lower()
     hits = []
     for a in aliases:
         try:

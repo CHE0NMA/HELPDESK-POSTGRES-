@@ -658,6 +658,124 @@ def expand_abbreviations(text: str) -> str:
     return result
 
 
+# ---------------------------------------------------------------------------
+# Vernacular spelling/vocabulary normalization + hypothetical framing
+# ---------------------------------------------------------------------------
+# Students type Bisaya/Tagalog phonetically and inconsistently -- "bulan"
+# vs "buwan" vs "bulana" for "month", "semana" vs "simana" for "week",
+# "haxing" for "hazing", clothing words (damit/sinina/bisti/suoton) that
+# never share a token with the handbook's own English "uniform"/"dress"
+# wording, etc. Every one of these silently tanks fuzzy-match/regex
+# scoring even though the FAQ or handbook chunk that answers the question
+# exists.
+#
+# This is SEARCH-TIME-ONLY normalization: the output is used to build the
+# text that gets matched against FAQ/handbook keywords, never the raw
+# text shown back to the student or used for language detection --
+# rewriting "bulan" as "buwan" is fine for matching purposes but would be
+# wrong to actually say back to someone who just spoke to you in Bisaya.
+_VERNACULAR_VARIANTS: Dict[str, str] = {
+    # month -- canonicalize every Bisaya/Tagalog spelling variant to
+    # "buwan" so the existing "this month"/"next month" patterns (which
+    # were only ever written expecting "buwan") also fire for "bulan".
+    'bulana': 'buwan', 'bulanan': 'buwan', 'bulan': 'buwan',
+    'buwana': 'buwan', 'buwanan': 'buwan',
+    # week
+    'simana': 'semana', 'simanaha': 'semana', 'semanaha': 'semana',
+    'simanahan': 'semana', 'semanahan': 'semana',
+    # today/this (common typo forms not already covered by fuzzy TODAY_WORDS)
+    'karung': 'karon', 'karun': 'karon',
+    # hazing / bullying misspellings students actually type
+    'haxing': 'hazing', 'hazeing': 'hazing', 'hasing': 'hazing',
+    'buly': 'bully', 'bulli': 'bully', 'bullyng': 'bullying',
+    'bulying': 'bullying', 'nambubully': 'bully', 'nanbubully': 'bully',
+    'pambully': 'bully',
+    # uniform / what-to-wear vocabulary -- map to words that DO appear in
+    # the handbook's/FAQ's own "Dress and Appearance"/"School Uniform"
+    # phrasing, so "unsa dapat suoton sa school" scores against an FAQ
+    # literally titled "unsay uniform sa skwelahan" the way it should --
+    # they mean the exact same thing but shared almost no tokens before.
+    'isul-ob': 'isuot uniform', 'isulob': 'isuot uniform',
+    'isuutin': 'isuot uniform', 'suoton': 'isuot uniform',
+    'sul-ob': 'isuot uniform', 'ipasul-ob': 'isuot uniform',
+    'sinina': 'uniform', 'bisti': 'uniform', 'panapton': 'uniform',
+}
+
+_VERNACULAR_WORD_RE = re.compile(r"[a-zA-Z']+(?:-[a-zA-Z']+)?")
+
+
+def normalize_vernacular_spelling(text: str) -> str:
+    """Best-effort phonetic/spelling canonicalization for FAQ/handbook
+    matching. See _VERNACULAR_VARIANTS above for what/why. Always safe to
+    call -- words not in the table pass through unchanged."""
+    if not text:
+        return text
+
+    def _sub(m):
+        w = m.group(0)
+        repl = _VERNACULAR_VARIANTS.get(w.lower())
+        return repl if repl else w
+
+    return _VERNACULAR_WORD_RE.sub(_sub, text)
+
+
+# "What would happen if I ___" style hypothetical framing. A student
+# asking this almost always wants the SAME answer as if they'd asked
+# directly ("is there a policy on ___", "what's the penalty for ___") --
+# but none of the direct-question phrasing patterns fire on "what if"
+# framing, so questions like "what would happen if I bully someone" were
+# falling through even though "is there a policy for bullying" worked.
+# Deliberately topic-agnostic: covers bullying, hazing, curfew, or any
+# other rule someone hypothetically asks about, not just one topic.
+_HYPOTHETICAL_PATTERNS = [
+    # English
+    r'what (?:would|will) happen(?:s)? if i\s+',
+    r'what happens if i\s+',
+    r'what if i\s+',
+    r"what'?s the (?:penalty|punishment|consequence)s? (?:if|for) i\s*",
+    # Tagalog
+    r'ano (?:ang |po ang )?mangyayari (?:kung|kapag) ako(?:y|\s+ay)?\s*',
+    r'paano kung ako\s*',
+    r'kung ako(?:y|\s+ay)?\s+',
+    # Bisaya/Cebuano
+    r'unsa(?:y)? (?:ang )?mahitabo kung ako\s*',
+    r'unsaon (?:kung|kon) ako\s*',
+    r'kon ako\s+',
+]
+_HYPOTHETICAL_RE = re.compile('|'.join(f'(?:{p})' for p in _HYPOTHETICAL_PATTERNS), re.I)
+
+
+def expand_hypothetical(text: str) -> str:
+    """If `text` is phrased as a hypothetical ("what would happen if I
+    bully someone"), append the direct-question form ("...policy penalty
+    violation offense for bully someone") so FAQ/handbook keyword and
+    topic-alias matching -- which was built around direct phrasing --
+    still fires. Never removes anything from the original text, so
+    nothing is lost if the pattern doesn't match."""
+    if not text:
+        return text
+    q = text.strip()
+    m = _HYPOTHETICAL_RE.search(q)
+    if not m:
+        return q
+    remainder = q[m.end():].strip(' ?.!')
+    if not remainder:
+        return q
+    return f"{q} policy penalty violation offense consequence for {remainder}"
+
+
+def expand_query(text: str) -> str:
+    """Full search-time normalization pipeline used before FAQ/handbook
+    matching: fix common vernacular misspellings, unwrap hypothetical
+    ('what if I...'/'kung ako...') framing into direct-question keywords,
+    then expand known abbreviations. Only for building the text that gets
+    matched -- never for what's shown back to the student or used for
+    language detection."""
+    normalized = normalize_vernacular_spelling(text)
+    normalized = expand_hypothetical(normalized)
+    return expand_abbreviations(normalized)
+
+
 def invalidate_response_tables():
     global _ABBR_CACHE
     with _ABBR_CACHE_LOCK:

@@ -575,7 +575,8 @@ def generate_faqs_from_chunks(chunks: List[Dict], max_sections: int = 80) -> Lis
     return all_faqs
 
 
-def mass_insert_faqs(get_db_fn: Callable, faqs: List[Dict], retire_previous: bool = True) -> int:
+def mass_insert_faqs(get_db_fn: Callable, faqs: List[Dict], retire_previous: bool = True,
+                      compute_embeddings: bool = True) -> int:
     """
     Insert FAQ-style handbook pairs into the faq table.
     Sets source='handbook'. Optionally retires previous handbook FAQs first.
@@ -594,12 +595,21 @@ def mass_insert_faqs(get_db_fn: Callable, faqs: List[Dict], retire_previous: boo
     to only touch columns that actually exist, tag rows correctly, and
     hard-delete the previous handbook generation before inserting the
     new one (no soft-delete column exists to flip instead).
+
+    `compute_embeddings`: also computes+stores a semantic embedding for
+    every inserted row (best-effort, never blocks the insert on failure)
+    so this batch immediately gets semantic/paraphrase matching with NO
+    manual alias work per FAQ -- this is what makes adding 500+ FAQs at
+    once (bulk admin upload, or this function's own AI-generated output)
+    scale without hand-tuning each one. Requires GEMINI_API_KEY; silently
+    skipped (same behavior as before this parameter existed) if unset.
     """
     if not faqs:
         return 0
     conn = get_db_fn()
     cur = conn.cursor()
     inserted = 0
+    inserted_ids: List[int] = []
     try:
         if retire_previous:
             try:
@@ -618,16 +628,36 @@ def mass_insert_faqs(get_db_fn: Callable, faqs: List[Dict], retire_previous: boo
                 cur.execute("""
                     INSERT INTO faq (question, answer, topic, keywords, priority_score, source)
                     VALUES (%s, %s, %s, %s, %s, 'handbook')
+                    RETURNING id
                 """, (q[:500], a[:4000], topic, kw, priority))
+                row = cur.fetchone()
+                if row:
+                    inserted_ids.append(row[0])
                 inserted += 1
             except Exception as e:
                 logger.error("mass_insert_faqs row failed: %s", e)
         conn.commit()
         logger.info("Mass-inserted %d handbook FAQs", inserted)
-        return inserted
     finally:
         cur.close()
         conn.close()
+
+    if compute_embeddings and inserted_ids:
+        try:
+            from services.embeddings import is_configured, backfill_faq_embeddings
+            if is_configured():
+                n = backfill_faq_embeddings(get_db_fn, limit=None)
+                logger.info("mass_insert_faqs: backfilled embeddings for %d FAQ rows", n)
+            else:
+                logger.info(
+                    "mass_insert_faqs: GEMINI_API_KEY not set -- inserted FAQs will "
+                    "match on fuzzy/keyword only until you set it and run "
+                    "services.embeddings.backfill_faq_embeddings()."
+                )
+        except Exception as e:
+            logger.warning("mass_insert_faqs: embedding backfill skipped: %s", e)
+
+    return inserted
 
 
 def parse_pasted_faqs(text: str) -> List[Dict]:
@@ -746,8 +776,16 @@ def ingest_handbook(
         conn.close()
 
 
-def import_chunks_json(get_db_fn: Callable, data: dict) -> int:
-    """Import a pre-chunked handbook_chunks_*.json export."""
+def import_chunks_json(get_db_fn: Callable, data: dict, compute_embeddings: bool = True) -> int:
+    """Import a pre-chunked handbook_chunks_*.json export.
+
+    `compute_embeddings`: after import, backfill a semantic embedding for
+    every active chunk that doesn't have one yet (best-effort, requires
+    GEMINI_API_KEY, never blocks/fails the import itself). This is what
+    lets hypothetical/paraphrased questions about ANY section -- not just
+    ones with a hand-written topic alias -- get matched by meaning. See
+    services.embeddings.backfill_chunk_embeddings.
+    """
     chunks = data.get('chunks') or []
     if not chunks:
         return 0
@@ -775,7 +813,23 @@ def import_chunks_json(get_db_fn: Callable, data: dict) -> int:
             )
             n += 1
         conn.commit()
-        return n
     finally:
         cur.close()
         conn.close()
+
+    if compute_embeddings and n:
+        try:
+            from services.embeddings import is_configured, backfill_chunk_embeddings
+            if is_configured():
+                updated = backfill_chunk_embeddings(get_db_fn, limit=None)
+                logger.info("import_chunks_json: backfilled embeddings for %d chunks", updated)
+            else:
+                logger.info(
+                    "import_chunks_json: GEMINI_API_KEY not set -- imported chunks will "
+                    "match on fulltext/fuzzy only until you set it and run "
+                    "services.embeddings.backfill_chunk_embeddings()."
+                )
+        except Exception as e:
+            logger.warning("import_chunks_json: embedding backfill skipped: %s", e)
+
+    return n
