@@ -622,6 +622,8 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
     <a href="/analytics" class="nav-link"><i class="bi bi-graph-up"></i> System Analytics</a>
     <a href="/ratings" class="nav-link"><i class="bi bi-star-half"></i> Chat Ratings</a>
     <a href="/alert_log" class="nav-link active"><i class="bi bi-bell"></i> Alert Log</a>
+    <div class="nav-section">Account</div>
+    <a href="/profile" class="nav-link"><i class="bi bi-person-circle"></i> My Profile</a>
   </nav>
   <div class="sidebar-footer">
     <button type="button" class="theme-toggle-sidebar" id="themeToggle" title="Toggle Dark/Light Mode">
@@ -632,6 +634,7 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
       <i class="bi bi-circle-half" style="opacity:.5;font-size:.85rem"></i>
     </button>
     <button onclick="exportData()" class="logout-btn"><i class="bi bi-download"></i> Export Backup</button>
+    <a href="/admin/logout" class="logout-btn"><i class="bi bi-box-arrow-right"></i> Log Out</a>
     <a href="/" class="logout-btn"><i class="bi bi-house"></i> Back to Help Desk</a>
   </div>
 </aside>
@@ -1029,8 +1032,11 @@ function exportData() {
 // INIT
 // ============================================================
 document.addEventListener('DOMContentLoaded', function() {
-  fetchAlerts();
-  setInterval(fetchAlerts, 60000);
+  // BUG FIX: raw setInterval kept polling every 60s even when the tab
+  // was in the background — PACAdmin.createPoller pauses while hidden
+  // and adds a little jitter so this and every other page's poller
+  // don't all land on the DB in the same instant.
+  window.PACAdmin.createPoller(fetchAlerts, 60000);
 });
 </script>
 <script src="/static/js/admin-common.js" defer></script>

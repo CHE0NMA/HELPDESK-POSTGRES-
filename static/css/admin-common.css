@@ -40,3 +40,86 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---------------------------------------------------------------------
+   "Real dashboard" polish pass — shared across all admin pages so live
+   badges/counters/tables update smoothly instead of popping/jumping.
+--------------------------------------------------------------------- */
+
+/* Smooth every number that updates live (badges, stat cards) instead of
+   an instant jump-cut — used by PACAdmin.setBadge / any stat element. */
+.nav-badge, .stat-value, [data-live] {
+  transition: color .2s ease;
+}
+.stat-value.updated { animation: statFlash .5s ease; }
+@keyframes statFlash {
+  0% { color: var(--accent, #00e5ff); }
+  100% { color: inherit; }
+}
+
+/* Small "live" dot for topbar/headers to show the badges are polling,
+   not stale. Add class="live-dot" to a <span>. */
+.live-dot {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--success, #51cf66);
+  box-shadow: 0 0 0 0 rgba(81,207,102,.55);
+  animation: liveDotPulse 2.2s ease-in-out infinite;
+}
+.live-dot.degraded { background: var(--warning, #fcc419); box-shadow: 0 0 0 0 rgba(252,196,25,.55); animation: none; }
+@keyframes liveDotPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(81,207,102,.5); }
+  70%  { box-shadow: 0 0 0 6px rgba(81,207,102,0); }
+  100% { box-shadow: 0 0 0 0 rgba(81,207,102,0); }
+}
+
+/* Skeleton loading rows/cards — swap real content in once fetched
+   instead of a blank flash or a spinner-then-pop. Add class="skeleton"
+   to a block-level placeholder while data loads. */
+.skeleton {
+  position: relative; overflow: hidden; border-radius: 8px;
+  background: rgba(120,150,190,.10);
+}
+.skeleton::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.08), transparent);
+  transform: translateX(-100%);
+  animation: skeletonShimmer 1.4s ease-in-out infinite;
+}
+@keyframes skeletonShimmer { to { transform: translateX(100%); } }
+
+/* Rows/cards that just arrived via a live update — brief highlight
+   instead of appearing instantly with no feedback. */
+.row-new { animation: rowNewIn .6s cubic-bezier(0.22,1,0.36,1) both; }
+@keyframes rowNewIn {
+  0%   { background: rgba(0,229,255,.14); }
+  100% { background: transparent; }
+}
+
+/* Consistent focus ring across all inputs/buttons/links — avoids the
+   default browser outline looking inconsistent page-to-page. */
+a:focus-visible, button:focus-visible, input:focus-visible,
+select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--accent, #00e5ff);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Small "data may be a few seconds stale" banner, shown when a live
+   endpoint served a cached/degraded fallback (see PACAdmin badge fetch). */
+.degraded-banner {
+  display: none; align-items: center; gap: .5rem;
+  font-size: .76rem; color: var(--warning, #fcc419);
+  background: rgba(252,196,25,.1); border: 1px solid rgba(252,196,25,.25);
+  border-radius: 8px; padding: .4rem .7rem; margin-bottom: .75rem;
+}
+.degraded-banner.show { display: inline-flex; }
+
+/* Smoother table row hover than a hard background swap. */
+table tbody tr { transition: background-color .15s ease; }
+
+/* Buttons feel snappier with a tiny press affordance. */
+button, .btn, .btn-save, .logout-btn, .nav-link {
+  transition: background-color .18s ease, border-color .18s ease,
+              color .18s ease, transform .12s ease, box-shadow .18s ease;
+}
+button:active, .btn:active, .btn-save:active { transform: translateY(0) scale(.98); }

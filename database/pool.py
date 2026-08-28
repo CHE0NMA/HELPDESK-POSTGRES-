@@ -1,11 +1,5 @@
 """
-database/pool.py — safe for Vercel + Render Postgres
-
-Goals:
-- Survive idle connection kills from Render
-- Survive Vercel cold starts / function freezes
-- Never turn a working DB into a permanent 500
-- Keep the original behaviour that was working
+database/pool.py — reliable version for local + Vercel + Render
 """
 
 from contextlib import contextmanager
@@ -30,9 +24,8 @@ def init_pool():
     if _pool is not None:
         return _pool
 
-    # Small pool on Vercel, larger locally
-    max_conn = 3 if _IS_VERCEL else 10
-    max_cached = 1 if _IS_VERCEL else 4
+    max_conn = 3 if _IS_VERCEL else 8
+    max_cached = 1 if _IS_VERCEL else 3
 
     kwargs = {
         "creator": psycopg2,
@@ -47,7 +40,6 @@ def init_pool():
         "database": DATABASE_CONFIG["database"],
         "port": DATABASE_CONFIG["port"],
         "options": "-c timezone=Asia/Manila",
-        # Help keep connections alive longer
         "keepalives": 1,
         "keepalives_idle": 30,
         "keepalives_interval": 10,
@@ -60,39 +52,15 @@ def init_pool():
         kwargs["sslmode"] = sslmode
 
     _pool = PooledDB(**kwargs)
-    logger.info("DB pool initialised (vercel=%s, maxconnections=%s)", _IS_VERCEL, max_conn)
+    logger.info("DB pool ready (vercel=%s max=%s)", _IS_VERCEL, max_conn)
     return _pool
-
-
-def _is_alive(conn) -> bool:
-    """Return True if the connection can still run a simple query."""
-    try:
-        if conn is None or conn.closed:
-            return False
-        # Use a short timeout so a hung connection doesn't block forever
-        old_autocommit = conn.autocommit
-        conn.autocommit = True
-        try:
-            with conn.cursor() as cur:
-                cur.execute("SELECT 1")
-                cur.fetchone()
-            return True
-        finally:
-            try:
-                conn.autocommit = old_autocommit
-            except Exception:
-                pass
-    except Exception:
-        return False
 
 
 def get_db(retries: int = 2):
     """
-    Get a usable connection.
-    - Tries the pool first
-    - If the connection is dead, discards it and retries
-    - If the pool itself is broken, falls back to a fresh direct connection
-    - Always returns a real connection or raises the *original* error
+    Get a connection from the pool.
+    Only retries when we actually get an OperationalError / InterfaceError.
+    Does NOT run a health-check that marks good connections as dead.
     """
     if _pool is None:
         init_pool()
@@ -100,47 +68,22 @@ def get_db(retries: int = 2):
     last_err = None
 
     for attempt in range(retries + 1):
-        conn = None
         try:
             conn = _pool.connection()
-
-            if _is_alive(conn):
-                return conn
-
-            # Dead connection → close it so the pool does not reuse it
-            logger.warning("Discarding dead pooled connection (attempt %s)", attempt + 1)
-            try:
-                conn.close()
-            except Exception:
-                pass
-
+            return conn          # ← just return it. No SELECT 1 check.
         except (OperationalError, InterfaceError) as e:
             last_err = e
-            logger.warning("Pool connection error (attempt %s): %s", attempt + 1, e)
-            if conn is not None:
-                try:
-                    conn.close()
-                except Exception:
-                    pass
+            logger.warning("DB connection failed (attempt %s): %s", attempt + 1, e)
+            if attempt < retries:
+                time.sleep(0.2 * (attempt + 1))
         except Exception as e:
-            last_err = e
-            logger.error("Unexpected error from pool: %s", e)
-            if conn is not None:
-                try:
-                    conn.close()
-                except Exception:
-                    pass
+            logger.error("Unexpected pool error: %s", e)
+            raise
 
-        if attempt < retries:
-            time.sleep(0.15 * (attempt + 1))
-
-    # ---------------------------------------------------------------
-    # Fallback: open a completely fresh connection outside the pool.
-    # This recovers from a corrupted pool after long idle periods.
-    # ---------------------------------------------------------------
-    logger.warning("Pool exhausted or broken – opening direct connection")
+    # Last resort: open a brand-new connection outside the pool
+    logger.warning("Pool failed – trying direct connection")
     try:
-        direct_kwargs = {
+        kwargs = {
             "host": DATABASE_CONFIG["host"],
             "user": DATABASE_CONFIG["user"],
             "password": DATABASE_CONFIG["password"],
@@ -155,20 +98,13 @@ def get_db(retries: int = 2):
         }
         sslmode = DATABASE_CONFIG.get("sslmode") or os.environ.get("DB_SSLMODE", "require")
         if sslmode:
-            direct_kwargs["sslmode"] = sslmode
+            kwargs["sslmode"] = sslmode
 
-        conn = psycopg2.connect(**direct_kwargs)
-        if _is_alive(conn):
-            return conn
-        conn.close()
+        return psycopg2.connect(**kwargs)
     except Exception as e:
-        last_err = e
-        logger.error("Direct connection also failed: %s", e)
-
-    # Re-raise the real underlying error so logs are useful
-    if last_err is not None:
-        raise last_err
-    raise OperationalError("Could not obtain a database connection")
+        if last_err:
+            raise last_err from e
+        raise
 
 
 @contextmanager

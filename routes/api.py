@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import datetime, timedelta
 
 from flask import Blueprint, jsonify, request
@@ -265,40 +266,123 @@ def chat_ratings_data():
         conn.close()
 
 
-@bp.route('/api/admin/alert_counts')
-def api_alert_counts():
-    if not admin_required():
-        return jsonify({'error': 'Unauthorized'}), 403
+# ---------------------------------------------------------------------
+# Admin live badge counts — shared by the sidebar poller (admin-common.js)
+# and the alert log page.
+#
+# BUG FIX (root cause of the "laggy when deployed" reports): this used to
+# be two near-duplicate endpoints (/api/admin/alert_counts here and
+# /api/admin/realtime below), each opening its own connection and running
+# 4-6 COUNT() queries with a bare `finally: cur.close(); conn.close()` and
+# NO `except` clause. If any single query failed (e.g. a table missing in
+# a given environment), the exception propagated with the transaction
+# still aborted -- Postgres then refuses every further statement on that
+# connection ("current transaction is aborted") until something issues a
+# ROLLBACK. Since the pooled connection just got closed (returned to the
+# pool, not actually reset) rather than rolled back, the NEXT request
+# anywhere in the app that happened to check out that same pooled
+# connection would immediately fail too -- on Vercel the pool is only 3
+# connections (see database/pool.py), so this could poison a third of the
+# whole pool from a single bad badge poll, and every open admin tab was
+# hitting this every 8-15 seconds. That cascading failure is what
+# presented as general "laggy"/flaky behavior across the site.
+#
+# Fixed by: (1) always rolling back on error before the connection goes
+# back to the pool, (2) caching the result for a few seconds so N open
+# tabs/admins share one DB round trip instead of one each, and
+# (3) serving the last-known-good snapshot instead of erroring out (and
+# flashing every badge to 0) if a single poll fails.
+_badge_counts_cache = {'data': None, 'ts': 0.0}
+_BADGE_COUNTS_TTL = 8  # seconds
+
+
+def _compute_admin_badge_counts() -> dict:
     conn = get_db()
     cur = conn.cursor()
     try:
         cur.execute("SELECT COUNT(*) FROM unanswered_questions")
-        unanswered_count = cur.fetchone()[0]
+        unanswered = cur.fetchone()[0]
 
         cur.execute("""
             SELECT COUNT(*) FROM satisfaction_feedback
             WHERE rating = 'thumbs_down'
               AND created_at > NOW() - INTERVAL '7 days'
         """)
-        reports_count = cur.fetchone()[0]
+        sat_reports = cur.fetchone()[0]
+
+        # Matches the merged /reports page: satisfaction_feedback +
+        # bad_feedback (routes/chat.py's /feedback, routes/api.py's
+        # /api/report) so the badge doesn't undercount detailed reports.
+        cur.execute(
+            "SELECT COUNT(*) FROM bad_feedback WHERE created_at > NOW() - INTERVAL '7 days'"
+        )
+        bad_reports = cur.fetchone()[0]
+        reports = sat_reports + bad_reports
 
         cur.execute("SELECT COUNT(*) FROM faq_review_queue WHERE status = 'pending'")
-        review_count = cur.fetchone()[0]
+        review = cur.fetchone()[0]
 
         cur.execute("SELECT COUNT(*) FROM pending_faq_drafts WHERE status = 'pending'")
-        draft_count = cur.fetchone()[0]
+        drafts = cur.fetchone()[0]
 
-        return jsonify({
-            'unanswered': unanswered_count,
-            'reports': reports_count,
-            'review_queue': review_count,
-            'pending_drafts': draft_count,
-            'health_issues': 0,
-            'total': unanswered_count + reports_count + review_count + draft_count,
-        })
+        # alert_history has no read/unread flag, so "new" = raised in the
+        # last 24h. chat_ratings has no reviewed flag either, so "needs a
+        # look" = 1-2 star in the last 7 days.
+        cur.execute(
+            "SELECT COUNT(*) FROM alert_history WHERE created_at > NOW() - INTERVAL '24 hours'"
+        )
+        alerts_new = cur.fetchone()[0]
+
+        cur.execute(
+            "SELECT COUNT(*) FROM chat_ratings WHERE rating <= 2 AND created_at > NOW() - INTERVAL '7 days'"
+        )
+        low_ratings = cur.fetchone()[0]
+
+        return {
+            "unanswered": unanswered,
+            "reports": reports,
+            "review_queue": review,
+            "pending_drafts": drafts,
+            "alerts_new": alerts_new,
+            "low_ratings": low_ratings,
+            "total": unanswered + reports + review + drafts,
+        }
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         cur.close()
         conn.close()
+
+
+def _get_admin_badge_counts() -> dict:
+    now = time.time()
+    cached = _badge_counts_cache['data']
+    if cached and now - _badge_counts_cache['ts'] < _BADGE_COUNTS_TTL:
+        return cached
+    try:
+        data = _compute_admin_badge_counts()
+        _badge_counts_cache.update(data=data, ts=now)
+        return data
+    except Exception as e:
+        logger.error(f"admin badge counts error: {e}")
+        if cached:
+            # Serve the last good snapshot rather than zeroing every
+            # badge out over one transient query failure.
+            return cached
+        return {
+            'unanswered': 0, 'reports': 0, 'review_queue': 0, 'pending_drafts': 0,
+            'alerts_new': 0, 'low_ratings': 0, 'total': 0, 'degraded': True,
+        }
+
+
+@bp.route('/api/admin/alert_counts')
+def api_alert_counts():
+    if not admin_required():
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = dict(_get_admin_badge_counts())
+    data['health_issues'] = 0
+    return jsonify(data)
 
 
 @bp.route('/api/admin/alerts', methods=['GET'])
@@ -603,72 +687,15 @@ def api_my_chats():
 
 @bp.route("/api/admin/realtime")
 def api_admin_realtime():
-    """Lightweight payload for admin live badges (poll every 8–15s)."""
+    """Lightweight payload for admin live badges (poll every 8-15s).
+    Shares the cached _get_admin_badge_counts() helper above with
+    /api/admin/alert_counts so two badge-polling pages open at once don't
+    double the DB hits."""
     if not admin_required():
         return jsonify({"error": "Unauthorized"}), 403
-    conn = get_db()
-    cur = conn.cursor()
-    try:
-        cur.execute("SELECT COUNT(*) FROM unanswered_questions")
-        unanswered = cur.fetchone()[0]
-
-        cur.execute(
-            """
-            SELECT COUNT(*) FROM satisfaction_feedback
-            WHERE rating = 'thumbs_down'
-              AND created_at > NOW() - INTERVAL '7 days'
-            """
-        )
-        sat_reports = cur.fetchone()[0]
-
-        # BUG FIX: reports badge used to only count satisfaction_feedback,
-        # missing everything submitted through the detailed report flow
-        # (routes/chat.py's /feedback, routes/api.py's /api/report), which
-        # lands in bad_feedback. Matches the merged /reports page.
-        cur.execute(
-            "SELECT COUNT(*) FROM bad_feedback WHERE created_at > NOW() - INTERVAL '7 days'"
-        )
-        bad_reports = cur.fetchone()[0]
-        reports = sat_reports + bad_reports
-
-        cur.execute(
-            "SELECT COUNT(*) FROM faq_review_queue WHERE status = 'pending'"
-        )
-        review = cur.fetchone()[0]
-
-        cur.execute(
-            "SELECT COUNT(*) FROM pending_faq_drafts WHERE status = 'pending'"
-        )
-        drafts = cur.fetchone()[0]
-
-        # New badges: alerts raised in the last 24h ("new" since
-        # alert_history has no read/unread flag to key off of), and chat
-        # ratings of 1-2 stars in the last 7 days that haven't been looked
-        # at yet -- both are "needs a human to glance at this" signals,
-        # same spirit as unanswered/reports.
-        cur.execute(
-            "SELECT COUNT(*) FROM alert_history WHERE created_at > NOW() - INTERVAL '24 hours'"
-        )
-        alerts_new = cur.fetchone()[0]
-
-        cur.execute(
-            "SELECT COUNT(*) FROM chat_ratings WHERE rating <= 2 AND created_at > NOW() - INTERVAL '7 days'"
-        )
-        low_ratings = cur.fetchone()[0]
-
-        return jsonify({
-            "unanswered": unanswered,
-            "reports": reports,
-            "review_queue": review,
-            "pending_drafts": drafts,
-            "alerts_new": alerts_new,
-            "low_ratings": low_ratings,
-            "total": unanswered + reports + review + drafts,
-            "ts": datetime.now().isoformat(),
-        })
-    finally:
-        cur.close()
-        conn.close()
+    data = dict(_get_admin_badge_counts())
+    data["ts"] = datetime.now().isoformat()
+    return jsonify(data)
 
 @bp.route('/api/visitor_stats')
 def api_visitor_stats():

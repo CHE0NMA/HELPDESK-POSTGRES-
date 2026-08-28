@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+<script>document.documentElement.setAttribute('data-bs-theme', localStorage.getItem('theme') || 'dark');</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<title>PAC Admin — My Profile</title>
+<link rel="icon" href="/static/logo.png" type="image/x-icon">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/admin-common.css">
+<style>
+* { box-sizing: border-box; }
+:root {
+  --bg:#0a1628; --bg2:#0f1f3a; --bg3:#162a4a; --brand:#1a73e8; --brand2:#4dabf7;
+  --accent:#00e5ff; --accent2:#66d9f7; --text:#e8f0f8; --text-dim:#a8c8e8; --muted:#8ba9cc;
+  --card:rgba(15,31,58,.85); --border:rgba(77,171,247,.15); --border2:rgba(77,171,247,.25);
+  --sidebar:260px; --success:#51cf66; --warning:#fcc419; --danger:#ff6b6b;
+  --modal-bg:rgba(15,31,58,.95); --row-hover:rgba(26,115,232,.06);
+}
+[data-bs-theme="light"] {
+  --bg:#f0f4f8; --bg2:#e8edf4; --bg3:#d5dde8; --text:#1a2a3a; --text-dim:#4a6a8a; --muted:#6a8aaa;
+  --card:rgba(255,255,255,.92); --border:rgba(26,115,232,.15); --border2:rgba(26,115,232,.25);
+  --modal-bg:rgba(255,255,255,.95); --row-hover:rgba(26,115,232,.04);
+}
+body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); margin:0; min-height:100vh; }
+::-webkit-scrollbar { width:6px; height:6px; }
+::-webkit-scrollbar-track { background:rgba(255,255,255,.05); border-radius:3px; }
+::-webkit-scrollbar-thumb { background:rgba(255,255,255,.15); border-radius:3px; }
+.bg-mesh { position:fixed; inset:0; pointer-events:none; z-index:0;
+  background:radial-gradient(ellipse 60% 50% at 5% 0%,rgba(26,115,232,.15) 0%,transparent 55%),
+             radial-gradient(ellipse 40% 40% at 95% 100%,rgba(0,229,255,.06) 0%,transparent 50%); }
+[data-bs-theme="light"] .bg-mesh { opacity:.25; }
+.bg-grid { position:fixed; inset:0; pointer-events:none; z-index:0;
+  background-image:linear-gradient(rgba(77,171,247,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(77,171,247,.03) 1px,transparent 1px);
+  background-size:44px 44px; }
+.sidebar { position:fixed; top:0; left:0; bottom:0; width:var(--sidebar); z-index:200;
+  background:rgba(8,16,32,.97); backdrop-filter:blur(20px); border-right:1px solid var(--border);
+  display:flex; flex-direction:column; transition:transform .28s ease; }
+[data-bs-theme="light"] .sidebar { background:rgba(255,255,255,.95); }
+.sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:150; }
+.sidebar-overlay.show { display:block; }
+.sidebar-toggle { display:none; background:rgba(10,30,50,.8); border:1.5px solid var(--border); border-radius:11px;
+  padding:.4rem .6rem; color:var(--text-dim); font-size:1.15rem; cursor:pointer; }
+.sidebar-toggle:hover { border-color:var(--accent); color:var(--text); }
+.theme-toggle-sidebar { display:flex; align-items:center; justify-content:space-between; gap:.65rem;
+  padding:.6rem .85rem; border-radius:11px; color:var(--text-dim); font-size:.85rem; cursor:pointer;
+  background:none; border:1px solid transparent; width:100%; margin-bottom:.4rem; }
+.theme-toggle-sidebar:hover { background:rgba(26,115,232,.12); color:var(--text); }
+.theme-toggle-sidebar .theme-switch-label { display:flex; align-items:center; gap:.65rem; }
+.sidebar-brand { padding:1.5rem 1.35rem 1.25rem; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:.75rem; }
+.brand-orb { width:38px; height:38px; border-radius:50%; overflow:hidden; flex-shrink:0;
+  box-shadow:0 0 0 2px rgba(0,229,255,.3),0 0 14px rgba(0,229,255,.2); }
+.brand-orb img { width:100%; height:100%; object-fit:cover; }
+.brand-text { font-family:'Sora',sans-serif; font-weight:800; font-size:.95rem; }
+.brand-sub { font-size:.7rem; color:var(--text-dim); }
+.sidebar-nav { flex:1; padding:1rem .75rem; overflow-y:auto; }
+.nav-section { font-size:.67rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); padding:.35rem .6rem; margin:.85rem 0 .35rem; }
+.nav-section:first-child { margin-top:0; }
+.nav-link { display:flex; align-items:center; gap:.7rem; padding:.65rem .85rem; border-radius:11px; color:var(--text-dim);
+  text-decoration:none; font-size:.88rem; font-weight:500; margin-bottom:.2rem; border:1px solid transparent; transition:all .2s; }
+.nav-link i { width:20px; text-align:center; }
+.nav-link:hover { background:rgba(26,115,232,.18); color:var(--text); }
+.nav-link.active { background:linear-gradient(135deg,rgba(26,115,232,.35),rgba(77,171,247,.2)); border-color:rgba(77,171,247,.3); color:#fff; }
+[data-bs-theme="light"] .nav-link.active { background:linear-gradient(135deg,rgba(26,115,232,.15),rgba(77,171,247,.1)); color:var(--brand); }
+.nav-badge { margin-left:auto; padding:.2rem .55rem; border-radius:20px; font-size:.7rem; font-weight:700; }
+.badge-red { background:rgba(255,82,82,.2); color:var(--danger); border:1px solid rgba(255,82,82,.3); }
+.badge-yellow { background:rgba(255,202,40,.15); color:var(--warning); border:1px solid rgba(255,202,40,.3); }
+.sidebar-footer { padding:1rem .75rem 1.25rem; border-top:1px solid var(--border); }
+.logout-btn { display:flex; align-items:center; gap:.65rem; padding:.6rem .85rem; border-radius:11px; color:var(--text-dim);
+  text-decoration:none; font-size:.85rem; background:none; border:1px solid transparent; width:100%; margin-bottom:.4rem; cursor:pointer; }
+.logout-btn:hover { background:rgba(255,82,82,.1); color:#ff6b6b; }
+.main { margin-left:var(--sidebar); min-height:100vh; position:relative; z-index:1; }
+.topbar { height:58px; display:flex; align-items:center; justify-content:space-between; padding:0 1.75rem;
+  background:rgba(8,16,32,.88); backdrop-filter:blur(18px); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:50; }
+[data-bs-theme="light"] .topbar { background:rgba(255,255,255,.9); }
+.topbar-title { font-family:'Sora',sans-serif; font-weight:700; font-size:1rem; display:flex; align-items:center; gap:.55rem; }
+.page-body { padding:1.75rem; max-width:920px; }
+.form-label { font-size:.75rem; font-weight:700; color:var(--text-dim); letter-spacing:.04em; text-transform:uppercase; margin-bottom:.4rem; }
+.form-control { background:rgba(14,32,64,.8); color:var(--text); border:1.5px solid var(--border); border-radius:10px; font-size:.88rem; padding:.62rem .9rem; }
+.form-control:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(26,115,232,.15); outline:none; color:var(--text); background:rgba(14,32,64,.9); }
+.form-control:disabled { opacity:.6; cursor:not-allowed; }
+[data-bs-theme="light"] .form-control { background:rgba(255,255,255,.9); color:#1a2a3a; }
+.form-text { font-size:.76rem; color:var(--muted); margin-top:.35rem; }
+.profile-card { background:var(--card); border:1px solid var(--border); border-radius:18px; padding:1.75rem; margin-bottom:1.5rem; }
+.profile-card-title { font-family:'Sora',sans-serif; font-weight:700; font-size:1rem; margin-bottom:.25rem; display:flex; align-items:center; gap:.55rem; }
+.profile-card-sub { font-size:.8rem; color:var(--text-dim); margin-bottom:1.4rem; }
+.profile-header { display:flex; align-items:center; gap:1.1rem; margin-bottom:1.75rem; }
+.profile-avatar { width:64px; height:64px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+  font-family:'Sora',sans-serif; font-weight:800; font-size:1.5rem; color:#fff;
+  background:linear-gradient(135deg,var(--brand),var(--accent)); box-shadow:0 0 0 3px rgba(0,229,255,.18); }
+.profile-header-name { font-family:'Sora',sans-serif; font-weight:700; font-size:1.15rem; }
+.profile-header-meta { font-size:.8rem; color:var(--text-dim); margin-top:.15rem; }
+.profile-meta-row { display:flex; flex-wrap:wrap; gap:1.5rem; margin-top:1.25rem; padding-top:1.25rem; border-top:1px solid var(--border); }
+.profile-meta-item { font-size:.78rem; color:var(--text-dim); }
+.profile-meta-item b { display:block; color:var(--text); font-size:.85rem; font-weight:600; margin-top:.15rem; }
+.form-row { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.1rem; }
+.form-row .field { margin-bottom:0; }
+.field { margin-bottom:1.1rem; }
+.btn-save { padding:.65rem 1.4rem; border-radius:11px; background:linear-gradient(135deg,var(--brand),var(--brand2)); border:none; color:#fff; font-family:'Sora',sans-serif; font-weight:700; font-size:.85rem; cursor:pointer; display:inline-flex; align-items:center; gap:.5rem; }
+.btn-save:hover { transform:translateY(-1px); box-shadow:0 4px 14px rgba(26,115,232,.4); }
+.btn-save:disabled { opacity:.6; cursor:not-allowed; transform:none; box-shadow:none; }
+.pw-input-wrap { position:relative; }
+.pw-toggle { position:absolute; right:.85rem; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--muted); cursor:pointer; font-size:1rem; }
+.pw-toggle:hover { color:var(--text); }
+.pw-strength { height:4px; border-radius:2px; background:rgba(255,255,255,.08); margin-top:.5rem; overflow:hidden; }
+.pw-strength-bar { height:100%; width:0%; border-radius:2px; transition:all .25s ease; background:var(--danger); }
+.pw-strength-label { font-size:.72rem; color:var(--muted); margin-top:.3rem; }
+.toast-wrap { position:fixed; bottom:20px; right:20px; z-index:9999; display:flex; flex-direction:column; gap:.5rem; }
+.toast-item { background:rgba(10,28,56,.97); border:1px solid var(--border2); padding:.6rem 1.1rem; border-radius:11px; font-size:.82rem;
+  display:flex; align-items:center; gap:.5rem; box-shadow:0 8px 28px rgba(0,0,0,.4); color:var(--text); animation:toastIn .25s ease; }
+[data-bs-theme="light"] .toast-item { background:rgba(255,255,255,.97); color:#1a2a3a; }
+@keyframes toastIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+.toast-item.success { border-left:3px solid var(--success); }
+.toast-item.danger { border-left:3px solid var(--danger); }
+.toast-item.info { border-left:3px solid var(--accent); }
+@media (max-width:900px) {
+  .sidebar { transform:translateX(-100%); }
+  .sidebar.open { transform:translateX(0); box-shadow:8px 0 32px rgba(0,0,0,.35); }
+  .main { margin-left:0; }
+  .sidebar-toggle { display:inline-flex; }
+  .page-body { padding:1.1rem; }
+  .form-row { grid-template-columns:1fr; }
+  .profile-header { flex-wrap:wrap; }
+}
+</style>
+</head>
+<body data-admin-page="profile">
+<div class="bg-mesh"></div>
+<div class="bg-grid"></div>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-orb"><img src="/static/logo.png" alt="PAC" onerror="this.parentElement.innerHTML='🎓'"></div>
+    <div><div class="brand-text">PAC Help Desk</div><div class="brand-sub">Admin Panel</div></div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">Management</div>
+    <a href="/dashboard" class="nav-link"><i class="bi bi-grid-fill"></i> FAQ Management</a>
+    <a href="/unanswered" class="nav-link">
+      <i class="bi bi-question-circle"></i> Unanswered
+      <span class="nav-badge badge-red" id="unansweredBadge" style="display:none"></span>
+    </a>
+    <a href="/holidays" class="nav-link"><i class="bi bi-calendar-event"></i> Holidays &amp; Events</a>
+    <a href="/handbook" class="nav-link"><i class="bi bi-journal-bookmark-fill"></i> Student Handbook</a>
+    <a href="/reports" class="nav-link">
+      <i class="bi bi-flag"></i> Reports
+      <span class="nav-badge badge-yellow" id="reportsBadge" style="display:none"></span>
+    </a>
+    <a href="/corrections" class="nav-link"><i class="bi bi-wrench-adjustable"></i> Corrections</a>
+    <div class="nav-section">Analytics</div>
+    <a href="/analytics" class="nav-link"><i class="bi bi-graph-up"></i> System Analytics</a>
+    <a href="/ratings" class="nav-link"><i class="bi bi-star-half"></i> Chat Ratings</a>
+    <a href="/alert_log" class="nav-link"><i class="bi bi-bell"></i> Alert Log</a>
+    <div class="nav-section">Account</div>
+    <a href="/profile" class="nav-link active"><i class="bi bi-person-circle"></i> My Profile</a>
+  </nav>
+  <div class="sidebar-footer">
+    <button type="button" class="theme-toggle-sidebar" id="themeToggle" title="Toggle theme">
+      <span class="theme-switch-label">
+        <i class="bi bi-moon-fill" id="themeIcon"></i>
+        <span id="themeLabel">Dark mode</span>
+      </span>
+      <i class="bi bi-circle-half" style="opacity:.5;font-size:.85rem"></i>
+    </button>
+    <button onclick="exportData()" class="logout-btn"><i class="bi bi-download"></i> Export Backup</button>
+    <a href="/admin/logout" class="logout-btn"><i class="bi bi-box-arrow-right"></i> Log Out</a>
+    <a href="/" class="logout-btn"><i class="bi bi-house"></i> Back to Help Desk</a>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:.75rem;min-width:0">
+      <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Open menu"><i class="bi bi-list"></i></button>
+      <span class="topbar-title"><i class="bi bi-person-circle" style="color:var(--accent2)"></i> My Profile</span>
+    </div>
+  </div>
+
+  <div class="page-body fade-in">
+
+    <div class="profile-card">
+      <div class="profile-header">
+        <div class="profile-avatar">{{ (admin_info.full_name or admin_info.username or '?')[0]|upper }}</div>
+        <div>
+          <div class="profile-header-name">{{ admin_info.full_name or admin_info.username }}</div>
+          <div class="profile-header-meta">@{{ admin_info.username }} &middot; Administrator</div>
+        </div>
+      </div>
+      <div class="profile-meta-row">
+        <div class="profile-meta-item">Signed in from<b>{{ admin_info.admin_ip or '—' }}</b></div>
+        <div class="profile-meta-item">Profile last updated<b>{{ admin_info.updated_at or 'Never' }}</b></div>
+        <div class="profile-meta-item">Password last changed<b>{{ admin_info.last_password_change or 'Never' }}</b></div>
+      </div>
+    </div>
+
+    <div class="profile-card">
+      <div class="profile-card-title"><i class="bi bi-person-lines-fill"></i> Profile details</div>
+      <div class="profile-card-sub">Your name and email are shown on activity logs and alert emails. Your username is your login ID and can't be changed here.</div>
+
+      <form id="profileForm">
+        <div class="form-row">
+          <div class="field">
+            <label class="form-label">Username</label>
+            <input class="form-control" value="{{ admin_info.username }}" disabled>
+          </div>
+          <div class="field">
+            <label class="form-label">Full name</label>
+            <input class="form-control" id="full_name" name="full_name" maxlength="150"
+                   placeholder="e.g. Juan Dela Cruz" value="{{ admin_info.full_name }}">
+          </div>
+        </div>
+        <div class="field">
+          <label class="form-label">Email address</label>
+          <input type="email" class="form-control" id="email" name="email" maxlength="150"
+                 placeholder="you@school.edu" value="{{ admin_info.email }}">
+          <div class="form-text">Used for admin alert notifications, if configured.</div>
+        </div>
+        <button type="submit" class="btn-save" id="saveProfileBtn">
+          <i class="bi bi-check-lg"></i> Save changes
+        </button>
+      </form>
+    </div>
+
+    <div class="profile-card">
+      <div class="profile-card-title"><i class="bi bi-shield-lock"></i> Change password</div>
+      <div class="profile-card-sub">Use a password you don't use anywhere else. At least 8 characters.</div>
+
+      <form id="passwordForm">
+        <div class="field">
+          <label class="form-label">Current password</label>
+          <div class="pw-input-wrap">
+            <input type="password" class="form-control" id="current_password" name="current_password" autocomplete="current-password">
+            <button type="button" class="pw-toggle" data-target="current_password"><i class="bi bi-eye"></i></button>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label class="form-label">New password</label>
+            <div class="pw-input-wrap">
+              <input type="password" class="form-control" id="new_password" name="new_password" autocomplete="new-password">
+              <button type="button" class="pw-toggle" data-target="new_password"><i class="bi bi-eye"></i></button>
+            </div>
+            <div class="pw-strength"><div class="pw-strength-bar" id="pwStrengthBar"></div></div>
+            <div class="pw-strength-label" id="pwStrengthLabel">&nbsp;</div>
+          </div>
+          <div class="field">
+            <label class="form-label">Confirm new password</label>
+            <div class="pw-input-wrap">
+              <input type="password" class="form-control" id="confirm_password" name="confirm_password" autocomplete="new-password">
+              <button type="button" class="pw-toggle" data-target="confirm_password"><i class="bi bi-eye"></i></button>
+            </div>
+          </div>
+        </div>
+        <button type="submit" class="btn-save" id="savePasswordBtn">
+          <i class="bi bi-shield-check"></i> Update password
+        </button>
+      </form>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script src="/static/js/admin-common.js"></script>
+<script>
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebarOverlay').classList.toggle('show');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('show');
+}
+document.querySelectorAll('.sidebar .nav-link').forEach(link => {
+  link.addEventListener('click', () => { if (window.innerWidth <= 900) closeSidebar(); });
+});
+
+function getCSRFToken() {
+  return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+}
+function toggleTheme() {
+  const html = document.documentElement;
+  const newTheme = html.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-bs-theme', newTheme);
+  localStorage.setItem('theme', newTheme);
+  updateThemeUI(newTheme);
+}
+function updateThemeUI(theme) {
+  const icon = document.getElementById('themeIcon');
+  const label = document.getElementById('themeLabel');
+  if (icon) icon.className = theme === 'dark' ? 'bi bi-moon-fill' : 'bi bi-sun-fill';
+  if (label) label.textContent = theme === 'dark' ? 'Dark mode' : 'Light mode';
+}
+(function(){ const t = localStorage.getItem('theme') || 'dark'; document.documentElement.setAttribute('data-bs-theme', t); updateThemeUI(t); })();
+document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);
+
+function exportData() { window.location.href = '/api/export/faq'; showToast('Export started…', 'info'); }
+
+function showToast(msg, type='success') {
+  const icons = {success:'check-circle-fill',danger:'x-circle-fill',warning:'exclamation-triangle-fill',info:'info-circle-fill'};
+  const el = document.createElement('div');
+  el.className = `toast-item ${type}`;
+  el.innerHTML = `<i class="bi bi-${icons[type]||'info-circle-fill'}"></i><span>${msg}</span>`;
+  document.getElementById('toastWrap').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// Show/hide password fields
+document.querySelectorAll('.pw-toggle').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const input = document.getElementById(btn.dataset.target);
+    const icon = btn.querySelector('i');
+    const isText = input.type === 'text';
+    input.type = isText ? 'password' : 'text';
+    icon.className = isText ? 'bi bi-eye' : 'bi bi-eye-slash';
+  });
+});
+
+// Profile details form
+document.getElementById('profileForm').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  const btn = document.getElementById('saveProfileBtn');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/admin/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+      body: JSON.stringify({
+        full_name: document.getElementById('full_name').value.trim(),
+        email: document.getElementById('email').value.trim(),
+      }),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (res.ok && d.success) {
+      showToast('Profile updated!', 'success');
+      setTimeout(() => location.reload(), 900);
+    } else {
+      showToast(d.error || 'Could not update profile.', 'danger');
+    }
+  } catch (err) {
+    showToast('Network error: ' + err.message, 'danger');
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// Password strength meter (rough, client-side only — real validation is server-side)
+const newPwInput = document.getElementById('new_password');
+newPwInput.addEventListener('input', () => {
+  const v = newPwInput.value;
+  let score = 0;
+  if (v.length >= 8) score++;
+  if (v.length >= 12) score++;
+  if (/[A-Z]/.test(v) && /[a-z]/.test(v)) score++;
+  if (/[0-9]/.test(v)) score++;
+  if (/[^A-Za-z0-9]/.test(v)) score++;
+  const pct = [0, 20, 40, 60, 80, 100][score];
+  const colors = ['#ff6b6b','#ff6b6b','#fcc419','#fcc419','#51cf66','#51cf66'];
+  const labels = ['Too short','Weak','Fair','Good','Strong','Very strong'];
+  const bar = document.getElementById('pwStrengthBar');
+  bar.style.width = pct + '%';
+  bar.style.background = colors[score];
+  document.getElementById('pwStrengthLabel').textContent = v ? labels[score] : '\u00A0';
+});
+
+// Change password form
+document.getElementById('passwordForm').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  const current = document.getElementById('current_password').value;
+  const next = document.getElementById('new_password').value;
+  const confirm = document.getElementById('confirm_password').value;
+
+  if (!current || !next) { showToast('Fill in both password fields.', 'danger'); return; }
+  if (next !== confirm) { showToast('New password and confirmation do not match.', 'danger'); return; }
+  if (next.length < 8) { showToast('New password must be at least 8 characters.', 'danger'); return; }
+
+  const btn = document.getElementById('savePasswordBtn');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/admin/profile/password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+      body: JSON.stringify({ current_password: current, new_password: next, confirm_password: confirm }),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (res.ok && d.success) {
+      showToast('Password updated!', 'success');
+      document.getElementById('passwordForm').reset();
+      document.getElementById('pwStrengthBar').style.width = '0%';
+      document.getElementById('pwStrengthLabel').textContent = '\u00A0';
+    } else {
+      showToast(d.error || 'Could not update password.', 'danger');
+    }
+  } catch (err) {
+    showToast('Network error: ' + err.message, 'danger');
+  } finally {
+    btn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>

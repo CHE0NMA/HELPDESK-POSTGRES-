@@ -314,6 +314,8 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
       <i class="bi bi-bell"></i> Alert Log
       <span class="nav-badge badge-red" id="alertsBadge" style="display:none"></span>
     </a>
+    <div class="nav-section">Account</div>
+    <a href="/profile" class="nav-link"><i class="bi bi-person-circle"></i> My Profile</a>
   </nav>
   <div class="sidebar-footer">
     <button type="button" class="theme-toggle-sidebar" id="themeToggle" title="Toggle theme">
@@ -324,6 +326,7 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
       <i class="bi bi-circle-half" style="opacity:.5;font-size:.85rem"></i>
     </button>
     <button onclick="exportData()" class="logout-btn"><i class="bi bi-download"></i> Export Backup</button>
+    <a href="/admin/logout" class="logout-btn"><i class="bi bi-box-arrow-right"></i> Log Out</a>
     <a href="/" class="logout-btn"><i class="bi bi-house"></i> Back to Help Desk</a>
   </div>
 </aside>
@@ -646,14 +649,32 @@ document.getElementById('deleteConfirmBtn')?.addEventListener('click', async fun
   try {
     let deleted = [];
     if (deleteMode === 'bulk') {
-      for (const id of deleteIds) {
-        try {
-          const res = await fetch('/api/admin/corrections/' + id, {
-            method: 'DELETE',
-            headers: { 'X-CSRFToken': getCSRFToken() }
-          });
-          if (res.ok) deleted.push(id);
-        } catch (_) {}
+      // BUG FIX: was one DELETE request per selected row, sequentially
+      // awaited (50 selected = 50 round trips before the UI unblocked).
+      // One bulk request now; falls back to the old per-row loop only
+      // if the bulk endpoint isn't available (e.g. mid-deploy).
+      try {
+        const res = await fetch('/api/admin/corrections/bulk_delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+          body: JSON.stringify({ ids: deleteIds }),
+        });
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          deleted = data.deleted || [];
+        } else if (res.status === 404) {
+          throw new Error('bulk endpoint missing');
+        }
+      } catch (_) {
+        for (const id of deleteIds) {
+          try {
+            const r = await fetch('/api/admin/corrections/' + id, {
+              method: 'DELETE',
+              headers: { 'X-CSRFToken': getCSRFToken() }
+            });
+            if (r.ok) deleted.push(id);
+          } catch (__) {}
+        }
       }
     } else {
       const res = await fetch('/api/admin/corrections/' + deleteId, {

@@ -11,6 +11,12 @@
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<!-- BUG FIX: this page used to reimplement the entire sidebar/topbar/
+     badge/toast/scrollbar CSS inline instead of linking the shared
+     stylesheet every other admin page uses -- that's most of why it
+     looked visibly different (colors, spacing, animations all drifted
+     slightly from copy-paste). Now it shares one source of truth. -->
+<link rel="stylesheet" href="/static/css/admin-common.css">
 <style>
 * { box-sizing: border-box; margin:0; padding:0; }
 :root {
@@ -106,7 +112,8 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
 [data-bs-theme="light"] .filter-select { background:rgba(255,255,255,.9); color:#1a2a3a; }
 
 .empty-state { text-align:center; padding:2rem; color:var(--text-dim); }
-.toast-item { position:fixed; bottom:20px; right:20px; z-index:9999; background:rgba(10,28,56,.97);
+.toast-wrap { position:fixed; bottom:20px; right:20px; z-index:9999; display:flex; flex-direction:column; gap:.5rem; }
+.toast-item { background:rgba(10,28,56,.97);
   border:1px solid var(--border2); padding:.6rem 1.1rem; border-radius:11px; font-size:.82rem;
   display:flex; align-items:center; gap:.5rem; box-shadow:0 8px 28px rgba(0,0,0,.35); color:var(--text);
   animation:toastIn .25s ease; }
@@ -121,27 +128,9 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
   .page-body { padding:1.1rem; }
   .topbar { padding:0 1rem; }
 }
-  /* Scrollbar variables — put in :root */
-:root {
-  --scrollbar-track: rgba(255,255,255,0.05);
-  --scrollbar-thumb: rgba(255,255,255,0.15);
-}
-
-/* Light theme override */
-[data-bs-theme="light"] {
-  --scrollbar-track: rgba(0,0,0,0.05);
-  --scrollbar-thumb: rgba(0,0,0,0.15);
-}
-
-/* Scrollbar styles */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--scrollbar-track); border-radius: 3px; }
-::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
-[data-bs-theme="light"] ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
 </style>
 </head>
-<body>
+<body data-admin-page="ratings">
 <div class="bg-mesh"></div>
 <div class="bg-grid"></div>
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
@@ -166,11 +155,19 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
     <a href="/corrections" class="nav-link"><i class="bi bi-wrench-adjustable"></i> Corrections</a>
     <div class="nav-section">Analytics</div>
     <a href="/analytics" class="nav-link"><i class="bi bi-graph-up"></i> System Analytics</a>
-    <a href="/ratings" class="nav-link active"><i class="bi bi-star-half"></i> Chat Ratings</a>
-    <a href="/alert_log" class="nav-link"><i class="bi bi-bell"></i> Alert Log</a>
+    <a href="/ratings" class="nav-link active">
+      <i class="bi bi-star-half"></i> Chat Ratings
+      <span class="nav-badge badge-yellow" id="ratingsBadge" style="display:none"></span>
+    </a>
+    <a href="/alert_log" class="nav-link">
+      <i class="bi bi-bell"></i> Alert Log
+      <span class="nav-badge badge-red" id="alertsBadge" style="display:none"></span>
+    </a>
+    <div class="nav-section">Account</div>
+    <a href="/profile" class="nav-link"><i class="bi bi-person-circle"></i> My Profile</a>
   </nav>
   <div class="sidebar-footer">
-    <button type="button" class="theme-toggle-sidebar" id="themeToggle" onclick="toggleTheme()" title="Toggle theme">
+    <button type="button" class="theme-toggle-sidebar" id="themeToggle" title="Toggle theme">
       <span class="theme-switch-label">
         <i class="bi bi-moon-fill" id="themeIcon"></i>
         <span id="themeLabel">Dark mode</span>
@@ -178,6 +175,7 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
       <i class="bi bi-circle-half" style="opacity:.5;font-size:.85rem"></i>
     </button>
     <button onclick="exportData()" class="logout-btn"><i class="bi bi-download"></i> Export Backup</button>
+    <a href="/admin/logout" class="logout-btn"><i class="bi bi-box-arrow-right"></i> Log Out</a>
     <a href="/" class="logout-btn"><i class="bi bi-house"></i> Back to Help Desk</a>
   </div>
 </aside>
@@ -187,6 +185,7 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
     <div style="display:flex;align-items:center;gap:.75rem;min-width:0">
       <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Open menu"><i class="bi bi-list"></i></button>
       <span class="topbar-title"><i class="bi bi-star-half" style="color:var(--accent)"></i> Chat Ratings</span>
+      <span class="live-dot" title="Live" style="margin-left:.35rem"></span>
     </div>
     <div style="display:flex;align-items:center;gap:.6rem">
       <button class="btn-refresh" onclick="loadData()" title="Refresh"><i class="bi bi-arrow-clockwise"></i></button>
@@ -260,56 +259,17 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
   </div>
 </div>
 
+<div class="toast-wrap" id="toastWrap"></div>
+
+<!-- BUG FIX: this page used to duplicate toggleSidebar/closeSidebar/
+     toggleTheme/badge-polling logic inline (and its badge poller only
+     ever updated 2 of the 4 sidebar badges, since /unanswered_count and
+     /reports_count are the only two standalone endpoints -- ratings/
+     alerts badges were dead code). admin-common.js already does all of
+     this consistently across every admin page, polling the one
+     cached, rollback-safe /api/admin/realtime endpoint. -->
+<script src="/static/js/admin-common.js" defer></script>
 <script>
-function toggleSidebar() {
-  const sb = document.getElementById('sidebar');
-  const ov = document.getElementById('sidebarOverlay');
-  const open = sb.classList.toggle('open');
-  ov.classList.toggle('show', open);
-  document.body.style.overflow = open ? 'hidden' : '';
-}
-function closeSidebar() {
-  document.getElementById('sidebar').classList.remove('open');
-  document.getElementById('sidebarOverlay').classList.remove('show');
-  document.body.style.overflow = '';
-}
-document.querySelectorAll('.sidebar .nav-link').forEach(link => {
-  link.addEventListener('click', () => { if (window.innerWidth <= 900) closeSidebar(); });
-});
-
-function toggleTheme() {
-  const html = document.documentElement;
-  const newTheme = html.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
-  html.setAttribute('data-bs-theme', newTheme);
-  localStorage.setItem('theme', newTheme);
-  updateThemeUI(newTheme);
-}
-function updateThemeUI(theme) {
-  const icon = document.getElementById('themeIcon');
-  const label = document.getElementById('themeLabel');
-  if (icon) icon.className = theme === 'dark' ? 'bi bi-moon-fill' : 'bi bi-sun-fill';
-  if (label) label.textContent = theme === 'dark' ? 'Dark mode' : 'Light mode';
-}
-(function(){ const t = localStorage.getItem('theme') || 'dark'; document.documentElement.setAttribute('data-bs-theme', t); updateThemeUI(t); })();
-
-async function updateBadge(url, el) {
-  try { const d = await (await fetch(url)).json(); const c = d.count||0; if (el) { el.textContent=c; el.style.display=c>0?'inline-block':'none'; } } catch(e) {}
-}
-function refreshBadges() {
-  updateBadge('/unanswered_count', document.getElementById('unansweredBadge'));
-  updateBadge('/reports_count', document.getElementById('reportsBadge'));
-}
-refreshBadges(); setInterval(refreshBadges, 30000);
-
-function exportData() { window.location.href='/api/export/faq'; showToast('Export started...','info'); }
-function showToast(msg, type='success') {
-  const icons = { success:'check-circle-fill', danger:'x-circle-fill', warning:'exclamation-triangle-fill', info:'info-circle-fill' };
-  const el = document.createElement('div');
-  el.className = 'toast-item';
-  el.innerHTML = `<i class="bi bi-${icons[type]||'info-circle-fill'}"></i><span>${escapeHtml(msg)}</span>`;
-  document.body.appendChild(el);
-  setTimeout(() => el.remove(), 3200);
-}
 function escapeHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 let _allComments = [];

@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from services.tz import ph_now  # BUG FIX: was using server-UTC datetime.now()/today() for "days ago" -- see services/tz.py
 from services.handbook_ingest import parse_pasted_faqs, mass_insert_faqs
 from flask import Blueprint, jsonify, redirect, render_template, request, session, make_response
-from werkzeug.security import check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 from threading import Thread
 from ai_providers import faq_cache
 from database import get_db
@@ -57,6 +57,13 @@ def admin():
             session['admin'] = True
             session.permanent = True
             session['admin_ip'] = ip
+            # BUG FIX: this was never set, so every place that read
+            # session.get('admin_user', 'admin') (schedules.py's created_by
+            # columns, this file's manual-review created_by, and the
+            # profile page below) silently fell back to the literal
+            # string 'admin' instead of the username that actually
+            # logged in.
+            session['admin_user'] = u
             session['login_time'] = datetime.now(timezone.utc).isoformat()
             logger.info(f"Admin login successful from {ip}")
             return redirect('/dashboard')
@@ -78,6 +85,167 @@ def admin_logout():
         del conversation_contexts[sid]
     session.clear()
     return redirect('/admin')
+
+
+# ---------------------------------------------------------------------
+# Admin profile (name / email / password)
+# ---------------------------------------------------------------------
+# admin_users only ever had username + password (see the SELECT in
+# admin() above). Rather than touching database/schema.py, this adds the
+# extra profile columns itself the first time they're needed, the same
+# "never raise, just log and move on" spirit as the ensure_* functions
+# app.py runs on every cold start.
+_profile_schema_ready = {'done': False}
+
+
+def _ensure_admin_profile_columns():
+    if _profile_schema_ready['done']:
+        return
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            ALTER TABLE admin_users
+                ADD COLUMN IF NOT EXISTS full_name VARCHAR(150),
+                ADD COLUMN IF NOT EXISTS email VARCHAR(150),
+                ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP,
+                ADD COLUMN IF NOT EXISTS last_password_change TIMESTAMP
+        """)
+        conn.commit()
+        _profile_schema_ready['done'] = True
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"_ensure_admin_profile_columns: {e}")
+    finally:
+        cur.close()
+        conn.close()
+
+
+@bp.route('/profile')
+def profile():
+    if not admin_required():
+        return redirect('/admin')
+
+    # Sessions created before the session['admin_user'] fix above won't
+    # have a username to look up -- send them through login again rather
+    # than guessing which admin_users row is theirs.
+    username = session.get('admin_user')
+    if not username:
+        return redirect('/admin/logout')
+
+    _ensure_admin_profile_columns()
+
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT username, full_name, email, updated_at, last_password_change "
+            "FROM admin_users WHERE username=%s", (username,)
+        )
+        row = cur.fetchone()
+    finally:
+        cur.close()
+        conn.close()
+
+    if not row:
+        return redirect('/admin/logout')
+
+    admin_info = {
+        'username': row[0],
+        'full_name': row[1] or '',
+        'email': row[2] or '',
+        'updated_at': row[3].strftime('%b %d, %Y %I:%M %p') if row[3] else None,
+        'last_password_change': row[4].strftime('%b %d, %Y %I:%M %p') if row[4] else None,
+        'login_time': session.get('login_time'),
+        'admin_ip': session.get('admin_ip'),
+    }
+    return render_template('profile.html', admin_info=admin_info)
+
+
+@bp.route('/api/admin/profile', methods=['POST'])
+@csrf.exempt
+def api_update_profile():
+    if not admin_required():
+        return jsonify({'error': 'Unauthorized'}), 403
+    username = session.get('admin_user')
+    if not username:
+        return jsonify({'error': 'Session expired — please log in again.'}), 401
+
+    _ensure_admin_profile_columns()
+
+    data = request.get_json(silent=True) or request.form
+    full_name = (data.get('full_name') or '').strip()[:150]
+    email = (data.get('email') or '').strip()[:150]
+
+    if email and ('@' not in email or '.' not in email.split('@')[-1]):
+        return jsonify({'error': 'Please enter a valid email address.'}), 400
+
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            UPDATE admin_users SET full_name=%s, email=%s, updated_at=NOW()
+            WHERE username=%s
+        """, (full_name or None, email or None, username))
+        conn.commit()
+        logger.info(f"Admin '{username}' updated their profile")
+        return jsonify({'success': True, 'full_name': full_name, 'email': email})
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"api_update_profile error: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+
+@bp.route('/api/admin/profile/password', methods=['POST'])
+@csrf.exempt
+def api_change_admin_password():
+    if not admin_required():
+        return jsonify({'error': 'Unauthorized'}), 403
+    username = session.get('admin_user')
+    if not username:
+        return jsonify({'error': 'Session expired — please log in again.'}), 401
+
+    data = request.get_json(silent=True) or request.form
+    current_password = data.get('current_password') or ''
+    new_password = data.get('new_password') or ''
+    confirm_password = data.get('confirm_password') or ''
+
+    if not current_password or not new_password:
+        return jsonify({'error': 'Current and new password are both required.'}), 400
+    if new_password != confirm_password:
+        return jsonify({'error': 'New password and confirmation do not match.'}), 400
+    if len(new_password) < 8:
+        return jsonify({'error': 'New password must be at least 8 characters.'}), 400
+
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT password FROM admin_users WHERE username=%s", (username,))
+        row = cur.fetchone()
+        if not row or not check_password_hash(row[0], current_password):
+            return jsonify({'error': 'Current password is incorrect.'}), 403
+        if check_password_hash(row[0], new_password):
+            return jsonify({'error': 'New password must be different from your current password.'}), 400
+
+        _ensure_admin_profile_columns()
+        cur.execute("""
+            UPDATE admin_users
+            SET password=%s, updated_at=NOW(), last_password_change=NOW()
+            WHERE username=%s
+        """, (generate_password_hash(new_password), username))
+        conn.commit()
+        logger.info(f"Admin '{username}' changed their password from {client_ip()}")
+        return jsonify({'success': True})
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"api_change_admin_password error: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
 
 
 _dash_cache = {'data': None, 'ts': 0}
@@ -553,6 +721,36 @@ def delete_correction_route(correction_id):
     if not ok:
         return jsonify({'error': 'Correction not found'}), 404
     return jsonify({'success': True})
+
+
+@bp.route('/api/admin/corrections/bulk_delete', methods=['POST'])
+@csrf.exempt
+def delete_corrections_bulk():
+    """BUG FIX: corrections_management.html's mass-select "delete
+    selected" used to fire one DELETE request per row, sequentially
+    awaited -- selecting 50+ corrections meant 50+ full network round
+    trips before the UI unblocked, which is exactly the kind of thing
+    that reads as "laggy" even though each individual query was fast.
+    One request, same per-row delete_correction() logic underneath."""
+    if not admin_required():
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.get_json(silent=True) or {}
+    ids = data.get('ids') or []
+    if not isinstance(ids, list) or not ids:
+        return jsonify({'error': 'ids must be a non-empty list'}), 400
+    if len(ids) > 200:
+        return jsonify({'error': 'Max 200 corrections per request'}), 400
+
+    from services.corrections import delete_correction
+    deleted = []
+    for raw_id in ids:
+        try:
+            cid = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if delete_correction(get_db, cid):
+            deleted.append(cid)
+    return jsonify({'success': True, 'deleted': deleted, 'count': len(deleted)})
 
 
 @bp.route('/history')
@@ -1316,12 +1514,17 @@ def delete_faqs_bulk():
 
     conn = get_db()
     cur = conn.cursor()
-    deleted = []
     try:
-        for public_uuid in uuids:
-            cur.execute("DELETE FROM faq WHERE public_uuid = %s", (public_uuid,))
-            if cur.rowcount > 0:
-                deleted.append(public_uuid)
+        # BUG FIX: was one DELETE per UUID (up to 200 round trips inside a
+        # single transaction) -- a single ANY(%s) does it in one
+        # statement, which matters a lot on the small (3-connection)
+        # Vercel pool since the connection is held for the whole loop
+        # either way.
+        cur.execute(
+            "DELETE FROM faq WHERE public_uuid = ANY(%s) RETURNING public_uuid",
+            (uuids,),
+        )
+        deleted = [row[0] for row in cur.fetchall()]
         conn.commit()
         if deleted:
             faq_cache.invalidate()
@@ -1351,3 +1554,28 @@ def health():
             conn.close()
     except Exception as e:
         return {"status": "error", "db": str(e)}, 503
+
+@bp.route('/api/admin/sidebar_counts')
+def api_sidebar_counts():
+    """Kept for backward compat with any page still pointed at this URL.
+    BUG FIX: this used to query tables/columns that don't exist in this
+    schema (`unanswered`, `feedback.is_negative`, `alert_log.seen`, ...) —
+    every poll here threw, and because there was no conn.rollback() the
+    connection went back to the pool mid-aborted-transaction, so the
+    NEXT request to reuse that pooled connection (Vercel's pool is only
+    3 connections) would fail too. That's very likely why things felt
+    laggy/flaky in general, not just on this badge. Now just delegates
+    to the one correct, cached counts source in routes/api.py so there's
+    a single source of truth and a single (cached, rollback-safe) query
+    path -- prefer polling /api/admin/realtime directly for new code.
+    """
+    if not admin_required():
+        return jsonify({'error': 'Unauthorized'}), 403
+    from routes.api import _get_admin_badge_counts
+    counts = _get_admin_badge_counts()
+    return jsonify({
+        'unanswered': counts.get('unanswered', 0),
+        'reports': counts.get('reports', 0),
+        'ratings': counts.get('low_ratings', 0),
+        'alerts': counts.get('alerts_new', 0),
+    })

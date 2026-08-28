@@ -1818,7 +1818,11 @@ async function checkAdmin() {
       return;
     }
     refreshAll();
-    setInterval(refreshAll, 90000);
+    // BUG FIX: was a bare setInterval that kept polling every 90s in
+    // background tabs; PACAdmin.createPoller pauses while hidden. Safe
+    // to reference here since this runs inside the DOMContentLoaded
+    // handler below, after admin-common.js (deferred) has executed.
+    window.PACAdmin.createPoller(refreshAll, 90000, { immediate: false });
   } catch(e) { showToast('Admin check failed','danger'); }
 }
 

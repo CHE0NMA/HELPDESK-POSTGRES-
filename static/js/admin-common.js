@@ -9,7 +9,11 @@
 (function () {
   'use strict';
 
-  const POLL_MS = 10000;
+  // Badge polling interval. The backend endpoint (/api/admin/realtime)
+  // caches its own result for ~8s server-side and is shared by every open
+  // tab/admin, so this can stay reasonably tight without hammering the
+  // (small, 3-connection-on-Vercel) DB pool — see routes/api.py.
+  const POLL_MS = 15000;
   const ACTIVE_MAP = {
     dashboard: '/dashboard',
     unanswered: '/unanswered',
@@ -20,6 +24,7 @@
     analytics: '/analytics',
     ratings: '/ratings',
     alert_log: '/alert_log',
+    profile: '/profile',
   };
 
   function $(sel, root) {
@@ -137,7 +142,7 @@
     const n = Number(count) || 0;
     const key = BADGE_KEY[id] || id;
     const prev = lastBadge[key];
-    el.textContent = n;
+    el.textContent = n > 99 ? '99+' : n;
     el.style.display = n > 0 ? 'inline-block' : 'none';
     if (prev !== null && prev !== n && n > 0) {
       el.classList.remove('pulse');
@@ -147,36 +152,38 @@
     }
     lastBadge[key] = n;
   }
+  window.PACAdmin.setBadge = setBadge;
 
-  async function fetchJSON(url) {
-    const r = await fetch(url, { credentials: 'same-origin' });
+  async function fetchJSON(url, opts) {
+    const r = await fetch(url, Object.assign({ credentials: 'same-origin' }, opts || {}));
     if (!r.ok) throw new Error(String(r.status));
     return r.json();
   }
+  window.PACAdmin.fetchJSON = fetchJSON;
+
+  // BUG FIX: this used to try /api/admin/realtime, and on ANY failure
+  // (including a plain network hiccup) silently fall back to two more
+  // requests AND leave the alerts/ratings badges stuck at 0 forever,
+  // since there was never a working fallback for those two. The backend
+  // endpoint is now a single cached, rollback-safe source of truth (see
+  // routes/api.py's _get_admin_badge_counts), so this is just one
+  // request — no fallback chain needed. An AbortController guards
+  // against a slow response still being in flight when the next poll
+  // tick fires (was possible to stack requests on a bad connection,
+  // which is its own source of "laggy").
+  let liveAbort = null;
 
   async function refreshAdminLive() {
     if (document.hidden) return;
-    let unanswered = 0;
-    let reports = 0;
-    let alertsNew = 0;
-    let lowRatings = 0;
+    if (liveAbort) liveAbort.abort();
+    liveAbort = new AbortController();
     try {
-      try {
-        const d = await fetchJSON('/api/admin/realtime');
-        unanswered = d.unanswered || 0;
-        reports = d.reports || 0;
-        alertsNew = d.alerts_new || 0;
-        lowRatings = d.low_ratings || 0;
-      } catch (_) {
-        const [u, rep] = await Promise.all([
-          fetchJSON('/unanswered_count').catch(function () { return { count: 0 }; }),
-          fetchJSON('/reports_count').catch(function () { return { count: 0 }; }),
-        ]);
-        unanswered = u.count || 0;
-        reports = rep.count || 0;
-        // No standalone endpoints for these two yet — they only come
-        // through /api/admin/realtime, so they stay 0 if that call fails.
-      }
+      const d = await fetchJSON('/api/admin/realtime', { signal: liveAbort.signal });
+      const unanswered = d.unanswered || 0;
+      const reports = d.reports || 0;
+      const alertsNew = d.alerts_new || 0;
+      const lowRatings = d.low_ratings || 0;
+
       setBadge('unansweredBadge', unanswered);
       setBadge('unansweredBadge2', unanswered);
       setBadge('reportsBadge', reports);
@@ -184,7 +191,20 @@
       setBadge('ratingsBadge', lowRatings);
 
       const su = $('#statUnanswered');
-      if (su) su.textContent = unanswered;
+      if (su && su.textContent !== String(unanswered)) {
+        su.textContent = unanswered;
+        su.classList.remove('updated');
+        void su.offsetWidth;
+        su.classList.add('updated');
+      }
+
+      $$('.live-dot').forEach(function (dot) {
+        dot.classList.toggle('degraded', !!d.degraded);
+        dot.title = d.degraded ? 'Live data delayed — showing last known values' : 'Live';
+      });
+      $$('.degraded-banner').forEach(function (b) {
+        b.classList.toggle('show', !!d.degraded);
+      });
 
       if (typeof window.onAdminLiveUpdate === 'function') {
         window.onAdminLiveUpdate({
@@ -192,13 +212,54 @@
           reports: reports,
           alertsNew: alertsNew,
           lowRatings: lowRatings,
+          degraded: !!d.degraded,
         });
       }
     } catch (e) {
-      console.debug('admin live', e);
+      if (e.name !== 'AbortError') console.debug('admin live', e);
     }
   }
   window.refreshAdminLive = refreshAdminLive;
+
+  // Shared helper for page-specific polling (analytics cache stats,
+  // ratings badge, alert log, etc). Every page that used to roll its own
+  // setInterval gets the same hidden-tab pause and jitter (spreads
+  // requests out so N open tabs don't all hit the DB in the same
+  // 100ms window every refresh) for free.
+  function createPoller(fn, ms, opts) {
+    opts = opts || {};
+    let timer = null;
+    let stopped = false;
+
+    function tick() {
+      if (stopped) return;
+      if (!document.hidden) {
+        try { fn(); } catch (e) { console.debug('poller', e); }
+      }
+      schedule();
+    }
+    function schedule() {
+      if (stopped) return;
+      const jitter = Math.floor(Math.random() * Math.min(1500, ms * 0.15));
+      timer = setTimeout(tick, ms + jitter);
+    }
+    function start() {
+      stopped = false;
+      if (opts.immediate !== false) fn();
+      schedule();
+    }
+    function stop() {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      timer = null;
+    }
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) fn();
+    });
+    start();
+    return { stop: stop, start: start, runNow: fn };
+  }
+  window.PACAdmin.createPoller = createPoller;
 
   function exportData() {
     showToast('Export started…', 'info');
@@ -242,12 +303,15 @@
       nav('/analytics', 'graph-up', 'System Analytics') +
       nav('/ratings', 'star-half', 'Chat Ratings', 'ratingsBadge', 'badge-yellow') +
       nav('/alert_log', 'bell', 'Alert Log', 'alertsBadge', 'badge-red') +
+      '<div class="nav-section">Account</div>' +
+      nav('/profile', 'person-circle', 'My Profile') +
       '</nav>' +
       '<div class="sidebar-footer">' +
       '<button type="button" class="theme-toggle-sidebar" id="themeToggle" title="Toggle theme">' +
       '<span class="theme-switch-label"><i class="bi bi-moon-fill" id="themeIcon"></i><span id="themeLabel">Dark mode</span></span>' +
       '<i class="bi bi-circle-half" style="opacity:.5;font-size:.85rem"></i></button>' +
       '<button type="button" class="logout-btn" id="exportBtn"><i class="bi bi-download"></i> Export Backup</button>' +
+      '<a href="/admin/logout" class="logout-btn"><i class="bi bi-box-arrow-right"></i> Log Out</a>' +
       '<a href="/" class="logout-btn"><i class="bi bi-house"></i> Back to Help Desk</a></div>';
 
     let sb = $('#sidebar');
@@ -272,12 +336,11 @@
   }
   window.PACAdmin.softLoadHTML = softLoadHTML;
 
-  let pollTimer = null;
+  let livePoller = null;
 
   function startPolling() {
-    refreshAdminLive();
-    if (pollTimer) clearInterval(pollTimer);
-    pollTimer = setInterval(refreshAdminLive, POLL_MS);
+    if (livePoller) return; // createPoller already self-pauses on hidden tabs
+    livePoller = createPoller(refreshAdminLive, POLL_MS);
   }
 
   function bindUI() {
@@ -314,15 +377,6 @@
     bindUI();
     startPolling();
   }
-
-  document.addEventListener('visibilitychange', function () {
-    if (document.hidden) {
-      if (pollTimer) clearInterval(pollTimer);
-      pollTimer = null;
-    } else {
-      startPolling();
-    }
-  });
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);
