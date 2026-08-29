@@ -9,10 +9,6 @@
 (function () {
   'use strict';
 
-  // Badge polling interval. The backend endpoint (/api/admin/realtime)
-  // caches its own result for ~8s server-side and is shared by every open
-  // tab/admin, so this can stay reasonably tight without hammering the
-  // (small, 3-connection-on-Vercel) DB pool — see routes/api.py.
   const POLL_MS = 15000;
   const ACTIVE_MAP = {
     dashboard: '/dashboard',
@@ -57,8 +53,17 @@
     return w;
   }
 
+  const _recentToasts = new Map();
   function showToast(msg, type) {
     type = type || 'success';
+    // Suggestion applied globally: de-dupe identical toasts fired in
+    // quick succession (e.g. a double-click on a delete button, or two
+    // polling cycles both reporting the same error) instead of stacking
+    // duplicates on screen.
+    const key = type + '|' + msg;
+    const now = Date.now();
+    if (_recentToasts.has(key) && now - _recentToasts.get(key) < 1800) return;
+    _recentToasts.set(key, now);
     const icons = {
       success: 'check-circle-fill',
       danger: 'x-circle-fill',
@@ -343,6 +348,51 @@
     livePoller = createPoller(refreshAdminLive, POLL_MS);
   }
 
+  function startNavProgress() {
+    let bar = document.getElementById('navProgressBar');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'navProgressBar';
+      document.body.appendChild(bar);
+    }
+    bar.classList.remove('done');
+    bar.style.width = '0%';
+    // Force a reflow so the width transition actually animates from 0.
+    void bar.offsetWidth;
+    requestAnimationFrame(function () { bar.style.width = '75%'; });
+  }
+  window.PACAdmin.startNavProgress = startNavProgress;
+
+  function bindNavProgress() {
+    $$('a[href^="/"]').forEach(function (link) {
+      if (link._navBound) return;
+      link._navBound = true;
+      link.addEventListener('click', function (e) {
+        if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
+        if (link.target === '_blank') return;
+        startNavProgress();
+      });
+    });
+  }
+
+  function bindSearchShortcut() {
+    const el = $('#searchInput') || $('#searchAlerts') || $('.filter-input');
+    if (!el || el._kBound) return;
+    el._kBound = true;
+    if (el.placeholder && !/[⌘Cc]trl.?K|⌘K/.test(el.placeholder)) {
+      const hint = navigator.platform && /Mac/.test(navigator.platform) ? '⌘K' : 'Ctrl+K';
+      el.placeholder = el.placeholder.replace(/[…\.]*$/, '') + '  (' + hint + ')';
+    }
+  }
+  document.addEventListener('keydown', function (e) {
+    if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'k') return;
+    const el = $('#searchInput') || $('#searchAlerts') || $('.filter-input');
+    if (!el || el.offsetParent === null) return;
+    e.preventDefault();
+    el.focus();
+    el.select();
+  });
+
   function bindUI() {
     const themeBtn = $('#themeToggle');
     if (themeBtn && !themeBtn._bound) {
@@ -359,24 +409,29 @@
         if (window.innerWidth <= 900) closeSidebar();
       });
     });
-    const toggle = $('#sidebarToggle');
-    if (toggle && !toggle._bound) {
-      toggle.addEventListener('click', toggleSidebar);
-      toggle._bound = true;
-    }
+
     const ov = $('#sidebarOverlay');
     if (ov && !ov._bound) {
       ov.addEventListener('click', closeSidebar);
       ov._bound = true;
     }
+    bindNavProgress();
   }
 
   function boot() {
     injectSidebarIfNeeded();
     loadTheme();
     bindUI();
+    bindSearchShortcut();
     startPolling();
   }
+
+  window.addEventListener('pageshow', function (e) {
+    if (e.persisted) {
+      const bar = document.getElementById('navProgressBar');
+      if (bar) { bar.style.width = '0%'; bar.classList.add('done'); }
+    }
+  });
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);

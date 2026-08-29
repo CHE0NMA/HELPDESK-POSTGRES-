@@ -662,6 +662,7 @@ textarea.form-control { resize:vertical; min-height:60px; }
   padding:2.5rem;
   color:var(--muted);
 }
+.sched-table .no-data.skel-row td { padding:.85rem 1rem; }
 
 .badge-closed  { background:rgba(255,82,82,.12);  color:#ff8a80; border:1px solid rgba(255,82,82,.22); padding:.22rem .6rem; border-radius:20px; font-size:.68rem; font-weight:700; }
 .badge-open    { background:rgba(81,207,102,.12);  color:#8ce99a; border:1px solid rgba(81,207,102,.22); padding:.22rem .6rem; border-radius:20px; font-size:.68rem; font-weight:700; }
@@ -1129,7 +1130,20 @@ textarea.form-control { resize:vertical; min-height:60px; }
 /* Row remove animation + bulk UI */
 .sched-table tbody tr { transition: opacity .28s ease, transform .28s ease; }
 .sched-table tbody tr.row-removing { opacity: 0; transform: translateX(12px); pointer-events: none; }
-.sched-table th.chk-col, .sched-table td.chk-col { width: 40px; text-align: center; }
+.sched-table th.chk-col, .sched-table td.chk-col {
+  width: 0; padding-left:0; padding-right:0; opacity:0; overflow:hidden; text-align: center;
+  transition: width .22s ease, opacity .18s ease, padding .22s ease;
+}
+.sched-card.selecting .sched-table th.chk-col, .sched-card.selecting .sched-table td.chk-col {
+  width: 40px; opacity:1;
+}
+.btn-select-toggle {
+  display:inline-flex; align-items:center; gap:.4rem; padding:.45rem .85rem; border-radius:11px;
+  background:rgba(26,115,232,.1); border:1.5px solid var(--border2); color:var(--text-dim);
+  font-weight:600; font-size:.82rem; cursor:pointer; transition:all .18s ease;
+}
+.btn-select-toggle:hover { background:rgba(26,115,232,.18); color:var(--text); }
+.btn-select-toggle.active { background:var(--brand); border-color:var(--brand); color:#fff; }
 .faq-check { width: 16px; height: 16px; accent-color: var(--brand); cursor: pointer; }
 .btn-bulk-del {
   display: none; align-items: center; gap: .4rem; padding: .45rem .9rem; border-radius: 11px;
@@ -1176,16 +1190,17 @@ textarea.form-control { resize:vertical; min-height:60px; }
     <a href="/analytics" class="nav-link"><i class="bi bi-graph-up"></i> System Analytics</a>
     <a href="/ratings" class="nav-link"><i class="bi bi-star-half"></i> Chat Ratings</a>
     <a href="/alert_log" class="nav-link"><i class="bi bi-bell"></i> Alert Log</a>
+    <div class="nav-section">Account</div>
+    <a href="/profile" class="nav-link"><i class="bi bi-person-circle"></i> My Profile</a>
+    <button type="button" class="nav-link nav-link-btn" id="themeToggle" title="Toggle theme">
+      <i class="bi bi-moon-fill" id="themeIcon"></i>
+      <span id="themeLabel">Dark mode</span>
+    </button>
+    <button type="button" class="nav-link nav-link-btn" onclick="exportData()">
+      <i class="bi bi-download"></i> Export Backup
+    </button>
   </nav>
   <div class="sidebar-footer">
-    <button type="button" class="theme-toggle-sidebar" id="themeToggle" title="Toggle Dark/Light Mode">
-      <span class="theme-switch-label">
-        <i class="bi bi-moon-fill" id="themeIcon"></i>
-        <span id="themeLabel">Dark mode</span>
-      </span>
-      <i class="bi bi-circle-half" style="opacity:.5;font-size:.85rem"></i>
-    </button>
-    <button onclick="exportData()" class="logout-btn"><i class="bi bi-download"></i> Export Backup</button>
     <a href="/" class="logout-btn"><i class="bi bi-house"></i> Back to Help Desk</a>
   </div>
 </aside>
@@ -1272,11 +1287,14 @@ textarea.form-control { resize:vertical; min-height:60px; }
     </div>
 
     <!-- Schedules List -->
-    <div class="card">
+    <div class="card sched-card" id="schedCard">
       <div class="card-header">
         <span><i class="bi bi-list-ul" style="color:var(--accent2)"></i> Upcoming Entries</span>
         <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
           <span id="schedCount" style="font-size:.75rem;color:var(--text-dim)"></span>
+          <button type="button" class="btn-select-toggle" id="btnSelectToggleSched" onclick="toggleSelectionModeSched()">
+            <i class="bi bi-check2-square"></i> Select
+          </button>
           <button type="button" class="btn-bulk-del" id="btnBulkDeleteSched" onclick="openBulkDeleteSched()">
             <i class="bi bi-trash"></i> Delete selected (<span id="bulkSchedCount">0</span>)
           </button>
@@ -1306,7 +1324,9 @@ textarea.form-control { resize:vertical; min-height:60px; }
             </tr>
           </thead>
           <tbody id="schedulesList">
-            <tr class="no-data"><td colspan="11"><i class="bi bi-hourglass-split"></i> Loading…</td></tr>
+            <tr class="no-data skel-row"><td colspan="11"><div class="skeleton" style="height:16px;width:70%;margin:0 auto;border-radius:6px"></div></td></tr>
+            <tr class="no-data skel-row"><td colspan="11"><div class="skeleton" style="height:16px;width:55%;margin:0 auto;border-radius:6px;opacity:.75"></div></td></tr>
+            <tr class="no-data skel-row"><td colspan="11"><div class="skeleton" style="height:16px;width:65%;margin:0 auto;border-radius:6px;opacity:.5"></div></td></tr>
           </tbody>
         </table>
       </div>
@@ -1319,7 +1339,10 @@ textarea.form-control { resize:vertical; min-height:60px; }
         <span id="emergencyCount" style="font-size:.75rem;color:var(--text-dim)"></span>
       </div>
       <div class="card-body" style="padding:.5rem 0" id="emergencyClosuresBody">
-        <div style="text-align:center;padding:2rem;color:var(--text-dim);font-size:.85rem"><i class="bi bi-hourglass-split"></i> Loading…</div>
+        <div style="padding:.5rem 1rem;display:flex;flex-direction:column;gap:.5rem">
+          <div class="skeleton" style="height:18px;width:80%;border-radius:6px"></div>
+          <div class="skeleton" style="height:18px;width:60%;border-radius:6px;opacity:.6"></div>
+        </div>
       </div>
     </div>
 
@@ -1327,7 +1350,10 @@ textarea.form-control { resize:vertical; min-height:60px; }
     <div class="card">
       <div class="card-header"><i class="bi bi-search-heart" style="color:var(--warning)"></i> Student Questions About Unlisted Dates</div>
       <div class="card-body" style="padding:.5rem 0" id="missingQueriesBody">
-        <div style="text-align:center;padding:2rem;color:var(--text-dim);font-size:.85rem"><i class="bi bi-hourglass-split"></i> Loading…</div>
+        <div style="padding:.5rem 1rem;display:flex;flex-direction:column;gap:.5rem">
+          <div class="skeleton" style="height:18px;width:75%;border-radius:6px"></div>
+          <div class="skeleton" style="height:18px;width:50%;border-radius:6px;opacity:.6"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -1726,58 +1752,16 @@ textarea.form-control { resize:vertical; min-height:60px; }
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-// ============================================================
-// SIDEBAR (mobile)
-// ============================================================
-function toggleSidebar() {
-  const sb = document.getElementById('sidebar');
-  const ov = document.getElementById('sidebarOverlay');
-  const open = sb.classList.toggle('open');
-  ov.classList.toggle('show', open);
-  document.body.style.overflow = open ? 'hidden' : '';
-}
-function closeSidebar() {
-  document.getElementById('sidebar').classList.remove('open');
-  document.getElementById('sidebarOverlay').classList.remove('show');
-  document.body.style.overflow = '';
-}
-// Close sidebar when a nav link is clicked (mobile)
-document.querySelectorAll('.sidebar .nav-link').forEach(link => {
-  link.addEventListener('click', () => {
-    if (window.innerWidth <= 900) closeSidebar();
-  });
-});
-
-// ============================================================
-// THEME TOGGLE
-// ============================================================
-function toggleTheme() {
-  const html = document.documentElement;
-  const currentTheme = html.getAttribute('data-bs-theme');
-  const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-  html.setAttribute('data-bs-theme', newTheme);
-  localStorage.setItem('theme', newTheme);
-  updateThemeUI(newTheme);
-}
-
-function updateThemeUI(theme) {
-  const icon = document.getElementById('themeIcon');
-  const label = document.getElementById('themeLabel');
-  if (theme === 'dark') {
-    icon.className = 'bi bi-moon-fill';
-    label.textContent = 'Dark mode';
-  } else {
-    icon.className = 'bi bi-sun-fill';
-    label.textContent = 'Light mode';
-  }
-}
-
-function loadTheme() {
-  const savedTheme = localStorage.getItem('theme') || 'dark';
-  document.documentElement.setAttribute('data-bs-theme', savedTheme);
-  updateThemeUI(savedTheme);
-}
-loadTheme();
+// toggleSidebar / closeSidebar / toggleTheme / updateThemeUI / loadTheme
+// now live only in admin-common.js.
+//
+// BUG FIX: this page's hamburger button has id="sidebarToggle", and
+// admin-common.js used to ALSO attach a click listener to that id on top
+// of this file's own toggleSidebar() (bound via the button's inline
+// onclick). One tap fired toggleSidebar() twice -- open then immediately
+// closed again, net zero visible change. That's the "sidebar doesn't
+// open/close on phone" bug. Deduping to a single implementation fixes it
+// for good instead of just patching the symptom.
 
 // ============================================================
 // MAIN
@@ -2651,6 +2635,20 @@ function getVisibleSchedChecks() {
 }
 function getSelectedSchedIds() {
   return [...document.querySelectorAll('#schedulesList .row-check:checked')].map(c => parseInt(c.value, 10)).filter(Boolean);
+}
+let selectionModeOnSched = false;
+function toggleSelectionModeSched(forceOn) {
+  selectionModeOnSched = typeof forceOn === 'boolean' ? forceOn : !selectionModeOnSched;
+  const card = document.getElementById('schedCard');
+  const btn = document.getElementById('btnSelectToggleSched');
+  if (card) card.classList.toggle('selecting', selectionModeOnSched);
+  if (btn) {
+    btn.classList.toggle('active', selectionModeOnSched);
+    btn.innerHTML = selectionModeOnSched
+      ? '<i class="bi bi-x-lg"></i> Cancel'
+      : '<i class="bi bi-check2-square"></i> Select';
+  }
+  if (!selectionModeOnSched) clearSchedSelection();
 }
 function toggleSelectAllSched(checked) {
   getVisibleSchedChecks().forEach(c => { c.checked = checked; });

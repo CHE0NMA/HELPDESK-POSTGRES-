@@ -7,6 +7,7 @@ from fuzzywuzzy import fuzz
 from ai_providers import ai_cache, circuit_breaker, llm_chat
 from database import get_db
 from services import nlg
+from services.ai_retrieval import llm_pick_sections, llm_self_check
 from services.disambiguation import (
     HANDBOOK_POLICY,
     select_contenders,
@@ -450,7 +451,8 @@ def _title_similarity(question: str, title: str) -> float:
 
 
 def get_top_handbook_chunks(question: str, max_chunks: int = 8,
-                             query_embedding: Optional[List[float]] = None) -> List[Dict]:
+                             query_embedding: Optional[List[float]] = None,
+                             context_hint: Optional[str] = None) -> List[Dict]:
     """`query_embedding`: optional, from services.embeddings.get_embedding()
     on the raw user question -- SAME embedding the caller already computed
     for FAQ matching can be reused here (see faq.py), so this costs zero
@@ -549,6 +551,40 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8,
                 if title_hit3:
                     rows_by_id[hid] = (r[0], r[1], r[2], r[3], r[4], r[5], 0.05)
 
+        # AI section router -- see services/ai_retrieval.py. Reads the
+        # question against the LIVE list of section titles (whatever's
+        # actually in the DB right now, including anything added since
+        # the last deploy) and picks the section(s) that answer it, with
+        # no hand-written pattern required. This is what lets a newly
+        # ingested chapter/section work correctly on day one, and is what
+        # catches topics nobody thought to write a topic_aliases/regex
+        # rule for (see mixed_test report: jewelry, slippers, dorm
+        # worship policy, degree-program list, sibling scholarships,
+        # "any suspension announced", etc. -- all cases where the correct
+        # section existed but lost the keyword race to an unrelated one).
+        # Guaranteed into the candidate pool here (same as forced_early
+        # above) and given the top-priority boost further below, ahead of
+        # the regex-based `forced` boost, since it reasons over the
+        # question's actual meaning instead of matching literal words.
+        ai_picked_titles: List[str] = []
+        ai_router_attempted = False
+        try:
+            all_titles = [r[2] for r in all_rows if r[2]]
+            ai_router_attempted = bool(all_titles) and not circuit_breaker.is_open()
+            ai_picked_titles = llm_pick_sections(
+                question, all_titles, max_picks=3, context_hint=context_hint,
+            )
+        except Exception as e:
+            logger.warning(f"AI section router skipped: {e}")
+            ai_router_attempted = False
+        if ai_picked_titles:
+            ai_titles_l = {t.lower() for t in ai_picked_titles}
+            for r in all_rows:
+                hid = int(r[0])
+                title_l4 = (r[2] or '').lower()
+                if title_l4 in ai_titles_l and hid not in rows_by_id:
+                    rows_by_id[hid] = (r[0], r[1], r[2], r[3], r[4], r[5], 0.05)
+
         if not rows_by_id:
             scored = []
             for r in all_rows:
@@ -561,7 +597,7 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8,
                 scored.append({
                     'id': hid, 'chapter': chapter, 'section_title': title,
                     'page_start': ps, 'page_end': pe, 'content': content,
-                    'score': score,
+                    'score': score, '_ai_router_attempted': ai_router_attempted,
                 })
             scored.sort(key=lambda x: x['score'], reverse=True)
             return [s for s in scored[:max_chunks] if s['score'] >= 0.28]
@@ -838,7 +874,7 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8,
             scored.append({
                 'id': r[0], 'chapter': r[1], 'section_title': r[2],
                 'page_start': r[3], 'page_end': r[4], 'content': content,
-                'score': score,
+                'score': score, '_ai_router_attempted': ai_router_attempted,
             })
 
         # Forced-topic override: prefer exact section titles over overview
@@ -857,6 +893,18 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8,
                 elif content_hit:
                     s['score'] = float(s['score']) * 3.0
                     s['_forced_content'] = True
+
+        # AI section router boost -- highest-priority signal, applied
+        # after the regex `forced` boost so it can win over it when they
+        # disagree (the AI router reasons about meaning; the regex boost
+        # only matches literal words). See the injection point above for
+        # why this needs no manual pattern per topic.
+        if ai_picked_titles:
+            ai_titles_l2 = {t.lower() for t in ai_picked_titles}
+            for s in scored:
+                if (s.get('section_title') or '').lower() in ai_titles_l2:
+                    s['score'] = float(s.get('score') or 0) * 30.0
+                    s['_ai_picked'] = True
 
         try:
             idf = get_idf_index(_load_all_chunk_texts)
@@ -901,6 +949,16 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8,
                 elif content_hit:
                     s['score'] = float(s.get('score') or 0) * 2.0
                     s['_forced_content'] = True
+
+        # Re-apply AI router boost after rarity_rerank, same rationale as
+        # the forced-boost re-application above -- rarity_rerank blends in
+        # a rarity score that could otherwise dilute this back down.
+        if ai_picked_titles:
+            ai_titles_l3 = {t.lower() for t in ai_picked_titles}
+            for s in scored:
+                if (s.get('section_title') or '').lower() in ai_titles_l3:
+                    s['score'] = float(s.get('score') or 0) * 20.0
+                    s['_ai_picked'] = True
 
         scored.sort(key=lambda x: x['score'], reverse=True)
         top = float(scored[0]['score'] or 1.0)
@@ -1010,6 +1068,12 @@ def llm_hard_relevance(question: str, chunk: Dict) -> bool:
 
 
 def chunk_is_relevant_hard(question: str, chunk: Dict) -> bool:
+    # AI-router picks are always relevant -- the LLM already reasoned
+    # about whether this section answers the question, using the actual
+    # question meaning rather than keyword overlap. See services/ai_retrieval.py.
+    if chunk.get('_ai_picked'):
+        return True
+
     # Forced-topic chunks are always relevant once they won ranking.
     if chunk.get('_forced') or chunk.get('_forced_content'):
         return True
@@ -1105,6 +1169,9 @@ def _trim_to_close_contenders(chunks: List[Dict], score_key: str = 'score',
 def get_relevant_chunks(question: str, candidates: List[Dict]) -> List[Dict]:
     if not candidates:
         return []
+    ai_picked = [c for c in candidates if c.get('_ai_picked')]
+    if ai_picked:
+        return _trim_to_close_contenders(ai_picked, max_n=3)
     forced_title = [c for c in candidates if c.get('_forced')]
     if forced_title:
         return forced_title[:3]
@@ -1135,6 +1202,21 @@ def get_relevant_chunks(question: str, candidates: List[Dict]) -> List[Dict]:
             llm_kept.append(c)
     if llm_kept:
         return llm_kept[:4]
+
+    # Last-resort fallback: hand over the single best-scoring chunk even
+    # though nothing cleared any real relevance bar. This is how a
+    # confident-sounding WRONG answer happens instead of "I don't know"
+    # -- so only take it when the AI router genuinely never got a chance
+    # to weigh in (`_ai_router_attempted` False -- LLM unavailable/no
+    # titles, a genuine degraded-service case worth a best-effort guess).
+    # If the router DID run and picked nothing (`_ai_router_attempted`
+    # True and no `_ai_picked` chunk ever made it into `candidates`),
+    # that's a much stronger "this genuinely isn't in the handbook"
+    # signal than a bare keyword score -- trust it and return nothing so
+    # the caller says CANNOT_ANSWER instead of guessing.
+    router_had_a_say = any(c.get('_ai_router_attempted') for c in candidates)
+    if router_had_a_say:
+        return []
     if candidates and candidates[0].get('score', 0) >= 0.45:
         return candidates[:1]
     return []
@@ -1245,10 +1327,49 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
                     c.get('_forced') or c.get('_forced_content') for c in chunks
                 )
                 min_ov = 0.25 if is_forced else 0.35
+                # BUG FIX: this used to skip _answer_relevant_to_question
+                # entirely whenever a regex-forced topic match fired
+                # (`elif (not is_forced) and not ...`). That's backwards --
+                # a forced/AI-picked chunk being WRONG is exactly the
+                # failure mode that produces a confident-sounding answer
+                # about something completely different (e.g. a jewelry/
+                # dress-code question landing on an unrelated bylaws
+                # chunk about board meeting quorums, because a "campus"
+                # keyword collided with a needle). answer_is_grounded only
+                # checks the answer against its OWN (possibly wrong)
+                # source chunk, so it can't catch that -- it will happily
+                # confirm an answer is "grounded" in the wrong excerpt.
+                # _answer_relevant_to_question checks the answer against
+                # the QUESTION'S own words instead, which is the actual
+                # backstop for a wrong-chunk selection, and it's already
+                # lenient (min_overlap=1) so it doesn't false-reject a
+                # correct answer that's phrased differently -- there's no
+                # good reason to ever skip it.
                 if not answer_is_grounded(response, source_blob, min_overlap=min_ov):
+                    # CRITICAL BUG FIX: this branch used to only log --
+                    # `response` was never cleared, so control fell through
+                    # to the `if response and "CANNOT_ANSWER" not in
+                    # response.upper(): return response` check below and
+                    # returned the ungrounded answer anyway. Every
+                    # "grounding rejected" log line in production was a
+                    # silent no-op; the safety net never actually fired.
+                    # This is almost certainly the direct cause of the
+                    # mixed-test-report answers that quote completely
+                    # unrelated handbook text (corporate bylaws for a
+                    # jewelry question, dorm fees for a worship-policy
+                    # question, etc.) -- the wrong chunk got selected
+                    # upstream, the LLM dutifully summarized it, grounding
+                    # correctly detected it didn't answer the question,
+                    # logged that, and returned it to the student anyway.
                     logger.info(f"handbook grounding rejected for q={question[:80]!r}")
-                elif (not is_forced) and not _answer_relevant_to_question(question, response, min_overlap=1):
-                    logger.info(f"handbook answer-relevance REJECTED for q={question[:80]!r}")
+                    response = None
+                elif not _answer_relevant_to_question(question, response, min_overlap=1):
+                    # Same fix -- see above. This is the check that
+                    # catches a well-grounded-in-its-own-excerpt answer
+                    # that's simply the wrong excerpt (grounded != relevant).
+                    logger.info(f"handbook answer-relevance REJECTED (is_forced={is_forced}) "
+                                f"for q={question[:80]!r}")
+                    response = None
                 elif not verify_output_language(response, detected_lang):
                     logger.info(
                         f"handbook answer drifted language (wanted {detected_lang}), "
@@ -1293,7 +1414,17 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
                                 f"NON-top excerpt ({len(chunks)} excerpts offered, top-excerpt "
                                 f"overlap={top_only_ratio:.2f}) -- worth a look if this looks wrong."
                             )
-                    return response
+                    # Final independent self-check -- a second opinion that
+                    # actually reads question+answer+source and judges fit,
+                    # on top of the word-overlap heuristics above (grounding
+                    # + relevance). Fails open (treats an unavailable check
+                    # as a pass) so a flaky extra call never costs a good
+                    # answer -- it only ever removes an answer that already
+                    # got this far, never blocks the deterministic fallback
+                    # path below from running in its place.
+                    if llm_self_check(question, response, source_blob):
+                        return response
+                    logger.info(f"handbook answer self-check REJECTED for q={question[:80]!r}")
         except Exception as e:
             logger.error(f"AI handbook answer failed: {e}")
 
@@ -1461,6 +1592,28 @@ def answer_handbook_question(question: str, detected_lang: str = 'english',
     if cached:
         return cached
 
+    # Anchor retrieval to what the conversation was already about, so a
+    # short follow-up with almost no content words of its own ("does that
+    # apply to all levels?", "whole school?") still routes to the right
+    # section instead of losing the keyword/embedding race to something
+    # unrelated. Cheap: reuses ctx fields already being tracked, no extra
+    # DB round-trip or LLM call by itself (the hint just rides along with
+    # the AI router call get_top_handbook_chunks already makes).
+    context_hint = None
+    if ctx is not None:
+        hint_parts = []
+        if getattr(ctx, 'last_handbook_sections', None):
+            hint_parts.append(
+                "Previously discussed section(s): "
+                + ", ".join(ctx.last_handbook_sections)
+            )
+        last_ex = (getattr(ctx, 'conversation_history', None) or [None])[-1:]
+        if last_ex and last_ex[0]:
+            hint_parts.append(f"Previous student question: {last_ex[0].get('user', '')}")
+            hint_parts.append(f"Previous answer given: {(last_ex[0].get('bot', '') or '')[:300]}")
+        if hint_parts:
+            context_hint = "\n".join(hint_parts)
+
     parts = split_compound_question(question)
     if len(parts) >= 2:
         response = _answer_compound_handbook_question(
@@ -1471,7 +1624,7 @@ def answer_handbook_question(question: str, detected_lang: str = 'english',
                 ctx.clear_disambiguation()
         return response
 
-    chunks = get_top_handbook_chunks(question)
+    chunks = get_top_handbook_chunks(question, context_hint=context_hint)
     if not chunks:
         return None
 
@@ -1499,6 +1652,9 @@ def answer_handbook_question(question: str, detected_lang: str = 'english',
         ai_cache.set(cache_key, response)
         if ctx is not None:
             ctx.clear_disambiguation()
+            used_titles = [c.get('section_title') for c in chunks[:3] if c.get('section_title')]
+            if used_titles:
+                ctx.update(handbook_sections=used_titles)
     return response
 
 

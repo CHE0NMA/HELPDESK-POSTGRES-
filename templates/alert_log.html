@@ -624,17 +624,15 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
     <a href="/alert_log" class="nav-link active"><i class="bi bi-bell"></i> Alert Log</a>
     <div class="nav-section">Account</div>
     <a href="/profile" class="nav-link"><i class="bi bi-person-circle"></i> My Profile</a>
+      <button type="button" class="nav-link nav-link-btn" id="themeToggle" title="Toggle theme">
+      <i class="bi bi-moon-fill" id="themeIcon"></i>
+      <span id="themeLabel">Dark mode</span>
+    </button>
+    <button type="button" class="nav-link nav-link-btn" onclick="exportData()">
+      <i class="bi bi-download"></i> Export Backup
+    </button>
   </nav>
   <div class="sidebar-footer">
-    <button type="button" class="theme-toggle-sidebar" id="themeToggle" title="Toggle Dark/Light Mode">
-      <span class="theme-switch-label">
-        <i class="bi bi-moon-fill" id="themeIcon"></i>
-        <span id="themeLabel">Dark mode</span>
-      </span>
-      <i class="bi bi-circle-half" style="opacity:.5;font-size:.85rem"></i>
-    </button>
-    <button onclick="exportData()" class="logout-btn"><i class="bi bi-download"></i> Export Backup</button>
-    <a href="/admin/logout" class="logout-btn"><i class="bi bi-box-arrow-right"></i> Log Out</a>
     <a href="/" class="logout-btn"><i class="bi bi-house"></i> Back to Help Desk</a>
   </div>
 </aside>
@@ -738,57 +736,16 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-// ============================================================
-// SIDEBAR (mobile)
-// ============================================================
-function toggleSidebar() {
-  const sb = document.getElementById('sidebar');
-  const ov = document.getElementById('sidebarOverlay');
-  const open = sb.classList.toggle('open');
-  ov.classList.toggle('show', open);
-  document.body.style.overflow = open ? 'hidden' : '';
-}
-function closeSidebar() {
-  document.getElementById('sidebar').classList.remove('open');
-  document.getElementById('sidebarOverlay').classList.remove('show');
-  document.body.style.overflow = '';
-}
-document.querySelectorAll('.sidebar .nav-link').forEach(link => {
-  link.addEventListener('click', () => {
-    if (window.innerWidth <= 900) closeSidebar();
-  });
-});
-
-// ============================================================
-// THEME
-// ============================================================
-function toggleTheme() {
-  const html = document.documentElement;
-  const currentTheme = html.getAttribute('data-bs-theme');
-  const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-  html.setAttribute('data-bs-theme', newTheme);
-  localStorage.setItem('theme', newTheme);
-  updateThemeUI(newTheme);
-}
-
-function updateThemeUI(theme) {
-  const icon = document.getElementById('themeIcon');
-  const label = document.getElementById('themeLabel');
-  if (theme === 'dark') {
-    icon.className = 'bi bi-moon-fill';
-    label.textContent = 'Dark mode';
-  } else {
-    icon.className = 'bi bi-sun-fill';
-    label.textContent = 'Light mode';
-  }
-}
-
-function loadTheme() {
-  const savedTheme = localStorage.getItem('theme') || 'dark';
-  document.documentElement.setAttribute('data-bs-theme', savedTheme);
-  updateThemeUI(savedTheme);
-}
-loadTheme();
+// toggleSidebar / closeSidebar / toggleTheme / updateThemeUI / loadTheme
+// now live only in admin-common.js.
+//
+// BUG FIX: this page's hamburger button has id="sidebarToggle", and
+// admin-common.js used to ALSO attach a click listener to that id on top
+// of this file's own toggleSidebar() (bound via the button's inline
+// onclick). One tap fired toggleSidebar() twice -- open then immediately
+// closed again, net zero visible change. That's the "sidebar doesn't
+// open/close on phone" bug. Deduping to a single implementation fixes it
+// for good instead of just patching the symptom.
 
 // ============================================================
 // DATA

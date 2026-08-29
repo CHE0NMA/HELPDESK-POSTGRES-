@@ -90,7 +90,20 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
 .tbl { width:100%; border-collapse:collapse; }
 .tbl thead th { padding:.85rem 1rem; font-family:'Sora',sans-serif; font-weight:700; font-size:.68rem; text-transform:uppercase; letter-spacing:.06em; color:var(--text-dim); border-bottom:1px solid var(--border); background:rgba(20,40,70,.3); }
 [data-bs-theme="light"] .tbl thead th { background:rgba(200,210,224,.3); }
-.tbl th.chk-col, .tbl td.chk-col { width:42px; text-align:center; padding-left:.75rem; padding-right:.5rem; }
+.tbl th.chk-col, .tbl td.chk-col {
+  width:0; padding-left:0; padding-right:0; opacity:0; overflow:hidden; text-align:center;
+  transition:width .22s ease, opacity .18s ease, padding .22s ease;
+}
+.table-card.selecting .tbl th.chk-col, .table-card.selecting .tbl td.chk-col {
+  width:42px; opacity:1; padding-left:.75rem; padding-right:.5rem;
+}
+.btn-select-toggle {
+  display:inline-flex; align-items:center; gap:.4rem; padding:.45rem .85rem; border-radius:11px;
+  background:rgba(26,115,232,.1); border:1.5px solid var(--border2); color:var(--text-dim);
+  font-weight:600; font-size:.82rem; cursor:pointer; transition:all .18s ease;
+}
+.btn-select-toggle:hover { background:rgba(26,115,232,.18); color:var(--text); }
+.btn-select-toggle.active { background:var(--brand); border-color:var(--brand); color:#fff; }
 .tbl tbody td { padding:.82rem 1rem; font-size:.86rem; color:var(--text-dim); border-bottom:1px solid rgba(77,171,247,.06); vertical-align:middle; max-width:300px; }
 .tbl tbody tr { transition: opacity .28s ease, transform .28s ease, background .15s; }
 .tbl tbody tr:hover { background:rgba(26,115,232,.06); }
@@ -316,17 +329,15 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
     </a>
     <div class="nav-section">Account</div>
     <a href="/profile" class="nav-link"><i class="bi bi-person-circle"></i> My Profile</a>
+      <button type="button" class="nav-link nav-link-btn" id="themeToggle" title="Toggle theme">
+      <i class="bi bi-moon-fill" id="themeIcon"></i>
+      <span id="themeLabel">Dark mode</span>
+    </button>
+    <button type="button" class="nav-link nav-link-btn" onclick="exportData()">
+      <i class="bi bi-download"></i> Export Backup
+    </button>
   </nav>
   <div class="sidebar-footer">
-    <button type="button" class="theme-toggle-sidebar" id="themeToggle" title="Toggle theme">
-      <span class="theme-switch-label">
-        <i class="bi bi-moon-fill" id="themeIcon"></i>
-        <span id="themeLabel">Dark mode</span>
-      </span>
-      <i class="bi bi-circle-half" style="opacity:.5;font-size:.85rem"></i>
-    </button>
-    <button onclick="exportData()" class="logout-btn"><i class="bi bi-download"></i> Export Backup</button>
-    <a href="/admin/logout" class="logout-btn"><i class="bi bi-box-arrow-right"></i> Log Out</a>
     <a href="/" class="logout-btn"><i class="bi bi-house"></i> Back to Help Desk</a>
   </div>
 </aside>
@@ -360,6 +371,9 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
     <div class="toolbar">
       <span class="page-title">Admin-Verified Answers</span>
       <input type="text" class="filter-input" id="searchInput" placeholder="Search by question or answer…" oninput="filterTable()" autocomplete="off">
+      <button type="button" class="btn-select-toggle" id="btnSelectToggle" onclick="toggleSelectionMode()">
+        <i class="bi bi-check2-square"></i> Select
+      </button>
       <button type="button" class="btn-bulk-del" id="btnBulkDelete" onclick="openBulkDelete()">
         <i class="bi bi-trash"></i> Delete selected (<span id="bulkCount">0</span>)
       </button>
@@ -378,7 +392,7 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
       </button>
     </div>
 
-    <div class="table-card">
+    <div class="table-card" id="correctionsTableCard">
       <table class="tbl" id="correctionsTable">
         <thead>
           <tr>
@@ -549,6 +563,20 @@ function getVisibleChecks() {
 function getSelectedIds() {
   return [...document.querySelectorAll('#correctionsTable .row-check:checked')].map(c => parseInt(c.value, 10)).filter(Boolean);
 }
+let selectionModeOn = false;
+function toggleSelectionMode(forceOn) {
+  selectionModeOn = typeof forceOn === 'boolean' ? forceOn : !selectionModeOn;
+  const card = document.getElementById('correctionsTableCard');
+  const btn = document.getElementById('btnSelectToggle');
+  if (card) card.classList.toggle('selecting', selectionModeOn);
+  if (btn) {
+    btn.classList.toggle('active', selectionModeOn);
+    btn.innerHTML = selectionModeOn
+      ? '<i class="bi bi-x-lg"></i> Cancel'
+      : '<i class="bi bi-check2-square"></i> Select';
+  }
+  if (!selectionModeOn) clearSelection();
+}
 function onRowCheckChange() {
   document.querySelectorAll('#correctionsTable tr[data-id]').forEach(r => {
     const chk = r.querySelector('.row-check');
@@ -718,35 +746,11 @@ document.addEventListener('DOMContentLoaded', () => {
 function getCSRFToken() {
   return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 }
-function toggleSidebar() {
-  const sb = document.getElementById('sidebar');
-  const ov = document.getElementById('sidebarOverlay');
-  const open = sb.classList.toggle('open');
-  ov.classList.toggle('show', open);
-  document.body.style.overflow = open ? 'hidden' : '';
-}
-function closeSidebar() {
-  document.getElementById('sidebar').classList.remove('open');
-  document.getElementById('sidebarOverlay').classList.remove('show');
-  document.body.style.overflow = '';
-}
-document.querySelectorAll('.sidebar .nav-link').forEach(link => {
-  link.addEventListener('click', () => { if (window.innerWidth <= 900) closeSidebar(); });
-});
-function updateThemeUI(theme) {
-  const icon = document.getElementById('themeIcon');
-  const label = document.getElementById('themeLabel');
-  if (icon) icon.className = theme === 'dark' ? 'bi bi-moon-fill' : 'bi bi-sun-fill';
-  if (label) label.textContent = theme === 'dark' ? 'Dark mode' : 'Light mode';
-}
-(function(){ const t = localStorage.getItem('theme') || 'dark'; document.documentElement.setAttribute('data-bs-theme', t); updateThemeUI(t); })();
-document.getElementById('themeToggle')?.addEventListener('click', () => {
-  const html = document.documentElement;
-  const newTheme = html.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
-  html.setAttribute('data-bs-theme', newTheme);
-  localStorage.setItem('theme', newTheme);
-  updateThemeUI(newTheme);
-});
+// toggleSidebar / closeSidebar / theme toggle now live only in
+// admin-common.js — this page used to ALSO bind its own click handler on
+// #themeToggle directly, so tapping it fired both handlers and the theme
+// flipped twice (net no visible change). Same root cause as the mobile
+// sidebar not opening/closing.
 
 function exportData() { window.location.href='/api/export/faq'; showToast('Export started...','info'); }
 

@@ -165,17 +165,15 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
     </a>
     <div class="nav-section">Account</div>
     <a href="/profile" class="nav-link"><i class="bi bi-person-circle"></i> My Profile</a>
+      <button type="button" class="nav-link nav-link-btn" id="themeToggle" title="Toggle theme">
+      <i class="bi bi-moon-fill" id="themeIcon"></i>
+      <span id="themeLabel">Dark mode</span>
+    </button>
+    <button type="button" class="nav-link nav-link-btn" onclick="exportData()">
+      <i class="bi bi-download"></i> Export Backup
+    </button>
   </nav>
   <div class="sidebar-footer">
-    <button type="button" class="theme-toggle-sidebar" id="themeToggle" title="Toggle theme">
-      <span class="theme-switch-label">
-        <i class="bi bi-moon-fill" id="themeIcon"></i>
-        <span id="themeLabel">Dark mode</span>
-      </span>
-      <i class="bi bi-circle-half" style="opacity:.5;font-size:.85rem"></i>
-    </button>
-    <button onclick="exportData()" class="logout-btn"><i class="bi bi-download"></i> Export Backup</button>
-    <a href="/admin/logout" class="logout-btn"><i class="bi bi-box-arrow-right"></i> Log Out</a>
     <a href="/" class="logout-btn"><i class="bi bi-house"></i> Back to Help Desk</a>
   </div>
 </aside>

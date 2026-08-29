@@ -147,6 +147,40 @@ textarea.form-control { resize:vertical; min-height:60px; }
 .flow-step .step-title { font-family:'Sora',sans-serif; font-weight:700; font-size:.95rem; margin-bottom:.25rem; }
 .flow-step .step-desc { font-size:.78rem; color:var(--text-dim); line-height:1.45; }
 
+/* --------------------------------------------------------------------
+   Insert-methods tab strip. The four "how do I add content" cards
+   (Upload PDF, Import JSON chunks, FAQ prompt guide, Mass insert FAQs)
+   used to be stacked full-height cards one after another — reaching the
+   actual chunks table below meant scrolling past all four every time.
+   Now only the active method's card renders; switching tabs is instant. */
+.insert-tabs {
+  display:flex; gap:.4rem; overflow-x:auto; padding-bottom:2px; margin-bottom:1rem;
+  border-bottom:1px solid var(--border);
+}
+.insert-tab {
+  display:flex; align-items:center; gap:.5rem; padding:.7rem 1.1rem; white-space:nowrap;
+  font-size:.85rem; font-weight:600; color:var(--text-dim); background:none; border:none;
+  border-bottom:2.5px solid transparent; cursor:pointer; transition:color .18s ease, border-color .18s ease;
+  flex-shrink:0;
+}
+.insert-tab:hover { color:var(--text); }
+.insert-tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+.insert-tab .tab-badge {
+  font-size:.66rem; font-weight:700; padding:.1rem .4rem; border-radius:20px;
+  background:rgba(120,150,190,.14); color:var(--text-dim);
+}
+.insert-tab.active .tab-badge { background:rgba(0,229,255,.18); color:var(--accent); }
+.insert-panel { display:none; animation:panelIn .22s ease; }
+.insert-panel.active { display:block; }
+@keyframes panelIn { from{ opacity:0; transform:translateY(6px);} to{ opacity:1; transform:translateY(0);} }
+/* Inside a tabbed panel the card no longer needs its own bottom margin
+   or to repeat the card chrome — the tab strip already frames it. */
+.insert-panel .card { margin-bottom:0; }
+@media (max-width:640px) {
+  .insert-tab { padding:.6rem .8rem; font-size:.8rem; }
+  .insert-tab span.tab-label-full { display:none; }
+}
+
 .prompt-box { background:rgba(10,20,40,.6); border:1px solid var(--border); border-radius:12px; padding:1rem; font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; font-size:.72rem; line-height:1.5; color:var(--text-dim); max-height:220px; overflow-y:auto; white-space:pre-wrap; word-break:break-word; }
 [data-bs-theme="light"] .prompt-box { background:rgba(0,0,0,.04); }
 .prompt-actions { display:flex; gap:.6rem; flex-wrap:wrap; margin-top:.75rem; }
@@ -206,14 +240,15 @@ textarea.form-control { resize:vertical; min-height:60px; }
     <a href="/alert_log" class="nav-link"><i class="bi bi-bell"></i> Alert Log</a>
     <div class="nav-section">Account</div>
     <a href="/profile" class="nav-link"><i class="bi bi-person-circle"></i> My Profile</a>
+      <button type="button" class="nav-link nav-link-btn" id="themeToggle" title="Toggle theme">
+      <i class="bi bi-moon-fill" id="themeIcon"></i>
+      <span id="themeLabel">Dark mode</span>
+    </button>
+    <button type="button" class="nav-link nav-link-btn" onclick="exportData()">
+      <i class="bi bi-download"></i> Export Backup
+    </button>
   </nav>
   <div class="sidebar-footer">
-    <button type="button" class="theme-toggle-sidebar" id="themeToggle" title="Toggle theme">
-      <span class="theme-switch-label"><i class="bi bi-moon-fill" id="themeIcon"></i><span id="themeLabel">Dark mode</span></span>
-      <i class="bi bi-circle-half" style="opacity:.5;font-size:.85rem"></i>
-    </button>
-    <button onclick="exportData()" class="logout-btn"><i class="bi bi-download"></i> Export Backup</button>
-    <a href="/admin/logout" class="logout-btn"><i class="bi bi-box-arrow-right"></i> Log Out</a>
     <a href="/" class="logout-btn"><i class="bi bi-house"></i> Back to Help Desk</a>
   </div>
 </aside>
@@ -373,6 +408,24 @@ textarea.form-control { resize:vertical; min-height:60px; }
       </div>
     </div>
 
+    <!-- Insert methods (tabbed — previously 4 stacked cards you had to
+         scroll past to reach the chunks table below) -->
+    <div class="insert-tabs" role="tablist">
+      <button type="button" class="insert-tab active" data-tab="tab-pdf" onclick="switchInsertTab('tab-pdf')">
+        <i class="bi bi-cloud-arrow-up-fill"></i> <span class="tab-label-full">Upload PDF</span><span class="tab-badge">1</span>
+      </button>
+      <button type="button" class="insert-tab" data-tab="tab-json" onclick="switchInsertTab('tab-json')">
+        <i class="bi bi-filetype-json"></i> <span class="tab-label-full">Import JSON</span><span class="tab-badge">1b</span>
+      </button>
+      <button type="button" class="insert-tab" data-tab="tab-prompt" onclick="switchInsertTab('tab-prompt')">
+        <i class="bi bi-magic"></i> <span class="tab-label-full">FAQ prompt guide</span><span class="tab-badge">2</span>
+      </button>
+      <button type="button" class="insert-tab" data-tab="tab-massinsert" onclick="switchInsertTab('tab-massinsert')">
+        <i class="bi bi-clipboard-plus-fill"></i> <span class="tab-label-full">Mass insert FAQs</span><span class="tab-badge">3</span>
+      </button>
+    </div>
+
+    <div class="insert-panel active" id="tab-pdf">
 <div class="card">
       <div class="card-header"><i class="bi bi-cloud-arrow-up-fill" style="color:var(--handbook)"></i> 1. Upload Handbook PDF → Chunks</div>
       <div class="card-body">
@@ -405,7 +458,9 @@ textarea.form-control { resize:vertical; min-height:60px; }
         <div class="status-msg" id="uploadStatus"></div>
       </div>
     </div>
+    </div><!-- /tab-pdf -->
 
+    <div class="insert-panel" id="tab-json">
     <!-- JSON Chunks Import -->
     <div class="card">
       <div class="card-header"><i class="bi bi-filetype-json" style="color:var(--warning)"></i> 1b. Import Pre-chunked JSON (optional)</div>
@@ -429,7 +484,9 @@ textarea.form-control { resize:vertical; min-height:60px; }
         <div class="status-msg" id="jsonImportStatus"></div>
       </div>
     </div>
+    </div><!-- /tab-json -->
 
+    <div class="insert-panel" id="tab-prompt">
     <!-- Prompt guide for generating FAQs -->
     <div class="card">
       <div class="card-header">
@@ -483,7 +540,9 @@ Section text:
         </div>
       </div>
     </div>
+    </div><!-- /tab-prompt -->
 
+    <div class="insert-panel" id="tab-massinsert">
     <!-- Mass insert FAQs -->
     <div class="card">
       <div class="card-header"><i class="bi bi-clipboard-plus-fill" style="color:var(--faq-green)"></i> 3. Mass insert Handbook FAQs</div>
@@ -523,6 +582,7 @@ Section text:
         <div class="status-msg" id="massInsertFaqStatus"></div>
       </div>
     </div>
+    </div><!-- /tab-massinsert -->
 
     <!-- Edit Panel -->
     <div class="card edit-panel" id="editPanel">
@@ -584,36 +644,8 @@ Section text:
 <script>
 const FAQ_PROMPT = document.getElementById('faqPromptBox')?.textContent || '';
 
-function toggleSidebar() {
-  const sb = document.getElementById('sidebar');
-  const ov = document.getElementById('sidebarOverlay');
-  const open = sb.classList.toggle('open');
-  ov.classList.toggle('show', open);
-  document.body.style.overflow = open ? 'hidden' : '';
-}
-function closeSidebar() {
-  document.getElementById('sidebar').classList.remove('open');
-  document.getElementById('sidebarOverlay').classList.remove('show');
-  document.body.style.overflow = '';
-}
-document.querySelectorAll('.sidebar .nav-link').forEach(link => {
-  link.addEventListener('click', () => { if (window.innerWidth <= 900) closeSidebar(); });
-});
-
-function toggleTheme() {
-  const html = document.documentElement;
-  const newTheme = html.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
-  html.setAttribute('data-bs-theme', newTheme);
-  localStorage.setItem('theme', newTheme);
-  updateThemeUI(newTheme);
-}
-function updateThemeUI(theme) {
-  const icon = document.getElementById('themeIcon');
-  const label = document.getElementById('themeLabel');
-  if (icon) icon.className = theme === 'dark' ? 'bi bi-moon-fill' : 'bi bi-sun-fill';
-  if (label) label.textContent = theme === 'dark' ? 'Dark mode' : 'Light mode';
-}
-(function(){ const t = localStorage.getItem('theme') || 'dark'; document.documentElement.setAttribute('data-bs-theme', t); updateThemeUI(t); })();
+// toggleSidebar / closeSidebar / toggleTheme / updateThemeUI now live only
+// in admin-common.js (deduped across every admin page).
 
 function getCsrf() { return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''; }
 function escHtml(s) {
@@ -635,6 +667,20 @@ function copyPrompt() {
 }
 
 let allChunks = [];
+
+// Insert-method tabs (Upload PDF / Import JSON / FAQ prompt guide / Mass
+// insert FAQs). Persist the last-used tab per browser so re-opening the
+// page during a multi-step handbook update doesn't dump you back at tab 1.
+function switchInsertTab(tabId) {
+  document.querySelectorAll('.insert-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabId));
+  document.querySelectorAll('.insert-panel').forEach(p => p.classList.toggle('active', p.id === tabId));
+  try { localStorage.setItem('handbookInsertTab', tabId); } catch (e) {}
+}
+(function restoreInsertTab() {
+  let saved = null;
+  try { saved = localStorage.getItem('handbookInsertTab'); } catch (e) {}
+  if (saved && document.getElementById(saved)) switchInsertTab(saved);
+})();
 let selectedFile = null;
 let uploadPollTimer = null;
 let selectedJsonFile = null;

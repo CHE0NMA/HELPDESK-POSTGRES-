@@ -63,12 +63,25 @@ class ConversationContext:
         self.last_answer = None
         self.last_schedule_query = None
         self.last_detected_lang = None
+        # Which handbook section(s) the last handbook-sourced answer
+        # actually came from -- used to anchor follow-up retrieval (see
+        # services/handbook.py's context_hint param and
+        # services/faq.py's _answer_followup_via_search). Without this,
+        # a short follow-up like "does that apply to all levels?" has to
+        # be rewritten into a standalone question by a free-text LLM
+        # rewrite and then re-run through retrieval from scratch, with
+        # no memory of which section the previous turn actually landed
+        # on -- if the rewrite drifts even slightly, retrieval has
+        # nothing to anchor to. Kept as a small list (not just one title)
+        # since a compound answer can draw from more than one section.
+        self.last_handbook_sections: List[str] = []
 
         self.last_disambiguation: Optional[dict] = None
         self._loaded_at = time.time()
 
     def update(self, topic=None, intent=None, user_msg=None, bot_response=None,
-               faq_answer=None, faq_question=None, detected_lang=None):
+               faq_answer=None, faq_question=None, detected_lang=None,
+               handbook_sections=None):
         if topic:
             self.last_topic = topic
         if intent:
@@ -79,6 +92,8 @@ class ConversationContext:
             self.last_faq_question = faq_question
         if detected_lang:
             self.last_detected_lang = detected_lang
+        if handbook_sections:
+            self.last_handbook_sections = list(handbook_sections)[:3]
 
         if user_msg and bot_response:
             self.conversation_history.append({
@@ -106,6 +121,11 @@ class ConversationContext:
             lines.append(f"\nLast topic discussed: {self.last_faq_question}")
         if self.last_topic:
             lines.append(f"Topic category: {self.last_topic}")
+        if self.last_handbook_sections:
+            lines.append(
+                "Last handbook section(s) discussed: "
+                + ", ".join(self.last_handbook_sections)
+            )
         return "\n".join(lines)
 
     def is_followup(self, question: str) -> bool:
@@ -246,6 +266,7 @@ def _ctx_to_dict(ctx: 'ConversationContext') -> dict:
         'last_answer': ctx.last_answer,
         'last_schedule_query': ctx.last_schedule_query,
         'last_detected_lang': ctx.last_detected_lang,
+        'last_handbook_sections': ctx.last_handbook_sections,
         # last_disambiguation deliberately omitted — see module docstring.
     }
 
@@ -259,6 +280,7 @@ def _apply_dict_to_ctx(ctx: 'ConversationContext', data: dict) -> None:
     ctx.last_answer = data.get('last_answer')
     ctx.last_schedule_query = data.get('last_schedule_query')
     ctx.last_detected_lang = data.get('last_detected_lang')
+    ctx.last_handbook_sections = data.get('last_handbook_sections') or []
 
 
 def _save_ctx(session_id: Optional[str], ctx: 'ConversationContext') -> None:

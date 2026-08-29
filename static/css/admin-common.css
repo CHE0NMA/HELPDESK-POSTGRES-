@@ -34,6 +34,56 @@
   border-color: var(--border2);
   transform: translateY(-2px);
 }
+/* Slim top-of-page loading bar shown while navigating between admin
+   pages — the beat of "smoothness" a full server-rendered page reload
+   is missing without a SPA. Purely visual: fills quickly on click, the
+   real navigation finishes the job. */
+#navProgressBar {
+  position: fixed; top: 0; left: 0; height: 3px; width: 0%;
+  background: linear-gradient(90deg, var(--brand, #1a73e8), var(--accent, #00e5ff));
+  z-index: 99999; border-radius: 0 2px 2px 0;
+  transition: width .35s cubic-bezier(0.22,1,0.36,1), opacity .25s ease .15s;
+  box-shadow: 0 0 8px rgba(0,229,255,.5);
+}
+#navProgressBar.done { opacity: 0; }
+
+/* Sidebar theme-toggle / export-backup buttons now live in the nav flow
+   itself instead of a separate footer section — reset default <button>
+   chrome so they inherit the page's own .nav-link look exactly. */
+.nav-link-btn {
+  width: 100%; text-align: left; background: none; border: 1px solid transparent;
+  font-family: inherit; cursor: pointer; display: flex; align-items: center;
+}
+.nav-divider {
+  height: 1px; background: var(--border, rgba(77,171,247,.15));
+  margin: .6rem .6rem .5rem;
+}
+
+/* Sticky table headers — long lists (FAQs, unanswered, corrections,
+   schedules) used to scroll their header off-screen with the data, so
+   you lost track of which column was which. Sticks just below the
+   topbar (58px) on every page that uses .tbl/.sched-table. */
+.tbl thead th, .sched-table thead th {
+  position: sticky;
+  top: 58px;
+  z-index: 20;
+  background-color: rgba(9, 20, 40, .92) !important;
+  backdrop-filter: blur(10px);
+}
+[data-bs-theme="light"] .tbl thead th, [data-bs-theme="light"] .sched-table thead th {
+  background-color: rgba(240, 244, 248, .94) !important;
+}
+
+/* Nicer default empty/no-data state — centered icon + muted message
+   instead of a bare line of text, wherever a page reuses .empty-state. */
+.empty-state {
+  display: flex; flex-direction: column; align-items: center; gap: .5rem;
+  padding: 2.25rem 1rem; color: var(--muted, #8ba9cc); text-align: center;
+}
+.empty-state i:first-child {
+  font-size: 2rem; opacity: .4;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

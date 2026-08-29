@@ -1113,7 +1113,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             )
             return result if return_topic else result[0]
 
-        if engine.faq_should_disambiguate(candidates):
+        if engine.faq_should_disambiguate(candidates, user_question=question):
             dis = engine.build_disambiguation(candidates, detected_lang)
             ctx.set_disambiguation(
                 'faq',
