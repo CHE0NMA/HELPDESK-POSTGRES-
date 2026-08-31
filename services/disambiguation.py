@@ -49,6 +49,33 @@ HANDBOOK_POLICY = DisambiguationPolicy(decisive_score=0.58, min_contender_score=
 FAQ_POLICY = DisambiguationPolicy(decisive_score=0.85, min_contender_score=0.58, max_gap=0.06)
 DATE_POLICY = DisambiguationPolicy(decisive_score=0.65, min_contender_score=0.50, max_gap=0.10)
 
+# "Soft" clarification tier -- used ONLY at the point the bot is about to
+# give up entirely and say "I don't have a confirmed answer for that."
+# Normal disambiguation (above) only fires when there's a genuinely close
+# race between good candidates; it deliberately does NOT fire on two
+# mediocre, spread-out candidates, because asking "which did you mean?"
+# between two bad guesses is worse than just answering the better one.
+# But when NEITHER guess is good enough to answer confidently, that
+# same logic means both get silently dropped and the student gets a flat
+# non-answer -- even though a person skimming the same 2-3 candidates
+# would often recognize the topic and just ask "did you mean X or Y?"
+# instead of shrugging. decisive_score is set above 1.0 (unreachable) so
+# select_contenders() never short-circuits into "just trust the leader" --
+# by the time this policy is consulted, nothing WAS trusted, so there is
+# no leader to fall back on. min_contender_score is deliberately much
+# lower than the normal policies' (a candidate only needs to be
+# vaguely-plausible, not close-to-confident, to be worth offering as an
+# option) and max_gap is wide (candidates don't need to be near-tied,
+# just all be in the "maybe" zone). Only ever consulted with >=2
+# contenders required by the caller -- a single weak guess still isn't
+# worth interrupting the conversation for.
+FAQ_SOFT_POLICY = DisambiguationPolicy(
+    decisive_score=1.01, min_contender_score=0.32, max_gap=0.28, max_options=3,
+)
+HANDBOOK_SOFT_POLICY = DisambiguationPolicy(
+    decisive_score=1.01, min_contender_score=0.22, max_gap=0.30, max_options=3,
+)
+
 
 def with_overrides(policy: DisambiguationPolicy, **overrides) -> DisambiguationPolicy:
     return replace(policy, **overrides)

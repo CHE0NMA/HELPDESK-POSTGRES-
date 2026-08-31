@@ -100,6 +100,24 @@ NEXT_MONTH_RE = re.compile(
     re.IGNORECASE,
 )
 
+# "whole week" / "buong linggo" / "tibuok (nga) semana" mean the same
+# thing as "this week" for scheduling purposes (student wants the full
+# current week's status, not just today) but don't share any words with
+# "this week" itself, so they need their own alternation rather than
+# relying on the THIS/NEXT WEEK regexes elsewhere in this file to catch
+# them by accident. Centralized here and reused everywhere "this week"
+# is checked (parse_date_with_regex, is_date_question,
+# _has_explicit_date_signal) so a fix here doesn't need to be repeated
+# in three places again.
+THIS_WEEK_RE = re.compile(
+    r'\b(this\s+week|this\s+wk|whole\s+week|entire\s+week|the\s+whole\s+week|'
+    r'ngayong\s+linggo|buong\s+linggo|buo(?:ng)?\s+linggo|'
+    r'karong\s+semana|karon\s+nga\s+semana|niining\s+semanaha|'
+    r'niini\s+nga\s+semana|ning\s+semana|tibuok\s+(?:nga\s+)?semana|'
+    r'tibuok\s+na\s+semana)\b',
+    re.IGNORECASE,
+)
+
 DATE_KEYWORDS = [
     'today', 'tomorrow', 'this week', 'next week', 'last week', 'previous week',
     'this month', 'next month', 'last month', 'previous month',
@@ -168,6 +186,24 @@ def is_schedule_level_followup(question: str, ctx) -> bool:
     if not q:
         return False
 
+    # BUG FIX: this used to fire on ANY short message containing a bare
+    # word like "high", "school", "college", "for", "sa", "too" -- which
+    # matches almost any self-contained new schedule question, not just
+    # a level/department follow-up. "Does high school have classes this
+    # week?" contains "high" and "school"; "whole week there is class?"
+    # contains "whole" -- both got (wrongly) treated as "just re-answer
+    # the PREVIOUS date with a different department" and silently reused
+    # ctx.last_schedule_query's stale date instead of parsing the new
+    # question's own "this week"/"whole week" at all. If the new message
+    # carries its OWN explicit date signal, it is never a bare
+    # level-only follow-up -- let it fall through to full re-parsing
+    # (services.dates.answer_date_question), which resolves the date
+    # correctly AND still picks up the department via
+    # services.schedule.detect_dept_from_question. This check must run
+    # before the aggressive word-list heuristic below, not after.
+    if _has_explicit_date_signal(q):
+        return False
+
     # Extremely short messages that contain any of these words are almost
     # certainly continuing the previous schedule conversation
     if len(q.split()) <= 6 and any(w in q for w in (
@@ -231,6 +267,12 @@ def answer_schedule_department_followup(question: str, ctx) -> Optional[str]:
         return natural
 
     # --- 2. Normal department switch (existing logic, kept intact) -------
+    # Same guard as is_schedule_level_followup above: a new question with
+    # its own explicit date signal is never just a department switch on
+    # the OLD date -- fall through to full re-parsing instead.
+    if _has_explicit_date_signal(q):
+        return None
+
     dept = sched.detect_dept_from_question(q)
     if dept == 'all' or len(q.split()) > 6:
         return None
@@ -307,6 +349,7 @@ def is_date_question(question: str, ctx=None) -> bool:
         is_range_word = (
             _has_day_word(q, LAST_WEEK_WORDS) or _has_day_word(q, LAST_MONTH_WORDS)
             or re.search(r'\b(this|next|last|previous)\s+(week|month)\b', q, re.I)
+            or THIS_WEEK_RE.search(q)
             or 'holiday' in q or 'holidays' in q
         )
         if is_range_word:
@@ -334,6 +377,8 @@ def is_date_question(question: str, ctx=None) -> bool:
             return True
 
     if re.search(r'\b(this|next|last|previous)\s+(week|month)\b', q, re.I) and schedule_context:
+        return True
+    if THIS_WEEK_RE.search(q) and schedule_context:
         return True
 
     if (THIS_MONTH_RE.search(q) or NEXT_MONTH_RE.search(q)) and schedule_context:
@@ -535,7 +580,7 @@ def parse_date_with_regex(question: str) -> Tuple[datetime.date, str, str]:
         last_month_start = last_month_end.replace(day=1)
         return last_month_start, 'last_month', last_month_start.strftime('%B %Y')
 
-    if re.search(r'(this\s+week|ngayong\s+linggo|karong\s+semana)', q, re.IGNORECASE):
+    if THIS_WEEK_RE.search(q):
         for name, wd in WEEKDAY_NAMES.items():
             if re.search(rf'\b{name}\b', q, re.IGNORECASE):
                 target = _next_weekday(today, wd)
@@ -574,12 +619,7 @@ def parse_date_with_regex(question: str) -> Tuple[datetime.date, str, str]:
     if _has_day_word(q, TODAY_WORDS):
         return today, 'today', today.strftime('%B %d, %Y')
 
-    if re.search(
-        r'(this\s+week|ngayong\s+linggo|karong\s+semana|karon\s+nga\s+semana|'
-        r'niining\s+semanaha|karon\s+nga\s+week|ning\s+semana|'
-        r'niini\s+nga\s+semana|this\s+wk)',
-        q, re.IGNORECASE,
-    ):
+    if THIS_WEEK_RE.search(q):
         return today, 'this_week', 'this week'
     if re.search(
         r'(next\s+week|susunod\s+na\s+linggo|sunod\s+nga\s+semana|'
@@ -673,6 +713,8 @@ def _has_explicit_date_signal(question: str) -> bool:
     ):
         return True
     if re.search(r'(this|next)\s+(week|month)', q, re.IGNORECASE):
+        return True
+    if THIS_WEEK_RE.search(q):
         return True
     if THIS_MONTH_RE.search(q) or NEXT_MONTH_RE.search(q):
         return True

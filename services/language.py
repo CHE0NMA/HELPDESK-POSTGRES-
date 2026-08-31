@@ -436,33 +436,35 @@ def get_non_school_response(language: str) -> str:
 
 LOGGED_FALLBACK_MESSAGES = {
     'english': (
-        "That's a good question — I don't have a confirmed answer for it yet, "
-        "but I've saved it so our staff can add it soon. Feel free to ask me "
-        "something else in the meantime!"
+        "Hmm, I couldn't find a solid answer for that one — I've saved your "
+        "question so our staff can add it soon. In the meantime, feel free to "
+        "try rephrasing it, or ask me something else!"
     ),
     'tagalog': (
-        "Magandang tanong iyan — wala pa akong sagot dito pero na-save ko na "
-        "ito para madagdag ito ng aming staff. Magtanong ka na lang ulit ng "
-        "iba habang hinihintay!"
+        "Hmm, wala akong makitang malinaw na sagot dyan — na-save ko na ang "
+        "tanong mo para madagdag ito ng aming staff. Habang hinihintay, "
+        "subukan mo rin siyang i-rephrase, o magtanong ka na lang ng iba!"
     ),
     'bisaya': (
-        "Maayo nga pangutana na — wala pa koy kumpirmadong tubag niini, apan "
-        "gi-save nako kini aron madugang sa among staff. Pangutana lang og "
-        "lain samtang naghulat!"
+        "Hmm, wala koy nakit-an nga klaro nga tubag ana — gi-save nako ang "
+        "imong pangutana aron madugang sa among staff. Samtang naghulat, "
+        "sulayi og lahi nga pagkasulti, o pangutana lang og lain!"
     ),
     'mixed_te': (
-        "Magandang tanong! Wala pa akong sagot dito ngayon, but I've saved "
-        "your question so it can be added soon. Try asking something else "
-        "in the meantime!"
+        "Hmm, wala akong nakitang malinaw na sagot dyan — but I've saved "
+        "your question so it can be added soon. Try rephrasing it, or "
+        "ask me something else in the meantime!"
     ),
     'mixed_be': (
-        "Maayo na pangutana! Wala pa koy tubag karon, but gi-save nako ang "
-        "imong pangutana para madugang unya. Pangutana og lain samtang "
-        "naghulat!"
+        "Hmm, wala koy nakit-an nga klaro nga tubag ana — but gi-save nako "
+        "ang imong pangutana para madugang unya. Sulayi og lahi nga "
+        "pagkasulti, o pangutana og lain samtang naghulat!"
     ),
     'mixed_tb': (
-        "Maayo/Maganda nga pangutana! Gi-save/Na-save na nako/ko kini para "
-        "madugang/madagdag unya. Pangutana og/ng lain samtang naghulat!"
+        "Hmm, wala koy/akong nakit-an nga klaro nga tubag/sagot ana — "
+        "Gi-save/Na-save na nako/ko kini para madugang/madagdag unya. "
+        "Sulayi og/ng laing paagi sa pagsulti, o pangutana og/ng lain "
+        "samtang naghulat!"
     ),
 }
 

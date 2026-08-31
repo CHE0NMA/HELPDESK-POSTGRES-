@@ -219,7 +219,10 @@ def _extract_from_answer(user_question: str, best_text: str, answer: str,
     - Answer ONLY what the student asked. Do NOT paste or restate the entire source text.
     - For when/what-year/started/founded questions: give the year/date in 1–2 short sentences. Skip long history unless they asked for the full story.
     - For who/founder questions: name the people in 1–2 short sentences.
-    - For yes/no (okay? allowed? can I?): lead with Yes or No, then a short reason.
+    - For yes/no (okay? allowed? can I?): your FIRST WORD must be Yes or No, then a short reason.
+    - If the student named a SPECIFIC item and the source only covers a DIFFERENT, similar
+      item without actually naming the one asked about, don't answer as if it was covered —
+      say plainly it isn't specifically addressed, or reply CANNOT_ANSWER if nothing else applies.
     - Never start with "According to…".
     - If asking for a full list of items, enumerate the relevant items — still keep it concise.
     - {nlg.STYLE_GUIDE}

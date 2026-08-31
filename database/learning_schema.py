@@ -25,6 +25,15 @@ def ensure_learning_schema(get_db_fn) -> None:
     if n:
         logger.info(f"Seeded {n} handbook topic aliases")
 
+    # Self-healing draft loop -- see services/self_heal.py's module
+    # docstring. Schema creation is idempotent/lazy just like
+    # ensure_topic_alias_schema above, so it's safe to call on every boot.
+    try:
+        from services.self_heal import ensure_self_heal_schema
+        ensure_self_heal_schema(get_db_fn)
+    except Exception as e:
+        logger.warning(f"self_heal schema ensure skipped: {e}")
+
 
 def wire_into_app(app, get_db_fn, scheduler=None):
     """
@@ -54,3 +63,21 @@ def wire_into_app(app, get_db_fn, scheduler=None):
             scheduler.add_job(func=_log_suggestions, trigger="interval", hours=24)
         except Exception as e:
             logger.warning(f"Could not schedule alias suggestions: {e}")
+
+        try:
+            from services.self_heal import run_self_heal_pass
+
+            def _run_self_heal():
+                try:
+                    n = run_self_heal_pass(get_db_fn, min_count=2, limit=50)
+                    if n:
+                        logger.info(f"self_heal: {n} draft(s) created/updated")
+                except Exception as e:
+                    logger.warning(f"self_heal job: {e}")
+
+            # Every 6 hours -- cheap to run (mostly cache hits/no-ops once
+            # the backlog of old misses is drained), and picks up newly
+            # ingested handbook content or newly saved corrections fast.
+            scheduler.add_job(func=_run_self_heal, trigger="interval", hours=6)
+        except Exception as e:
+            logger.warning(f"Could not schedule self_heal pass: {e}")

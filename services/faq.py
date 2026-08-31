@@ -16,6 +16,7 @@ from services.conversation import (
     resolve_disambiguation_choice,
 )
 from services.embeddings import get_embedding
+from services.ai_retrieval import llm_self_check
 from utils.text import normalize_input
 
 logger = logging.getLogger("pac_helpdesk.faq")
@@ -418,6 +419,83 @@ def _note_header(kind: str, lang: str) -> str:
     return d.get(lookup_lang, d.get('english', ''))
 
 
+def _try_soft_clarification(question: str, candidates: list, hb_chunks: list,
+                             detected_lang: str, ctx) -> Optional[str]:
+    """Last resort before the canned "I don't have a confirmed answer"
+    fallback. If there are two or more plausible-but-not-confident-enough
+    candidates (FAQ or handbook), ask the student to pick instead of
+    flatly giving up -- the same way a person skimming 2-3 similarly
+    themed entries would say "did you mean X or Y?" rather than shrug.
+
+    Uses the SAME disambiguation machinery as a normal confident-tie
+    picker (ctx.set_disambiguation / _try_resolve_pending_disambiguation
+    resolves it exactly the same way on the student's next message) but
+    at the much looser services.disambiguation.FAQ_SOFT_POLICY /
+    HANDBOOK_SOFT_POLICY thresholds -- reserved specifically for this
+    "about to say I don't know" moment. A normal, confident answer never
+    reaches this function; it only ever runs once every earlier, higher-
+    confidence path has already failed.
+
+    Returns None (never raises) if fewer than 2 genuine contenders exist,
+    in which case the caller should fall back to the plain "I don't know"
+    message as before.
+    """
+    from services.disambiguation import FAQ_SOFT_POLICY, HANDBOOK_SOFT_POLICY, select_contenders
+
+    try:
+        if candidates:
+            scores = [c.get('combined', 0.0) for c in candidates]
+            contenders = select_contenders(candidates, scores, FAQ_SOFT_POLICY)
+            if len(contenders) >= 2:
+                dis = engine.build_disambiguation(contenders, detected_lang)
+                if dis:
+                    ctx.set_disambiguation(
+                        'faq', engine.build_disambiguation_options(contenders),
+                        original_question=question, detected_lang=detected_lang,
+                    )
+                    return dis
+    except Exception as e:
+        logger.debug(f"_try_soft_clarification (faq) skipped: {e}")
+
+    try:
+        if hb_chunks:
+            scores = [c.get('score', 0.0) for c in hb_chunks]
+            contenders = select_contenders(hb_chunks, scores, HANDBOOK_SOFT_POLICY)
+            if len(contenders) >= 2:
+                dis = handbook_service.build_handbook_disambiguation(contenders, detected_lang)
+                if dis:
+                    ctx.set_disambiguation(
+                        'handbook', handbook_service.build_handbook_disambiguation_options(contenders),
+                        original_question=question, detected_lang=detected_lang,
+                    )
+                    return dis
+    except Exception as e:
+        logger.debug(f"_try_soft_clarification (handbook) skipped: {e}")
+
+    return None
+
+
+def _give_up(question: str, candidates: list, hb_chunks: list, detected_lang: str,
+             ctx, cur, conn, return_topic: bool):
+    """Shared final fallback: try a soft clarification first (see above);
+    only fall through to the flat canned "I don't have a confirmed
+    answer" message, and only THEN log the miss to unanswered_questions,
+    if clarification didn't find anything worth offering either. Logging
+    is deliberately skipped when a clarification question is returned --
+    that's not an unanswered miss, it's still an active exchange."""
+    soft = _try_soft_clarification(question, candidates, hb_chunks, detected_lang, ctx)
+    if soft:
+        result = (soft, 'Disambiguation', None, None, detected_lang)
+        return result if return_topic else result[0]
+
+    _log_unanswered(cur, conn, question, ctx)
+    result = (
+        lang_service.get_logged_fallback_response(detected_lang),
+        'Unknown', None, None, detected_lang,
+    )
+    return result if return_topic else result[0]
+
+
 def _chunk_is_schedule_related(chunk: dict) -> bool:
     title = (chunk.get('section_title') or '').lower()
     content = (chunk.get('content') or '')[:600].lower()
@@ -498,12 +576,27 @@ def _merge_with_handbook(base_answer: str, question: str, hb_chunks: list,
     hb_ans = handbook_service.answer_from_selected_chunk(question, hb_chunks[0], detected_lang)
     if not hb_ans:
         return base_answer
+    # BUG FIX: this used to append hb_ans unconditionally once the caller's
+    # cheap _chunk_is_schedule_related() regex pre-filter passed -- but
+    # that regex treats any topically-adjacent word (e.g. "attendance",
+    # "excused absence") as "schedule-related", so a holiday/no-class
+    # answer could get a completely unrelated attendance-policy paragraph
+    # glued onto it ("From the handbook, for the general policy: ...").
+    # The pre-filter is still worth keeping upstream (cheap, avoids most
+    # obviously-irrelevant merges before we even build hb_ans), but the
+    # actual merge now requires the same self-check used for primary
+    # answers -- "does this excerpt actually address the question" --
+    # before it's allowed to ride along as a bonus note.
+    source_text = f"{hb_chunks[0].get('section_title','')} {hb_chunks[0].get('content','')}"
+    if not llm_self_check(question, hb_ans, source_text):
+        logger.info(f"_merge_with_handbook: self-check rejected supplementary note for q={question[:80]!r}")
+        return base_answer
     return f"{base_answer}\n\n{_note_header('handbook', detected_lang)} {hb_ans}"
 
 
 def _merge_with_faq(base_answer: str, question: str, faq_candidates: list,
                      detected_lang: str) -> str:
-    faq_ans, _matched = engine.smart_extract_answer(
+    faq_ans, matched = engine.smart_extract_answer(
         user_question=question,
         candidates=faq_candidates,
         detected_lang=detected_lang,
@@ -511,6 +604,12 @@ def _merge_with_faq(base_answer: str, question: str, faq_candidates: list,
         ai_cache=ai_cache,
     )
     if not faq_ans:
+        return base_answer
+    # Same rationale as _merge_with_handbook above.
+    matched_row = (matched or faq_candidates[0]).get('faq') if faq_candidates else None
+    source_text = (matched_row[0] if matched_row else '') or ''
+    if not llm_self_check(question, faq_ans, source_text):
+        logger.info(f"_merge_with_faq: self-check rejected supplementary note for q={question[:80]!r}")
         return base_answer
     return f"{base_answer}\n\n{_note_header('faq', detected_lang)} {faq_ans}"
 
@@ -535,6 +634,19 @@ def _combine_handbook_and_faq(question: str, candidates: list, hb_chunks: list,
         hb_ans = handbook_service.answer_from_selected_chunk(
             question, hb_chunks[0], detected_lang
         )
+        # Both are being offered as PRIMARY content here (not a bonus
+        # aside), so both already went through their own extraction's
+        # grounding+relevance+self-check pipeline individually. The one
+        # additional risk specific to this function is gluing two
+        # answers together that individually look fine but jointly read
+        # as a non-sequitur -- guard the handbook half the same way the
+        # bonus-note merges above do, since it's the one most likely to
+        # have been a marginal/co-incidental keyword match against hb_score.
+        if hb_ans:
+            source_text = f"{hb_chunks[0].get('section_title','')} {hb_chunks[0].get('content','')}"
+            if not llm_self_check(question, hb_ans, source_text):
+                logger.info(f"_combine_handbook_and_faq: self-check rejected handbook half for q={question[:80]!r}")
+                hb_ans = None
 
     if faq_ans and hb_ans:
         if faq_ans.strip().lower()[:120] == hb_ans.strip().lower()[:120]:
@@ -1087,12 +1199,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 return result if return_topic else result[0]
 
             if pure_handbook_topics:
-                _log_unanswered(cur, conn, question, ctx)
-                result = (
-                    lang_service.get_logged_fallback_response(detected_lang),
-                    'Unknown', None, None, detected_lang,
-                )
-                return result if return_topic else result[0]
+                return _give_up(question, candidates, hb_chunks, detected_lang, ctx, cur, conn, return_topic)
 
         if not candidates:
             hb_ans = handbook_service.answer_handbook_question(question, detected_lang, ctx=ctx)
@@ -1106,12 +1213,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                     )
                 result = (hb_ans, 'Handbook', None, 'handbook_query', detected_lang)
                 return result if return_topic else result[0]
-            _log_unanswered(cur, conn, question, ctx)
-            result = (
-                lang_service.get_logged_fallback_response(detected_lang),
-                'Unknown', None, None, detected_lang,
-            )
-            return result if return_topic else result[0]
+            return _give_up(question, candidates, hb_chunks, detected_lang, ctx, cur, conn, return_topic)
 
         if engine.faq_should_disambiguate(candidates, user_question=question):
             dis = engine.build_disambiguation(candidates, detected_lang)
@@ -1192,12 +1294,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             result = (hb_ans, 'Handbook', None, 'handbook_query', detected_lang)
             return result if return_topic else result[0]
 
-        _log_unanswered(cur, conn, question, ctx)
-        result = (
-            lang_service.get_logged_fallback_response(detected_lang),
-            'Unknown', None, None, detected_lang,
-        )
-        return result if return_topic else result[0]
+        return _give_up(question, candidates, hb_chunks, detected_lang, ctx, cur, conn, return_topic)
 
     except Exception as e:
         logger.error(f"Error in find_answer: {e}", exc_info=True)

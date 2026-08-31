@@ -191,31 +191,22 @@ def _try_faq_answer(get_db_fn, question: str):
     """Best-effort FAQ attempt using answer_engine directly (not
     services.faq's find_answer, which has session/chat-history side
     effects that don't belong in an offline batch job). Mirrors the same
-    fuzzy+embedding+AI-router+grounding pipeline live traffic uses."""
+    fuzzy+embedding+AI-router+grounding pipeline live traffic uses.
+
+    Reuses services.faq's own _get_all_faqs() (confirmed against the real
+    schema: `faq` has no `is_active` column at all -- every row is
+    considered live, which is also why _get_all_faqs() itself has no
+    WHERE clause) instead of duplicating that query here, so this can
+    never drift out of sync with the real table again."""
     from services import answer_engine as engine
     from services.embeddings import get_embedding
+    from services.faq import _get_all_faqs
 
-    # NOTE: column order here must match whatever your real faq.py's
-    # _get_all_faqs() selects (this mirrors answer_engine.py's documented
-    # expectation: answer, question, id, topic, intent, keywords, related,
-    # priority_score, image, [embedding]). If your schema/column names
-    # differ, swap this query for a direct call to your existing
-    # `services.faq._get_all_faqs()` instead of duplicating the SELECT.
-    conn = get_db_fn()
-    cur = conn.cursor()
     try:
-        cur.execute("""
-            SELECT answer, question, id, topic, intent, keywords, related_questions,
-                   priority_score, image_path, embedding
-            FROM faq WHERE is_active = 1
-        """)
-        all_faqs = cur.fetchall()
+        all_faqs = _get_all_faqs()
     except Exception as e:
         logger.debug(f"_try_faq_answer: could not load FAQ table ({e})")
         return None, None
-    finally:
-        cur.close()
-        conn.close()
 
     if not all_faqs:
         return None, None

@@ -1,0 +1,71 @@
+{% extends "admin_base.html" %}
+{# If your project doesn't have an admin_base.html layout to extend,
+   delete the {% extends %}/{% endblock %} lines and this becomes a
+   standalone page -- everything else here is plain HTML/JS with no
+   other template dependency. #}
+{% block content %}
+<h1>Self-Healing Drafts</h1>
+<p>Questions that were frequently asked and unanswered, which the live answer
+pipeline can now actually answer. Nothing here is authoritative yet —
+approving a draft is the same as writing it into <a href="/corrections">Corrections</a>
+by hand, just pre-filled for you.</p>
+
+<button onclick="runNow()">Run self-heal now</button>
+
+<table border="1" cellpadding="8" style="width:100%; border-collapse: collapse; margin-top: 1em;">
+  <thead>
+    <tr>
+      <th>Question</th>
+      <th>Draft answer</th>
+      <th>Source</th>
+      <th>Times asked</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for d in drafts %}
+    <tr id="draft-{{ d.id }}">
+      <td>{{ d.question }}</td>
+      <td style="max-width: 420px; white-space: pre-wrap;">{{ d.draft_answer }}</td>
+      <td>{{ d.source_type }}{% if d.source_ref %} — {{ d.source_ref }}{% endif %}</td>
+      <td>{{ d.times_asked }}</td>
+      <td>
+        <button onclick="approve({{ d.id }})">Approve</button>
+        <button onclick="dismiss({{ d.id }})">Dismiss</button>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5">No pending drafts right now.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<script>
+function csrfToken() {
+  const m = document.cookie.match(/csrf_token=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : (document.querySelector('meta[name="csrf-token"]')?.content || '');
+}
+async function post(url) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken() },
+  });
+  return res.json();
+}
+async function approve(id) {
+  const r = await post(`/api/admin/self_heal/${id}/approve`);
+  if (r.success) document.getElementById(`draft-${id}`).remove();
+  else alert(r.error || 'Could not approve');
+}
+async function dismiss(id) {
+  const r = await post(`/api/admin/self_heal/${id}/dismiss`);
+  if (r.success) document.getElementById(`draft-${id}`).remove();
+  else alert(r.error || 'Could not dismiss');
+}
+async function runNow() {
+  const r = await post('/api/admin/self_heal/run');
+  if (r.success) location.reload();
+  else alert(r.error || 'Could not run');
+}
+</script>
+{% endblock %}

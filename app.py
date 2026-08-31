@@ -212,6 +212,20 @@ def create_app():
             )
             scheduler.start()
             app.scheduler = scheduler
+
+            # Wires the self-heal draft loop + alias-suggestion log job
+            # (services/self_heal.py, services/topic_aliases.py) into the
+            # scheduler that was just started above. ensure_learning_layer()
+            # earlier in this function only creates schema/seeds -- this is
+            # the actual job registration, which previously existed in
+            # database/learning_schema.py's wire_into_app() but was never
+            # called from anywhere, so it silently never ran.
+            try:
+                from database.learning_schema import wire_into_app
+                from database import get_db
+                wire_into_app(app, get_db, scheduler=scheduler)
+            except Exception as e:
+                app.logger.warning(f"learning_schema wire_into_app failed: {e}")
         except Exception as e:
             app.logger.warning(f"Scheduler not started: {e}")
 

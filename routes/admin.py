@@ -1579,3 +1579,66 @@ def api_sidebar_counts():
         'ratings': counts.get('low_ratings', 0),
         'alerts': counts.get('alerts_new', 0),
     })
+
+# ---------------------------------------------------------------------
+# Self-healing draft review (services/self_heal.py)
+# ---------------------------------------------------------------------
+# Mirrors the corrections_management / add_correction / delete_correction
+# pattern above exactly. A draft here is NEVER authoritative by itself --
+# approve_draft() is the one deliberate step that promotes it into
+# services.corrections (same table add_correction writes to above), so
+# reviewing a draft is just pre-filled convenience for what an admin
+# would otherwise have to find and type in by hand on /corrections.
+
+@bp.route('/self_heal')
+def self_heal_review():
+    """Admin page listing pending self-heal drafts -- questions that were
+    frequently asked and unanswered, which the live answer pipeline can
+    now actually answer (see services/self_heal.run_self_heal_pass),
+    waiting for a one-click human approval before becoming authoritative."""
+    if not admin_required():
+        return redirect('/admin')
+    from services.self_heal import list_pending_drafts
+    return render_template('self_heal_review.html', drafts=list_pending_drafts(get_db))
+
+
+@bp.route('/api/admin/self_heal/run', methods=['POST'])
+@csrf.exempt
+def run_self_heal_now():
+    """Manual trigger -- same job the scheduler runs every 6 hours
+    (see database/learning_schema.py's wire_into_app), exposed here so an
+    admin doesn't have to wait for the next scheduled run after adding
+    new handbook content or corrections."""
+    if not admin_required():
+        return jsonify({'error': 'Unauthorized'}), 403
+    from services.self_heal import run_self_heal_pass
+    try:
+        n = run_self_heal_pass(get_db, min_count=2, limit=50)
+        return jsonify({'success': True, 'drafts_created_or_updated': n})
+    except Exception as e:
+        logger.error(f"run_self_heal_now error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/api/admin/self_heal/<int:draft_id>/approve', methods=['POST'])
+@csrf.exempt
+def approve_self_heal_draft(draft_id):
+    if not admin_required():
+        return jsonify({'error': 'Unauthorized'}), 403
+    from services.self_heal import approve_draft
+    ok = approve_draft(get_db, draft_id, reviewed_by=session.get('admin_user', 'admin'))
+    if not ok:
+        return jsonify({'error': 'Could not approve draft'}), 500
+    return jsonify({'success': True})
+
+
+@bp.route('/api/admin/self_heal/<int:draft_id>/dismiss', methods=['POST'])
+@csrf.exempt
+def dismiss_self_heal_draft(draft_id):
+    if not admin_required():
+        return jsonify({'error': 'Unauthorized'}), 403
+    from services.self_heal import dismiss_draft
+    ok = dismiss_draft(get_db, draft_id, reviewed_by=session.get('admin_user', 'admin'))
+    if not ok:
+        return jsonify({'error': 'Could not dismiss draft'}), 500
+    return jsonify({'success': True})

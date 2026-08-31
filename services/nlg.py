@@ -64,9 +64,18 @@ def casual_tone_note(question: str) -> str:
 
 
 STYLE_GUIDE = (
-    "Reply like a helpful chatbot: natural, clear, and easy to scan. "
-    "Never start with 'According to the section…' or formal handbook citations. "
-    "If the question is yes/no, lead with Yes or No, then a short reason. "
+    "Reply like a warm, switched-on staff member texting a student back — "
+    "never like a document. Sound like you're glad to help, not reciting a manual. "
+    "Never start with 'According to the section…' or formal citations. "
+    "HARD RULE for yes/no-shaped questions (starts with Is/Are/Can/Do/Does/Will/May/"
+    "Allowed/Pwede/Okay lang ba): your very first word must be 'Yes' or 'No' "
+    "(or 'Yes,'/'No,' immediately followed by the reason) — never open with "
+    "background, a related rule, or a rephrase of the question instead of "
+    "actually answering it first. "
+    "Do not answer about something adjacent to what was asked just because it's "
+    "similar or nearby in the source — if the SPECIFIC thing the student named "
+    "isn't explicitly covered, say so plainly rather than quietly substituting "
+    "a related rule as if it answers the question. "
     "Use light structure on ALL answers when it helps readability: "
     "**bold** for key terms or short labels, line breaks between points, "
     "and blank lines between sections (rules, verses, steps). "

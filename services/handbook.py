@@ -1308,7 +1308,13 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
             Instructions:
             - Sound natural and clear — like a real chatbot, not a formal document.
             - NEVER start with "According to the section…" or similar citations. Just answer.
-            - If the question is yes/no, lead with Yes or No, then a short reason.
+            - If the question is yes/no (starts with Is/Are/Can/Do/Does/Will/May/Allowed/
+              Pwede/Okay ba), your FIRST WORD must be "Yes" or "No", then a short reason.
+            - If the student named a SPECIFIC item (e.g. "shorts", "earrings") and the
+              excerpts only cover a DIFFERENT, similar item (e.g. jeans, jewelry in
+              general) without actually naming the one asked about, do not answer as if
+              the specific item was covered — say plainly that the excerpt doesn't
+              specifically address it, or reply CANNOT_ANSWER if nothing else applies.
             - Format for easy reading on EVERY answer: use **bold** for key terms, line breaks between points, blank lines between sections. For lists put one item per line with - . For lyrics/hymns put each line on its own line and **bold** labels like **Chorus:**.
             - State numbers (demerits, days, fines) clearly.
             - Optional: a light page note at the end only, e.g. (More detail is on page 7.)
