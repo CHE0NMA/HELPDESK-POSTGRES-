@@ -1,6 +1,7 @@
 import logging
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional, Tuple
 
 from ai_providers import ai_cache, circuit_breaker, faq_cache, llm_chat
@@ -20,6 +21,14 @@ from services.ai_retrieval import llm_self_check
 from utils.text import normalize_input
 
 logger = logging.getLogger("pac_helpdesk.faq")
+
+# PERF: handbook scoring and FAQ scoring are independent I/O (separate DB
+# queries + in-process fuzzy scoring) -- they don't depend on each other's
+# result, only optionally on the same query_embedding. Running them on a
+# small shared thread pool instead of back-to-back turns two sequential
+# round-trips into one wall-clock round-trip. Small pool: this is
+# per-request fan-out of 2 tasks, not a general-purpose worker pool.
+_SCORING_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="faq_scoring")
 
 _FAQ_ROWS_CACHE = None
 _FAQ_ROWS_TS = 0.0
@@ -230,8 +239,16 @@ def _lookup_faq_answer(question: str, detected_lang: str) -> Optional[Tuple[str,
     return (ai_ans, best_row[3], best_row[4])
 
 
-def _log_unanswered(cur, conn, question: str, ctx=None):
+def _log_unanswered(question: str, ctx=None):
+    """PERF: opens its own short-lived connection right when it's actually
+    needed, instead of requiring find_answer() to check a connection out
+    of the (small, 3-on-Vercel) pool at the very start of a request and
+    hold it, unused, through several seconds of sequential AI calls, on
+    the off chance this ends up being an unanswered-question miss at the
+    very end. Mirrors log_unanswered_standalone()'s existing pattern."""
     from services.conversation import build_context_snapshot
+    conn = get_db()
+    cur = conn.cursor()
     try:
         context_snapshot = build_context_snapshot(ctx) if ctx else ''
         resolved_question = None
@@ -252,6 +269,12 @@ def _log_unanswered(cur, conn, question: str, ctx=None):
         conn.commit()
     except Exception as e:
         logger.error(f"_log_unanswered error: {e}")
+    finally:
+        try:
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
 
 
 def _resolve_standalone_question(question: str, context_snapshot: str) -> str:
@@ -279,14 +302,8 @@ nothing else."""
 
 
 def log_unanswered_standalone(question: str, session_id: str = None):
-    conn = get_db()
-    cur = conn.cursor()
-    try:
-        ctx = get_conversation_context(session_id) if session_id else None
-        _log_unanswered(cur, conn, question, ctx)
-    finally:
-        cur.close()
-        conn.close()
+    ctx = get_conversation_context(session_id) if session_id else None
+    _log_unanswered(question, ctx)
 
 
 def _try_resolve_pending_disambiguation(question: str, detected_lang: str, ctx):
@@ -369,20 +386,41 @@ def _faq_candidates_and_score(question: str, detected_lang: str, query_embedding
     return candidates, best_score
 
 
+def _score_sources_parallel(question: str, detected_lang: str, query_embedding=None) -> dict:
+    """PERF: run handbook scoring and FAQ scoring concurrently instead of
+    sequentially -- they're independent (separate DB queries + in-process
+    scoring, no shared mutable state), so there's no reason to pay their
+    latencies back-to-back. Returns the same shape callers were already
+    unpacking from the two calls combined:
+    {'hb_score', 'hb_chunks', 'faq_candidates', 'faq_score'}.
+    Falls back to sequential execution if the pool submission itself fails
+    for any reason (never raises past this function).
+    """
+    try:
+        hb_future = _SCORING_EXECUTOR.submit(_handbook_best_score, question, query_embedding)
+        faq_future = _SCORING_EXECUTOR.submit(
+            _faq_candidates_and_score, question, detected_lang, query_embedding
+        )
+        hb_score, hb_chunks = hb_future.result()
+        faq_candidates, faq_score = faq_future.result()
+    except Exception as e:
+        logger.debug(f"_score_sources_parallel: pool failed, falling back to sequential: {e}")
+        hb_score, hb_chunks = _handbook_best_score(question, query_embedding=query_embedding)
+        faq_candidates, faq_score = _faq_candidates_and_score(
+            question, detected_lang, query_embedding=query_embedding
+        )
+    return {
+        'hb_score': hb_score, 'hb_chunks': hb_chunks,
+        'faq_candidates': faq_candidates, 'faq_score': faq_score,
+    }
+
+
 def _cross_check_sources(question: str, detected_lang: str, ctx=None) -> dict:
     q_embedding = _get_query_embedding(question)
-    hb_score, hb_chunks = _handbook_best_score(question, query_embedding=q_embedding)
-    faq_candidates, faq_score = _faq_candidates_and_score(
-        question, detected_lang, query_embedding=q_embedding
-    )
+    scored = _score_sources_parallel(question, detected_lang, query_embedding=q_embedding)
     is_date_q = date_service.is_date_question(question, ctx=ctx)
-    return {
-        'hb_score': hb_score,
-        'hb_chunks': hb_chunks,
-        'faq_candidates': faq_candidates,
-        'faq_score': faq_score,
-        'is_date_q': is_date_q,
-    }
+    scored['is_date_q'] = is_date_q
+    return scored
 
 
 _NOTE_HEADERS = {
@@ -476,7 +514,7 @@ def _try_soft_clarification(question: str, candidates: list, hb_chunks: list,
 
 
 def _give_up(question: str, candidates: list, hb_chunks: list, detected_lang: str,
-             ctx, cur, conn, return_topic: bool):
+             ctx, return_topic: bool):
     """Shared final fallback: try a soft clarification first (see above);
     only fall through to the flat canned "I don't have a confirmed
     answer" message, and only THEN log the miss to unanswered_questions,
@@ -488,7 +526,7 @@ def _give_up(question: str, candidates: list, hb_chunks: list, detected_lang: st
         result = (soft, 'Disambiguation', None, None, detected_lang)
         return result if return_topic else result[0]
 
-    _log_unanswered(cur, conn, question, ctx)
+    _log_unanswered(question, ctx)
     result = (
         lang_service.get_logged_fallback_response(detected_lang),
         'Unknown', None, None, detected_lang,
@@ -717,7 +755,22 @@ Translated answer:"""
 def find_answer(question: str, return_topic: bool = False, session_id: str = None):
     start = time.time()
     ctx = get_conversation_context(session_id or 'default')
-    detected_lang = lang_service.detect_language(question, prior_lang=ctx.last_detected_lang)
+    # PERF: merged language-detect + gibberish/on-topic classification into
+    # one call (services.language.classify_and_detect_language) instead of
+    # two separate ones -- detect_language() here and classify_question_ai()
+    # further down used to each pay their own sequential AI round-trip on
+    # a genuinely ambiguous message. Each side still tries its own fast
+    # path/cache first, so this is a pure latency win in the common case;
+    # the only added cost is a narrow edge case where an admin correction
+    # or the answer-success cache short-circuits the request AND the
+    # topic's fast-path classification also happens to miss -- that combo
+    # now occasionally computes a classification result that goes unused,
+    # versus never computing it before. See classify_and_detect_language's
+    # docstring for the full trade-off.
+    _lang_and_class = lang_service.classify_and_detect_language(
+        question, prior_lang=ctx.last_detected_lang
+    )
+    detected_lang = _lang_and_class['language']
     ctx.last_detected_lang = detected_lang
 
     if ctx.last_disambiguation:
@@ -776,7 +829,9 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
     except Exception:
         pass
 
-    classification = lang_service.classify_question_ai(question)
+    # Reuse the classification computed up front alongside language
+    # detection (see comment above) instead of a second, separate call.
+    classification = _lang_and_class
 
     if classification['is_gibberish']:
         result = (
@@ -796,18 +851,19 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
     _looks_hb = handbook_service.is_handbook_question(question)
     _hb_score_early, _hb_chunks_early = (0.0, [])
     _faq_score_early = 0.0
+    _faq_cands_early = []
+    _early_scoring_done = False
     if _looks_date or _looks_hb:
+        # PERF: handbook scoring and FAQ scoring are independent -- run
+        # them concurrently instead of sequentially (see
+        # _score_sources_parallel). Any failure inside falls back to
+        # sequential automatically, so this can't make things worse.
         try:
-            _hb_score_early, _hb_chunks_early = _handbook_best_score(question)
+            scored = _score_sources_parallel(question, detected_lang)
+            _hb_score_early, _hb_chunks_early = scored['hb_score'], scored['hb_chunks']
+            _faq_cands_early, _faq_score_early = scored['faq_candidates'], scored['faq_score']
         except Exception:
             pass
-        try:
-            _faq_cands_early, _faq_score_early = _faq_candidates_and_score(
-                question, detected_lang
-            )
-        except Exception:
-            _faq_cands_early = []
-            _faq_score_early = 0.0
 
         # Lazy: only spend an embeddings call when the cheap fuzzy/keyword
         # pass came back weak on BOTH sources -- exactly the situation a
@@ -820,17 +876,18 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             _q_embedding = _get_query_embedding(question)
             if _q_embedding:
                 try:
-                    _hb_score_early, _hb_chunks_early = _handbook_best_score(
-                        question, query_embedding=_q_embedding
-                    )
-                except Exception:
-                    pass
-                try:
-                    _faq_cands_early, _faq_score_early = _faq_candidates_and_score(
+                    scored = _score_sources_parallel(
                         question, detected_lang, query_embedding=_q_embedding
                     )
+                    _hb_score_early, _hb_chunks_early = scored['hb_score'], scored['hb_chunks']
+                    _faq_cands_early, _faq_score_early = scored['faq_candidates'], scored['faq_score']
                 except Exception:
                     pass
+        # PERF: remember that this work already happened so the later
+        # block (below, ~line 996 in the original) can reuse it instead of
+        # silently recomputing hb_score/hb_chunks/candidates from scratch
+        # -- see that block's comment for why this used to be wasted work.
+        _early_scoring_done = True
 
     _hb_clearly_better = (
         _looks_hb and _hb_score_early >= 0.12
@@ -993,16 +1050,21 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 else (cached[0] if cached else lang_service.get_fallback_response(detected_lang))
             )
 
-    hb_score, hb_chunks = _handbook_best_score(question)
-
-    conn = get_db()
-    cur = conn.cursor()
-    try:
-        all_faqs = _get_all_faqs()
+    # PERF: if _looks_date/_looks_hb routing above already scored both
+    # sources (same 0.45/0.78 thresholds, same lazy-embedding fallback),
+    # reuse that result instead of silently redoing the same DB queries +
+    # fuzzy scoring + possible embedding call a second time. This used to
+    # always recompute here even when the exact same work had just been
+    # done a few dozen lines earlier.
+    if _early_scoring_done:
+        hb_score, hb_chunks = _hb_score_early, _hb_chunks_early
+        candidates, faq_best_score = _faq_cands_early, _faq_score_early
+    else:
+        hb_score, hb_chunks = _handbook_best_score(question)
         search_q = lang_service.normalize_vernacular_spelling(question.lower())
         expanded_q = lang_service.expand_query(search_q)
         candidates = engine.get_top_faq_candidates(
-            search_q, expanded_q, all_faqs, detected_lang, query_embedding=None
+            search_q, expanded_q, _get_all_faqs(), detected_lang, query_embedding=None
         )
         faq_best_score = candidates[0]['combined'] if candidates else 0.0
         # Lazy: only pay for an embeddings call when the fuzzy/keyword
@@ -1017,12 +1079,18 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             query_embedding = get_embedding(search_q, cache=ai_cache)
             if query_embedding:
                 candidates = engine.get_top_faq_candidates(
-                    search_q, expanded_q, all_faqs, detected_lang,
+                    search_q, expanded_q, _get_all_faqs(), detected_lang,
                     query_embedding=query_embedding,
                 )
                 faq_best_score = candidates[0]['combined'] if candidates else 0.0
                 hb_score, hb_chunks = _handbook_best_score(question, query_embedding=query_embedding)
 
+    # PERF: no longer opening a DB connection here (see _log_unanswered's
+    # docstring) -- this block now goes straight into the try/except that
+    # wraps the scoring/routing/AI-extraction pipeline below, without
+    # holding a pooled connection idle through all of it "just in case"
+    # the request ends in _give_up().
+    try:
         word_count = len(question.split())
 
         if is_hb:
@@ -1199,7 +1267,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 return result if return_topic else result[0]
 
             if pure_handbook_topics:
-                return _give_up(question, candidates, hb_chunks, detected_lang, ctx, cur, conn, return_topic)
+                return _give_up(question, candidates, hb_chunks, detected_lang, ctx, return_topic)
 
         if not candidates:
             hb_ans = handbook_service.answer_handbook_question(question, detected_lang, ctx=ctx)
@@ -1213,7 +1281,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                     )
                 result = (hb_ans, 'Handbook', None, 'handbook_query', detected_lang)
                 return result if return_topic else result[0]
-            return _give_up(question, candidates, hb_chunks, detected_lang, ctx, cur, conn, return_topic)
+            return _give_up(question, candidates, hb_chunks, detected_lang, ctx, return_topic)
 
         if engine.faq_should_disambiguate(candidates, user_question=question):
             dis = engine.build_disambiguation(candidates, detected_lang)
@@ -1294,7 +1362,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             result = (hb_ans, 'Handbook', None, 'handbook_query', detected_lang)
             return result if return_topic else result[0]
 
-        return _give_up(question, candidates, hb_chunks, detected_lang, ctx, cur, conn, return_topic)
+        return _give_up(question, candidates, hb_chunks, detected_lang, ctx, return_topic)
 
     except Exception as e:
         logger.error(f"Error in find_answer: {e}", exc_info=True)
@@ -1303,6 +1371,3 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             'Unknown', None, None, 'english',
         )
         return result if return_topic else result[0]
-    finally:
-        cur.close()
-        conn.close()

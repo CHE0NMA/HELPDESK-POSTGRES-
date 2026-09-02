@@ -278,6 +278,13 @@ function getCSRFToken() {
 
 function exportData() { window.location.href = '/api/export/faq'; showToast('Export started…', 'info'); }
 
+// Unsaved-changes guards, scoped to each form individually. Neither form
+// lives inside a Bootstrap modal (this is a dedicated page), so this
+// only guards against tab close / navigation — never search/filters,
+// since there aren't any on this page.
+const profileFormGuard = window.PACAdmin?.guardUnsavedChanges('profileForm');
+const passwordFormGuard = window.PACAdmin?.guardUnsavedChanges('passwordForm');
+
 // showToast now lives only in admin-common.js (deduped, consistent
 // animation/timing with the rest of the admin panel).
 
@@ -308,6 +315,7 @@ document.getElementById('profileForm').addEventListener('submit', async function
     });
     const d = await res.json().catch(() => ({}));
     if (res.ok && d.success) {
+      profileFormGuard?.markClean();
       showToast('Profile updated!', 'success');
       setTimeout(() => location.reload(), 900);
     } else {
@@ -360,6 +368,7 @@ document.getElementById('passwordForm').addEventListener('submit', async functio
     });
     const d = await res.json().catch(() => ({}));
     if (res.ok && d.success) {
+      passwordFormGuard?.markClean();
       showToast('Password updated!', 'success');
       document.getElementById('passwordForm').reset();
       document.getElementById('pwStrengthBar').style.width = '0%';

@@ -61,17 +61,22 @@
 
 /* Sticky table headers — long lists (FAQs, unanswered, corrections,
    schedules) used to scroll their header off-screen with the data, so
-   you lost track of which column was which. Sticks just below the
-   topbar (58px) on every page that uses .tbl/.sched-table. */
+   you lost track of which column was which. Each table now scrolls
+   inside its own bounded card (see .table-card's max-height/overflow),
+   so the header sticks to the top of THAT scrollport at 0, not the
+   page — sticky positioning is unreliable against an ancestor with
+   overflow:hidden and no scroll of its own, which is what caused the
+   header to overlap/float instead of cleanly sticking. */
 .tbl thead th, .sched-table thead th {
   position: sticky;
-  top: 58px;
-  z-index: 20;
-  background-color: rgba(9, 20, 40, .92) !important;
+  top: 0;
+  z-index: 5;
+  background-color: rgba(9, 20, 40, .96) !important;
   backdrop-filter: blur(10px);
+  box-shadow: 0 1px 0 0 var(--border2, rgba(77,171,247,.25));
 }
 [data-bs-theme="light"] .tbl thead th, [data-bs-theme="light"] .sched-table thead th {
-  background-color: rgba(240, 244, 248, .94) !important;
+  background-color: rgba(240, 244, 248, .97) !important;
 }
 
 /* Nicer default empty/no-data state — centered icon + muted message
@@ -82,6 +87,89 @@
 }
 .empty-state i:first-child {
   font-size: 2rem; opacity: .4;
+}
+
+/* ---------------------------------------------------------------------
+   Phone responsiveness — applied globally so every admin page gets
+   consistent mobile behavior instead of some pages having it and others
+   not (dashboard.html, handbook_management.html, ratings.html,
+   alert_log.html, analytics.html, and profile.html had NO modal-sizing
+   rules at all before this, relying on Bootstrap's un-adjusted default,
+   which routinely overflows or gets cut off on small phones).
+--------------------------------------------------------------------- */
+
+/* Bootstrap modals: keep them fully on-screen and internally scrollable
+   instead of letting content overflow past the viewport height. */
+.modal-dialog {
+  max-height: calc(100dvh - 1rem);
+  margin: 0.5rem auto;
+  display: flex;
+  align-items: center;
+}
+.modal-dialog .modal-content {
+  max-height: calc(100dvh - 1rem);
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+.modal-body { overflow-y: auto; }
+
+@media (max-width: 576px) {
+  .modal-dialog {
+    margin: 0.25rem;
+    max-width: calc(100% - 0.5rem);
+    max-height: calc(100dvh - 0.5rem);
+  }
+  .modal-dialog .modal-content {
+    max-height: calc(100dvh - 0.5rem);
+    border-radius: 14px;
+  }
+  .modal-footer {
+    padding: 0.75rem 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .modal-footer .btn-save,
+  .modal-footer .btn-del-confirm,
+  .modal-footer .btn-cancel,
+  .modal-footer button {
+    flex: 1 1 auto;
+    min-width: 110px;
+    justify-content: center;
+  }
+
+  /* Search/filter boxes take the full toolbar width on phones instead
+     of staying cramped next to the Select/Delete buttons. */
+  .filter-input, .toolbar input[type="text"], .toolbar input[type="search"] {
+    width: 100%;
+    max-width: none;
+    flex: 1 1 100%;
+  }
+
+  /* Sidebar nav-buttons (theme toggle, export) and toolbar buttons get
+     a slightly bigger tap target on touch screens. */
+  .nav-link, .nav-link-btn, .btn-select-toggle, .btn-bulk-del, .btn-refresh {
+    min-height: 40px;
+  }
+
+  /* Bounded table scroll region shrinks a bit on phones, where the
+     browser chrome already eats a lot of vertical space. */
+  .table-card { max-height: min(58vh, 520px) !important; }
+
+  /* Toasts span full width with safe margins instead of a narrow
+     floating box that can run off the right edge. Some pages define
+     their own non-media-scoped .toast-wrap { bottom; right } which,
+     due to normal cascade/source-order rules, would otherwise win over
+     this even though it's the more specific (phone-only) intent. */
+  .toast-wrap {
+    left: 0.75rem !important;
+    right: 0.75rem !important;
+    bottom: 0.75rem !important;
+  }
+  .toast-item, .toast-wrap .toast-item {
+    min-width: 0 !important;
+    width: 100%;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

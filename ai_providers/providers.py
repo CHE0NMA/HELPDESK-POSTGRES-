@@ -8,6 +8,7 @@ Supports multiple Groq API keys with:
 import logging
 import os
 import threading
+import time
 from collections import defaultdict
 from datetime import datetime, timedelta, date
 
@@ -15,13 +16,11 @@ from config import (
     AI_PROVIDER, GROQ_API_KEY, GROQ_MODEL,
     GEMINI_API_KEY, GEMINI_MODEL,
 )
-# BUG FIX: llama-3.1-8b-instant shuts down 08/16/26 (Groq's own
-# deprecation page: https://console.groq.com/docs/deprecations) --
-# Groq's recommended replacement is openai/gpt-oss-20b. Same account,
-# same GROQ_API_KEY(s) -- no new API registration needed, just the model
-# string. If INGEST_GROQ_MODEL is set as an env var in your deployment,
-# update it there too; this default only applies when it's unset.
+
 INGEST_GROQ_MODEL = os.getenv("INGEST_GROQ_MODEL", "openai/gpt-oss-20b")
+
+FAST_GROQ_MODEL = os.getenv("FAST_GROQ_MODEL", INGEST_GROQ_MODEL)
+
 from .circuit_breaker import circuit_breaker
 from .metrics import model_metrics
 
@@ -204,15 +203,69 @@ def _call_gemini(prompt: str, max_tokens: int = 400) -> str:
         return ""
 
 
+def _call_groq_fast(prompt: str, max_tokens: int = 400) -> str:
+    """Same as _call_groq but pinned to FAST_GROQ_MODEL -- the small/cheap
+    model already used for bulk ingest (see INGEST_GROQ_MODEL above).
+    Used for short, low-stakes classification calls (language id,
+    gibberish/on-topic check, follow-up yes/no) where the big model's
+    extra quality isn't needed but its extra latency is paid on *every*
+    chat message. See llm_chat_fast()."""
+    return _call_groq(prompt, max_tokens=max_tokens, model=FAST_GROQ_MODEL)
+
+
 _PROVIDER_FUNCS = {
     'groq': _call_groq,
     'gemini': _call_gemini,
+}
+
+_FAST_PROVIDER_FUNCS = {
+    'groq': _call_groq_fast,
+    'gemini': _call_gemini,  # Gemini has no separate "fast" tier configured here
 }
 
 _PROVIDER_READY = {
     'groq': lambda: bool(GROQ_API_KEYS),
     'gemini': lambda: bool(GEMINI_API_KEY),
 }
+
+
+def _run_provider_chain(prompt: str, max_tokens: int, order, provider_funcs, label: str) -> str:
+    """Shared body for call_with_fallback / call_gemini_then_groq /
+    call_fast_with_fallback: try each provider in `order`, recording a
+    REAL elapsed-time metric per attempt (see PERF FIX below) and
+    updating the circuit breaker, stopping at the first non-empty result.
+
+    PERF FIX: every call site here used to do
+        model_metrics.record_response_time(0, True/False)
+    with a hardcoded 0 -- so model_metrics.get_stats()'s
+    avg_response_time_ms / p95_response_time_ms were always 0, silently
+    useless for spotting which calls are actually slow. Now measured with
+    time.perf_counter() around the real provider call.
+    """
+    tried = []
+    for provider in order:
+        if not _PROVIDER_READY.get(provider, lambda: False)():
+            continue
+        tried.append(provider)
+        fn = provider_funcs.get(provider)
+        if not fn:
+            continue
+
+        t0 = time.perf_counter()
+        result = fn(prompt, max_tokens)
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+
+        if result:
+            model_metrics.record_response_time(elapsed_ms, True)
+            circuit_breaker.record_success()
+            return result
+        model_metrics.record_response_time(elapsed_ms, False)
+        circuit_breaker.record_failure()
+        logger.warning(f"Provider '{provider}' failed during {label} (tried: {tried})")
+
+    logger.error(f"{label}: all providers failed. Tried: {tried}")
+    return ""
+
 
 def call_for_ingest(prompt: str, max_tokens: int = 2200) -> str:
     """
@@ -223,23 +276,27 @@ def call_for_ingest(prompt: str, max_tokens: int = 2200) -> str:
     """
     # 1) Groq 8B
     if GROQ_API_KEYS:
+        t0 = time.perf_counter()
         result = _call_groq(prompt, max_tokens=max_tokens, model=INGEST_GROQ_MODEL)
+        elapsed_ms = (time.perf_counter() - t0) * 1000
         if result:
-            model_metrics.record_response_time(0, True)
+            model_metrics.record_response_time(elapsed_ms, True)
             circuit_breaker.record_success()
             return result
-        model_metrics.record_response_time(0, False)
+        model_metrics.record_response_time(elapsed_ms, False)
         circuit_breaker.record_failure()
         logger.warning("Ingest: Groq 8B failed, trying Gemini")
 
     # 2) Gemini
     if GEMINI_API_KEY:
+        t0 = time.perf_counter()
         result = _call_gemini(prompt, max_tokens=max_tokens)
+        elapsed_ms = (time.perf_counter() - t0) * 1000
         if result:
-            model_metrics.record_response_time(0, True)
+            model_metrics.record_response_time(elapsed_ms, True)
             circuit_breaker.record_success()
             return result
-        model_metrics.record_response_time(0, False)
+        model_metrics.record_response_time(elapsed_ms, False)
         circuit_breaker.record_failure()
         logger.warning("Ingest: Gemini also failed")
 
@@ -248,55 +305,54 @@ def call_for_ingest(prompt: str, max_tokens: int = 2200) -> str:
 
 
 def call_with_fallback(prompt: str, max_tokens: int = 400) -> str:
-    tried = []
     order = [AI_PROVIDER] + [p for p in FALLBACK_ORDER if p != AI_PROVIDER]
+    return _run_provider_chain(prompt, max_tokens, order, _PROVIDER_FUNCS, "call_with_fallback")
 
-    for provider in order:
-        if not _PROVIDER_READY.get(provider, lambda: False)():
-            continue
-        tried.append(provider)
-        fn = _PROVIDER_FUNCS.get(provider)
-        if not fn:
-            continue
-        result = fn(prompt, max_tokens)
-        if result:
-            model_metrics.record_response_time(0, True)
-            circuit_breaker.record_success()
-            return result
-        model_metrics.record_response_time(0, False)
-        circuit_breaker.record_failure()
-        logger.warning(f"Provider '{provider}' failed (tried: {tried})")
-
-    logger.error(f"All AI providers failed. Tried: {tried}")
-    return ""
 
 def call_gemini_then_groq(prompt: str, max_tokens: int = 400) -> str:
     """
     Prefer Gemini, then fall back to Groq.
     Useful for bulk jobs (handbook ingest) so Groq daily limits last longer.
     """
-    tried = []
-    for provider in ("gemini", "groq"):
-        if not _PROVIDER_READY.get(provider, lambda: False)():
-            continue
-        tried.append(provider)
-        fn = _PROVIDER_FUNCS.get(provider)
-        if not fn:
-            continue
-        result = fn(prompt, max_tokens)
-        if result:
-            model_metrics.record_response_time(0, True)
-            circuit_breaker.record_success()
-            return result
-        model_metrics.record_response_time(0, False)
-        circuit_breaker.record_failure()
-        logger.warning(f"Provider '{provider}' failed during gemini-then-groq (tried: {tried})")
+    return _run_provider_chain(
+        prompt, max_tokens, ("gemini", "groq"), _PROVIDER_FUNCS, "gemini-then-groq"
+    )
 
-    logger.error(f"Gemini+Groq both failed. Tried: {tried}")
-    return ""
+
+def call_fast_with_fallback(prompt: str, max_tokens: int = 60) -> str:
+    """Cheap/fast-model variant of call_with_fallback, for short
+    classification-style prompts (yes/no labels, language id, one-word
+    verdicts) that run on nearly every chat message. Uses FAST_GROQ_MODEL
+    on Groq (same small model already trusted for bulk ingest) instead of
+    the full GROQ_MODEL, then falls back to Gemini exactly like the
+    normal chain. Never used for actual answer generation -- see
+    llm_chat_fast()'s docstring for which call sites this is meant for.
+    """
+    order = [AI_PROVIDER] + [p for p in FALLBACK_ORDER if p != AI_PROVIDER]
+    return _run_provider_chain(
+        prompt, max_tokens, order, _FAST_PROVIDER_FUNCS, "call_fast_with_fallback"
+    )
+
 
 def llm_chat(prompt: str, max_tokens: int = 400) -> str:
     """Main entry point used by the rest of the app (faq, handbook, dates…)."""
     if circuit_breaker.is_open():
         return ""
     return call_with_fallback(prompt, max_tokens)
+
+
+def llm_chat_fast(prompt: str, max_tokens: int = 60) -> str:
+    """PERF: entry point for short, low-stakes classification calls that
+    fire on nearly every incoming message -- language id, gibberish/
+    on-topic check, follow-up yes/no, single-word verdicts. These don't
+    need the quality of the main GROQ_MODEL, but every one of them was
+    previously paying that model's full latency on the hot path of every
+    chat message. Routes through the small/fast model instead (same one
+    already used for bulk ingest), same circuit-breaker/fallback/metrics
+    behavior as llm_chat(). Do NOT use this for actual answer generation,
+    extraction, or anything grounded in source text -- only for cheap
+    label/verdict prompts.
+    """
+    if circuit_breaker.is_open():
+        return ""
+    return call_fast_with_fallback(prompt, max_tokens)

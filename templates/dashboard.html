@@ -108,7 +108,16 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
 .btn-bulk-del.show { display:inline-flex; }
 .btn-bulk-del:hover:not(:disabled) { background:rgba(255,82,82,.22); color:#fff; }
 .btn-bulk-del:disabled { opacity:.55; cursor:not-allowed; }
-.table-card { background:var(--card); border:1px solid var(--border); border-radius:18px; overflow:hidden; }
+.table-card {
+  background:var(--card); border:1px solid var(--border); border-radius:18px;
+  /* BUG FIX: position:sticky on the thead doesn't stick reliably against
+     an ancestor with overflow:hidden and no scroll of its own -- that's
+     what was causing the sticky header to overlap/float oddly at the
+     top instead of cleanly sticking. Giving the card its own bounded,
+     scrollable region (instead of the whole page scrolling) fixes it
+     properly and is also the more standard "data table" pattern. */
+  overflow:auto; max-height:min(70vh, 640px);
+}
 .tbl { width:100%; border-collapse:collapse; font-size:.82rem; }
 .tbl thead { background:rgba(20,40,70,.3); }
 [data-bs-theme="light"] .tbl thead { background:rgba(200,210,224,.3); }
@@ -211,6 +220,31 @@ textarea.form-control { resize:vertical; min-height:80px; }
   .stats-row { grid-template-columns:1fr 1fr; }
   .table-card { overflow-x:auto; }
   .tbl { min-width:640px; }
+}
+/* BUG FIX: the topbar search input had a hardcoded inline width:200px
+   with no responsive override, sitting in a non-wrapping topbar next to
+   the refresh button and the "FAQ Management" title. On phone widths
+   the combined content was wider than the screen, so the search box
+   visibly overlapped/ran off past the other topbar elements. Wrapping
+   the topbar onto two rows and letting the search box grow to fill the
+   second row fixes it -- and works regardless of the inline style
+   because !important beats it. */
+@media (max-width:560px) {
+  .topbar {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 58px;
+    padding: .6rem 1rem;
+    row-gap: .5rem;
+  }
+  .topbar > div:last-child {
+    width: 100%;
+  }
+  .topbar input#searchInput.filter-input {
+    width: auto !important;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -657,17 +691,25 @@ document.getElementById('confirmDeleteBtn')?.addEventListener('click', async fun
 
   const conf = this;
   const sourceBtn = conf._sourceBtn;
-  conf.disabled = true;
-  conf.innerHTML = '<span class="spinner"></span> Deleting…';
-  if (sourceBtn) {
-    sourceBtn.disabled = true;
-    sourceBtn.classList.add('deleting');
-  }
+  const isBulk = deleteMode === 'bulk' && Array.isArray(faqToDelete);
+  const uuids = isBulk ? faqToDelete.slice() : [faqToDelete];
+
+  // Optimistic delete: close the modal and fade the row(s) out right
+  // away instead of leaving the admin staring at a spinner for a
+  // network round trip on something as routine as a delete. Rows are
+  // only hidden (display:none), never removed from the DOM, until the
+  // server actually confirms — so a failure just means un-hiding them,
+  // no risk of losing data or needing to reconstruct anything.
+  bootstrap.Modal.getInstance(document.getElementById('deleteModal'))?.hide();
+  const rowSet = new Set(uuids);
+  const rows = [...document.querySelectorAll('#faqTableBody tr[data-uuid]')].filter(r => rowSet.has(r.dataset.uuid));
+  rows.forEach(r => r.classList.add('row-removing'));
+  await new Promise(res => setTimeout(res, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 220));
+  rows.forEach(r => { r.style.display = 'none'; });
+
   document.getElementById('btnBulkDelete')?.setAttribute('disabled', 'true');
 
   const csrf = getCSRFToken();
-  const isBulk = deleteMode === 'bulk' && Array.isArray(faqToDelete);
-  const uuids = isBulk ? faqToDelete.slice() : [faqToDelete];
 
   try {
     let ok = false;
@@ -709,10 +751,16 @@ document.getElementById('confirmDeleteBtn')?.addEventListener('click', async fun
       }
     }
 
-    bootstrap.Modal.getInstance(document.getElementById('deleteModal'))?.hide();
+    // Anything the server DIDN'T confirm gets rolled back (un-hidden);
+    // only the confirmed set is actually removed from the DOM.
+    const deletedSet = new Set(deleted);
+    const notDeleted = rows.filter(r => !deletedSet.has(r.dataset.uuid));
+    if (notDeleted.length) {
+      notDeleted.forEach(r => { r.style.display = ''; r.classList.remove('row-removing'); });
+    }
 
     if (ok && deleted.length) {
-      await removeRowsByUuid(deleted);
+      await removeRowsByUuid(deleted, { animate: false });
       clearSelection();
       showToast(
         deleted.length === 1 ? 'FAQ deleted.' : `${deleted.length} FAQs deleted.`,
@@ -722,7 +770,9 @@ document.getElementById('confirmDeleteBtn')?.addEventListener('click', async fun
       showToast('Nothing was deleted.', 'warning');
     }
   } catch (err) {
-    showToast(err.message || 'Error deleting FAQ.', 'danger');
+    // Full rollback — nothing was confirmed deleted.
+    rows.forEach(r => { r.style.display = ''; r.classList.remove('row-removing'); });
+    showToast(err.message || 'Error deleting FAQ — restored.', 'danger');
     if (sourceBtn) {
       sourceBtn.disabled = false;
       sourceBtn.classList.remove('deleting');
@@ -761,6 +811,7 @@ function openAddModal() {
   document.getElementById('priority_score').value = '0';
   const btn = document.getElementById('btnSaveFaq');
   if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg"></i> Save FAQ'; }
+  faqFormGuard?.markClean();
 }
 
 function openUpdateModal(faq) {
@@ -783,10 +834,22 @@ function openUpdateModal(faq) {
     const btn = document.getElementById('btnSaveFaq');
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg"></i> Save FAQ'; }
     new bootstrap.Modal(document.getElementById('faqModal')).show();
+    faqFormGuard?.markClean();
   } catch (err) {
     showToast('Error opening edit: ' + err.message, 'danger');
   }
 }
+
+// Unsaved-changes guard, scoped to the FAQ add/edit form only — warns
+// before losing typed content on tab close or modal dismiss, but never
+// on filters/search since it's bound to nothing but this one form.
+// BUG FIX: admin-common.js loads with `defer`, so window.PACAdmin isn't
+// defined yet at the point this inline (non-deferred) script runs during
+// parsing — wrapping in DOMContentLoaded guarantees it's ready.
+let faqFormGuard = null;
+document.addEventListener('DOMContentLoaded', function () {
+  faqFormGuard = window.PACAdmin?.guardUnsavedChanges('faqForm', { modal: 'faqModal' });
+});
 
 document.getElementById('faqForm')?.addEventListener('submit', async function(e) {
   e.preventDefault();
@@ -803,6 +866,7 @@ document.getElementById('faqForm')?.addEventListener('submit', async function(e)
       method: 'POST', body: fd, headers: { 'X-CSRFToken': csrf }
     });
     if (res.ok) {
+      faqFormGuard?.markClean();
       bootstrap.Modal.getInstance(document.getElementById('faqModal'))?.hide();
       showToast(uuid ? 'FAQ updated!' : 'FAQ created!', 'success');
       saveFilters();

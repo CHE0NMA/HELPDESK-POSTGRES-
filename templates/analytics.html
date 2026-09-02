@@ -420,16 +420,9 @@ async function loadAnalytics() {
   }
 }
 
-// BUG FIX: PACAdmin.createPoller lives in admin-common.js, which is
-// loaded with `defer` — deferred scripts run after parsing finishes but
-// before DOMContentLoaded, while this plain inline script block runs
-// immediately as the parser reaches it. Wrapping in DOMContentLoaded
-// guarantees admin-common.js has already executed and window.PACAdmin
-// exists by the time we reference it.
 document.addEventListener('DOMContentLoaded', function () {
   loadCacheStats();
-  // Was a bare setInterval that kept polling every 30s in background
-  // tabs; PACAdmin.createPoller pauses while hidden.
+
   window.PACAdmin.createPoller(loadCacheStats, 30000, { immediate: false });
   loadAnalytics();
 });

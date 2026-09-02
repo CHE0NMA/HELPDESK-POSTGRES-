@@ -8,6 +8,10 @@ from threading import Lock
 from typing import Dict, Optional, Tuple
 
 from ai_providers import ai_cache, circuit_breaker, llm_chat
+# PERF: cheap classification calls (language id, gibberish/on-topic check)
+# route through the small/fast model instead of the main answer-generation
+# model -- see ai_providers/providers.py's llm_chat_fast() docstring.
+from ai_providers.providers import llm_chat_fast
 from database import get_db
 from services.config import bot_identity_line
 
@@ -316,7 +320,9 @@ def detect_language(text: str, prior_lang: Optional[str] = None) -> str:
         f"Text: {text[:200]}\n\nLabel:"
     )
     try:
-        raw = llm_chat(prompt, max_tokens=8).strip().lower()
+        # PERF: was llm_chat() (main/slow model) for a single-word label --
+        # llm_chat_fast() gives the same answer at a fraction of the latency.
+        raw = llm_chat_fast(prompt, max_tokens=8).strip().lower()
         label_map = {
             'english': 'english', 'tagalog': 'tagalog',
             'bisaya': 'bisaya', 'cebuano': 'bisaya',
@@ -581,7 +587,8 @@ Reply with EXACTLY this format, nothing else:
 GIBBERISH: yes/no
 SCHOOL: yes/no"""
         try:
-            response = llm_chat(prompt, max_tokens=20)
+            # PERF: small yes/no classification -- fast model, not the main one.
+            response = llm_chat_fast(prompt, max_tokens=20)
             if response:
                 r = response.strip().lower()
                 gibberish_match = re.search(r'gibberish:\s*(yes|no)', r)
@@ -600,6 +607,120 @@ SCHOOL: yes/no"""
         'is_gibberish': False,
         'is_school_related': True,
     }
+
+
+def classify_and_detect_language(question: str, prior_lang: Optional[str] = None) -> dict:
+    """PERF: combined replacement for detect_language() + classify_question_ai()
+    for callers (see services/faq.py's find_answer()) that need BOTH results
+    up front. Both functions already have fast paths (heuristic language
+    guess, obvious-keyword topic check, per-text caches) that cost zero AI
+    calls for the common case -- this only changes what happens when BOTH
+    fast paths miss and BOTH would otherwise fire their own separate AI
+    round-trip. In that case (genuinely ambiguous language on a genuinely
+    ambiguous topic -- exactly the worst-case, highest-latency messages)
+    this merges them into ONE prompt/ONE call instead of two sequential
+    ones. When only one side needs AI, this just delegates to that single
+    function, so behavior/accuracy is identical to calling them separately
+    -- only the double-AI-call case changes.
+
+    Returns {'language': str, 'is_gibberish': bool, 'is_school_related': bool}.
+    """
+    q = (question or '').strip()
+    if not q:
+        return {'language': prior_lang or 'english', 'is_gibberish': False, 'is_school_related': True}
+
+    # ---- language side: mirror detect_language()'s fast paths ----
+    lang_guess, lang_confident = _heuristic_language(q)
+    word_count = len(q.split())
+    lang_result, lang_needs_ai = None, False
+    if not lang_confident and word_count <= 2 and prior_lang:
+        lang_result = prior_lang
+    else:
+        lang_key = _lang_cache_key(q)
+        with _LANG_CACHE_LOCK:
+            cached_lang = _LANG_CACHE.get(lang_key)
+        if cached_lang:
+            lang_result = cached_lang
+        elif lang_confident or circuit_breaker.is_open():
+            lang_result = lang_guess
+            _cache_lang(lang_key, lang_guess)
+        else:
+            lang_needs_ai = True
+
+    # ---- classification side: mirror classify_question_ai()'s fast paths ----
+    class_result, class_needs_ai = None, False
+    if _obviously_not_gibberish_and_school_related(q):
+        class_result = {'is_gibberish': False, 'is_school_related': True}
+    else:
+        class_cache_key = f"classify_q_{hash(q.lower())}"
+        cached_class = ai_cache.get(class_cache_key)
+        if cached_class:
+            class_result = cached_class
+        elif circuit_breaker.is_open():
+            class_result = {'is_gibberish': False, 'is_school_related': True}
+        else:
+            class_needs_ai = True
+
+    # Neither needs AI -- both already resolved from a fast path/cache.
+    if not lang_needs_ai and not class_needs_ai:
+        return {'language': lang_result, **class_result}
+
+    # Only one side needs AI -- delegate to the existing single-purpose
+    # function rather than duplicating its prompt/parsing here.
+    if lang_needs_ai and not class_needs_ai:
+        return {'language': detect_language(q, prior_lang=prior_lang), **class_result}
+    if class_needs_ai and not lang_needs_ai:
+        return {'language': lang_result, **classify_question_ai(q)}
+
+    # Both need AI -- the case this function exists for. One merged prompt
+    # instead of two sequential round-trips.
+    prompt = f"""A student typed this message to a school helpdesk chatbot.
+{bot_identity_line()} The student may write in English, Tagalog, Bisaya/Cebuano,
+or a mix of these.
+
+Message: "{q}"
+
+Answer three questions about it. Reply with EXACTLY this format, nothing else:
+LANGUAGE: english/tagalog/bisaya/mixed_te/mixed_be/mixed_tb
+GIBBERISH: yes/no  (yes only if random keyboard-mashing / not real words in ANY language;
+  a short or informal real message, even one real word or a greeting, is NOT gibberish)
+SCHOOL: yes/no  (plausibly related to the school -- enrollment, tuition, grades, clearance,
+  scholarships, class schedules, office hours, campus rules/handbook, or greeting/small talk
+  directed at the school assistant; if unsure, prefer yes -- only say no if CLEARLY unrelated,
+  e.g. celebrities, general trivia, other companies, unrelated math homework)"""
+
+    try:
+        response = llm_chat_fast(prompt, max_tokens=30)
+        if response:
+            r = response.strip().lower()
+            lang_match = re.search(r'language:\s*(\w+)', r)
+            gibberish_match = re.search(r'gibberish:\s*(yes|no)', r)
+            school_match = re.search(r'school:\s*(yes|no)', r)
+            label_map = {
+                'english': 'english', 'tagalog': 'tagalog', 'bisaya': 'bisaya',
+                'cebuano': 'bisaya', 'mixed_te': 'mixed_te', 'mixed_tb': 'mixed_tb',
+                'mixed_be': 'mixed_be', 'filipino': 'tagalog',
+            }
+            resolved_lang = lang_guess
+            if lang_match:
+                resolved_lang = label_map.get(lang_match.group(1), lang_guess)
+            if gibberish_match and school_match:
+                resolved_class = {
+                    'is_gibberish': gibberish_match.group(1) == 'yes',
+                    'is_school_related': school_match.group(1) == 'yes',
+                }
+                _cache_lang(_lang_cache_key(q), resolved_lang)
+                ai_cache.set(f"classify_q_{hash(q.lower())}", resolved_class)
+                return {'language': resolved_lang, **resolved_class}
+    except Exception as e:
+        logger.warning(f"classify_and_detect_language merged call failed, "
+                        f"falling back to heuristics: {e}")
+
+    # Merged call failed/partially parsed -- fail open exactly like the
+    # two original functions would on their own.
+    _cache_lang(_lang_cache_key(q), lang_guess)
+    return {'language': lang_guess, 'is_gibberish': False, 'is_school_related': True}
+
 
 _ABBR_CACHE: Optional[Dict[str, str]] = None
 _ABBR_CACHE_LOCK = Lock()

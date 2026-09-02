@@ -1066,6 +1066,48 @@ textarea.form-control { resize:vertical; min-height:60px; }
   .dept-tab { padding:.4rem .75rem; font-size:.75rem; }
   .quick-grid { grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); }
   .card-body { overflow-x:auto; }
+  /* BUG FIX: .sched-table had no min-width, so on a narrow phone the
+     browser crammed all 11 columns (Title/Scope/Dept/Grades/Type/Start/
+     End/Status/Repeat/Actions) into whatever width was available instead
+     of scrolling horizontally -- dates and other cell content wrapped
+     and overlapped illegibly. Forcing a min-width makes it scroll
+     cleanly instead, matching the pattern already used for the FAQ/
+     corrections/unanswered tables. */
+  .sched-table { min-width: 920px; }
+}
+@media (max-width: 560px) {
+  /* Dept tabs: 6 pill tabs used to wrap into a messy multi-row block on
+     phones. One scrollable row reads much cleaner and matches how tab
+     strips behave everywhere else in the admin panel. */
+  .dept-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: .35rem;
+    margin-bottom: 1rem;
+  }
+  .dept-tab { flex-shrink: 0; }
+
+  /* Week-overview header: legend + prev/next/today buttons were all
+     crammed into one card-header row and overlapped on phones. Hide the
+     color-key legend (it's a nice-to-have, not needed to use the nav)
+     and let the nav controls take their own full-width row, centered. */
+  .week-legend { display: none; }
+  .week-nav-row { width: 100%; justify-content: center; }
+  #weekLabel { flex: 1; text-align: center; }
+
+  /* Quick Add: the auto-fill grid could land on 1 or 3 columns
+     depending on exact width, which looked awkward. Force a clean
+     2-per-row layout on phones instead. */
+  .quick-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: .6rem;
+  }
+  .quick-btn { padding: .8rem .6rem; font-size: .78rem; }
+
+  /* Schedules-list filter tabs (All/Global/Exceptions/Emergency) sat in
+     a non-wrapping row and overflowed off-screen on phones. */
+  .form-tabs { flex-wrap: wrap; }
 }
 @media(max-width:600px){
   .mode-switcher { flex-direction:column; width:100%; }
@@ -1251,8 +1293,8 @@ textarea.form-control { resize:vertical; min-height:60px; }
     <div class="card">
       <div class="card-header">
         <span><i class="bi bi-calendar3" style="color:var(--accent)"></i> Week Overview</span>
-        <div style="display:flex;gap:.5rem;align-items:center">
-          <div style="display:flex;align-items:center;gap:.5rem;font-size:.72rem;color:var(--text-dim)">
+        <div style="display:flex;gap:.5rem;align-items:center" class="week-nav-row">
+          <div style="display:flex;align-items:center;gap:.5rem;font-size:.72rem;color:var(--text-dim)" class="week-legend">
             <span style="display:inline-flex;align-items:center;gap:.3rem"><span style="width:10px;height:10px;border-radius:2px;background:rgba(255,109,0,.3);border:1px solid #ff9800;display:inline-block"></span> Global</span>
             <span style="display:inline-flex;align-items:center;gap:.3rem"><span style="width:10px;height:10px;border-radius:2px;background:rgba(170,0,255,.2);border:1px solid #aa00ff;display:inline-block"></span> Exception</span>
             <span style="display:inline-flex;align-items:center;gap:.3rem"><span style="width:10px;height:10px;border-radius:2px;background:rgba(255,23,68,.2);border:1px solid #ff1744;display:inline-block"></span> Emergency</span>
@@ -1306,7 +1348,7 @@ textarea.form-control { resize:vertical; min-height:60px; }
           </div>
         </div>
       </div>
-      <div class="card-body" style="padding:0;overflow-x:auto">
+      <div class="card-body" style="padding:0;overflow:auto;max-height:min(70vh, 640px)">
         <table class="sched-table">
           <thead>
             <tr>
@@ -1767,6 +1809,15 @@ textarea.form-control { resize:vertical; min-height:60px; }
 // MAIN
 // ============================================================
 let allSchedules = [];
+
+// Unsaved-changes guard, scoped to the schedule add/edit form only.
+// BUG FIX: admin-common.js loads with `defer`, so window.PACAdmin isn't
+// defined yet at the point this inline (non-deferred) script runs during
+// parsing — wrapping in DOMContentLoaded guarantees it's ready.
+let scheduleFormGuard = null;
+document.addEventListener('DOMContentLoaded', function () {
+  scheduleFormGuard = window.PACAdmin?.guardUnsavedChanges('scheduleForm', { modal: 'scheduleModal' });
+});
 let allEmergencies = [];
 let activeDept   = 'all';
 let listTab      = 'all';
@@ -1821,6 +1872,7 @@ function openAddModal() {
   document.getElementById('formTitle').innerHTML = '<i class="bi bi-plus-circle" style="color:var(--accent)"></i> Add Schedule Entry';
   const modal = new bootstrap.Modal(document.getElementById('scheduleModal'));
   modal.show();
+  scheduleFormGuard?.markClean();
 }
 
 function openEditModal() {
@@ -2510,6 +2562,7 @@ function editSchedule(id) {
   updateDateHints();
   document.getElementById('formTitle').innerHTML='<i class="bi bi-pencil-square" style="color:var(--warning)"></i> Edit Entry';
   openEditModal();
+  scheduleFormGuard?.markClean();
 }
 
 // ============================================================
@@ -2548,8 +2601,34 @@ document.getElementById('confirmDeleteBtn').addEventListener('click', async func
 
   deleteInFlight = true;
   const conf = this;
-  conf.disabled = true;
-  conf.innerHTML = '<span class="spinner"></span> Deleting…';
+
+  // Optimistic delete for schedule rows (bulk and single) — fade the
+  // row(s) out immediately and close the modal instead of a
+  // spinner-then-wait. Rows only get un-hidden if the server actually
+  // fails; emergency-closure deletes still re-fetch the list as before
+  // since that view isn't row-addressable the same way.
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let optimisticRows = [];
+  if (deleteTargetType === 'bulk') {
+    bootstrap.Modal.getInstance(document.getElementById('deleteModal'))?.hide();
+    const idSet = new Set(deleteBulkIds.map(String));
+    optimisticRows = [...document.querySelectorAll('#schedulesList tr[data-id]')].filter(r => idSet.has(String(r.dataset.id)));
+    optimisticRows.forEach(r => r.classList.add('row-removing'));
+    await new Promise(res => setTimeout(res, reduceMotion ? 0 : 220));
+    optimisticRows.forEach(r => { r.style.display = 'none'; });
+  } else if (deleteTargetType === 'schedule') {
+    bootstrap.Modal.getInstance(document.getElementById('deleteModal'))?.hide();
+    const row = document.querySelector(`#schedulesList tr[data-id="${deleteTargetId}"]`);
+    if (row) {
+      optimisticRows = [row];
+      row.classList.add('row-removing');
+      await new Promise(res => setTimeout(res, reduceMotion ? 0 : 220));
+      row.style.display = 'none';
+    }
+  } else {
+    conf.disabled = true;
+    conf.innerHTML = '<span class="spinner"></span> Deleting…';
+  }
 
   try {
     if (deleteTargetType === 'bulk') {
@@ -2561,10 +2640,13 @@ document.getElementById('confirmDeleteBtn').addEventListener('click', async func
           if (r.ok) deleted.push(id);
         } catch (_) {}
       }
-      bootstrap.Modal.getInstance(document.getElementById('deleteModal'))?.hide();
+      const deletedSet = new Set(deleted.map(String));
+      const notDeleted = optimisticRows.filter(r => !deletedSet.has(String(r.dataset.id)));
+      notDeleted.forEach(r => { r.style.display = ''; r.classList.remove('row-removing'); });
+
       if (deleted.length) {
         allSchedules = allSchedules.filter(s => !deleted.includes(s.id));
-        await removeScheduleRows(deleted);
+        await removeScheduleRows(deleted, { animate: false });
         clearSchedSelection();
         showToast(deleted.length === 1 ? 'Deleted' : `${deleted.length} entries deleted`, 'success');
         renderWeekCalendar();
@@ -2579,26 +2661,29 @@ document.getElementById('confirmDeleteBtn').addEventListener('click', async func
       const id = deleteTargetId;
       const typ = deleteTargetType;
       const r = await fetch(url, { method: 'DELETE' });
-      bootstrap.Modal.getInstance(document.getElementById('deleteModal'))?.hide();
+      if (typ !== 'emergency') bootstrap.Modal.getInstance(document.getElementById('deleteModal'))?.hide();
       if (r.ok) {
         if (typ === 'emergency') {
+          bootstrap.Modal.getInstance(document.getElementById('deleteModal'))?.hide();
           allEmergencies = allEmergencies.filter(e => e.id !== id);
           showToast('Emergency deleted', 'success');
           loadEmergencyClosures();
           renderWeekCalendar();
         } else {
           allSchedules = allSchedules.filter(s => s.id !== id);
-          await removeScheduleRows([id]);
+          await removeScheduleRows([id], { animate: false });
           showToast('Deleted', 'success');
           renderWeekCalendar();
           document.getElementById('schedCount').textContent = allSchedules.length + ' entries';
         }
       } else {
+        if (typ !== 'emergency') optimisticRows.forEach(row => { row.style.display = ''; row.classList.remove('row-removing'); });
         const e = await r.json().catch(() => ({}));
         showToast(e.error || 'Delete failed', 'danger');
       }
     }
   } catch (e) {
+    optimisticRows.forEach(row => { row.style.display = ''; row.classList.remove('row-removing'); });
     showToast('Network error', 'danger');
   } finally {
     deleteInFlight = false;
@@ -2609,11 +2694,17 @@ document.getElementById('confirmDeleteBtn').addEventListener('click', async func
   }
 });
 
-function removeScheduleRows(ids) {
+function removeScheduleRows(ids, { animate = true } = {}) {
   const set = new Set(ids.map(String));
   const rows = [...document.querySelectorAll('#schedulesList tr[data-id]')].filter(r => set.has(String(r.dataset.id)));
   if (!rows.length) {
     renderSchedules();
+    return Promise.resolve();
+  }
+  if (!animate || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    rows.forEach(r => r.remove());
+    if (!document.querySelector('#schedulesList tr[data-id]')) renderSchedules();
+    updateSchedSelectionUI();
     return Promise.resolve();
   }
   return new Promise(resolve => {
@@ -2797,6 +2888,7 @@ async function submitForm(ev) {
       });
       if(r.ok){
         showToast('Emergency closure saved!','success');
+        scheduleFormGuard?.markClean();
         clearForm();
         closeScheduleModal();
         refreshAll();
@@ -2829,6 +2921,7 @@ async function submitForm(ev) {
       const resp=await r.json();
       if(r.ok){
         showToast(id ? 'Entry updated!' : 'Entry saved!','success');
+        scheduleFormGuard?.markClean();
         clearForm();
         closeScheduleModal();
         refreshAll();

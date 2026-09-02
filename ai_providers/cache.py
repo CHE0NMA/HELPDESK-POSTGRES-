@@ -64,7 +64,14 @@ class AICache:
 
 
 class FAQCache:
-    def __init__(self, maxsize=100, ttl_seconds=3600):
+    # BUG FIX (perf review): 100 was small relative to AICache's 500 --
+    # under normal traffic (and especially during enrollment-period
+    # spikes) this evicted and forced full re-computation of FAQ answers
+    # far more often than necessary. Raised to match AICache so a busy
+    # period doesn't quietly degrade into a cache-miss-most-of-the-time
+    # state. ttl_seconds unchanged -- eviction pressure, not staleness,
+    # was the actual problem.
+    def __init__(self, maxsize=500, ttl_seconds=3600):
         self.cache = {}
         self.maxsize = maxsize
         self.ttl = ttl_seconds

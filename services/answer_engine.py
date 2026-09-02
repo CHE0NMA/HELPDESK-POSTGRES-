@@ -199,8 +199,16 @@ def _extract_from_answer(user_question: str, best_text: str, answer: str,
     (with one retry) that services/nlg.py's speak_naturally() already
     does for date answers, so FAQ answers get the same treatment.
     """
+    # PERF: a stronger, harder-to-ignore directive on the FIRST attempt
+    # (not just "Reply in X") -- the language-drift retry a few lines
+    # below costs a full second AI call every time it fires, and Bisaya/
+    # Tagalog replies were the ones drifting into English most often. A
+    # firmer up-front instruction reduces how often that retry is needed
+    # without changing the retry safety net itself.
     lang_instruction = (
-        f"Reply in {nlg.lang_name(detected_lang)}." if detected_lang != 'english' else ""
+        f"You must reply ENTIRELY in {nlg.lang_name(detected_lang)} — not English, not a "
+        f"mix — unless a proper noun has no natural translation."
+        if detected_lang != 'english' else ""
     )
     few_shot = nlg.few_shot_example(detected_lang) if detected_lang != 'english' else ""
     casual_note = nlg.casual_tone_note(user_question)

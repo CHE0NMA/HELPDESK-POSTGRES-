@@ -20,6 +20,9 @@ from datetime import datetime
 from typing import Optional
 
 from ai_providers import ai_cache, circuit_breaker, llm_chat
+# PERF: FOLLOWUP/NEW is a one-word verdict call -- route through the
+# small/fast model (see ai_providers/providers.py's llm_chat_fast).
+from ai_providers.providers import llm_chat_fast
 from services.grounding import answer_is_grounded
 from services.language import verify_output_language
 
@@ -155,8 +158,29 @@ def speak_naturally(canonical_text: str, question: str, detected_lang: str = 'en
     cached = ai_cache.get(cache_key)
     if cached:
         return cached
-        from services.config import bot_identity_line
-        prompt = f"""{now_context()}
+
+    # BUG FIX (major): this whole prompt-build + AI-call block used to sit
+    # INSIDE the `if cached:` branch, after an unconditional `return cached`
+    # -- i.e. it was unreachable dead code. On every cache miss, the
+    # function fell straight through to `try: response = llm_chat(prompt,
+    # ...)` with `prompt` never defined, hit a NameError, and the broad
+    # `except Exception` below silently swallowed it and returned
+    # canonical_text unchanged. In practice this meant speak_naturally()
+    # NEVER actually rephrased anything -- every dates.py answer (and its
+    # Tagalog/Bisaya few-shot handling) was silently skipped, all the time,
+    # for every language. Dedented so this actually runs on a cache miss.
+    from services.config import bot_identity_line
+    # A stronger, up-front language directive (rather than relying only on
+    # the retry-after-drift path below) so a correct-language reply is more
+    # likely on the FIRST attempt -- see the retry block further down,
+    # which used to be the only real defense against language drift and
+    # cost a full second AI call every time it fired.
+    lang_directive = (
+        f"You must reply ENTIRELY in {lang_name(detected_lang)} — not English, "
+        f"not a mix — unless a proper noun has no natural translation.\n"
+        if detected_lang != 'english' else ""
+    )
+    prompt = f"""{now_context()}
 
     {bot_identity_line()}
     A student asked: "{question}"
@@ -165,7 +189,7 @@ def speak_naturally(canonical_text: str, question: str, detected_lang: str = 'en
     "{canonical_text}"
 
     {extra_note}{casual_tone_note(question)}
-
+    {lang_directive}
     Rephrase the answer above so it reads naturally, in {lang_name(detected_lang)}. {STYLE_GUIDE}
     {("\n" + few_shot_example(detected_lang) + "\n") if detected_lang != 'english' else ""}
     STRICT RULE: Do not add, remove, or change any fact — no dates, times, names, amounts,
@@ -263,7 +287,7 @@ Or is it a NEW, unrelated question/topic on its own?
 
 Reply with exactly one word: FOLLOWUP or NEW."""
         try:
-            verdict = llm_chat(prompt, max_tokens=5)
+            verdict = llm_chat_fast(prompt, max_tokens=5)
             if verdict:
                 v = verdict.strip().upper()
                 if v.startswith('FOLLOWUP'):

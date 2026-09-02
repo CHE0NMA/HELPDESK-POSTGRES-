@@ -9,6 +9,10 @@
 (function () {
   'use strict';
 
+  // Badge polling interval. The backend endpoint (/api/admin/realtime)
+  // caches its own result for ~8s server-side and is shared by every open
+  // tab/admin, so this can stay reasonably tight without hammering the
+  // (small, 3-connection-on-Vercel) DB pool — see routes/api.py.
   const POLL_MS = 15000;
   const ACTIVE_MAP = {
     dashboard: '/dashboard',
@@ -348,6 +352,11 @@
     livePoller = createPoller(refreshAdminLive, POLL_MS);
   }
 
+  // Slim top-loading-bar on internal navigation (sidebar links, "Back to
+  // Help Desk", "Log Out", etc). Full page reloads have no other feedback
+  // between click and the next page painting — this closes that gap so
+  // navigating between admin pages feels like a single smooth app instead
+  // of a series of blank-flash reloads.
   function startNavProgress() {
     let bar = document.getElementById('navProgressBar');
     if (!bar) {
@@ -375,6 +384,11 @@
     });
   }
 
+  // Ctrl/Cmd+K jumps straight to this page's search box, wherever it is —
+  // dashboard/corrections/handbook/reports/unanswered all use #searchInput,
+  // alert_log uses #searchAlerts, others fall back to any .filter-input.
+  // Also appends a "(Ctrl+K)" hint to whichever box we find so the
+  // shortcut is discoverable instead of hidden.
   function bindSearchShortcut() {
     const el = $('#searchInput') || $('#searchAlerts') || $('.filter-input');
     if (!el || el._kBound) return;
@@ -393,6 +407,55 @@
     el.select();
   });
 
+  // Unsaved-changes guard — scoped to a specific <form> (never applied
+  // generically to search/filter inputs, which would false-positive
+  // constantly). Warns on browser navigation/close AND on closing the
+  // Bootstrap modal the form lives in, while there are unsaved edits.
+  // Call .markClean() right after a successful save, and right after
+  // programmatically populating the form for "add" or "edit" mode, so
+  // pre-filled values don't themselves count as a pending change.
+  function guardUnsavedChanges(formEl, opts) {
+    opts = opts || {};
+    if (typeof formEl === 'string') formEl = document.getElementById(formEl);
+    if (!formEl || formEl._unsavedGuardBound) return formEl && formEl._unsavedGuard;
+    formEl._unsavedGuardBound = true;
+
+    let dirty = false;
+    let armed = false; // ignore the initial programmatic fill before the user's first real edit
+    function markDirty() { if (armed) dirty = true; }
+    function markClean() { dirty = false; armed = true; }
+
+    formEl.addEventListener('input', markDirty);
+    formEl.addEventListener('change', markDirty);
+    markClean();
+
+    function beforeUnloadHandler(e) {
+      if (!dirty) return;
+      e.preventDefault();
+      e.returnValue = '';
+    }
+    window.addEventListener('beforeunload', beforeUnloadHandler);
+
+    const modalEl = opts.modal
+      ? (typeof opts.modal === 'string' ? document.getElementById(opts.modal) : opts.modal)
+      : formEl.closest('.modal');
+    if (modalEl) {
+      modalEl.addEventListener('hide.bs.modal', function (e) {
+        if (!dirty) return;
+        if (!window.confirm('You have unsaved changes. Discard them?')) {
+          e.preventDefault();
+        } else {
+          markClean();
+        }
+      });
+    }
+
+    const guard = { markClean, markDirty, isDirty: function () { return dirty; } };
+    formEl._unsavedGuard = guard;
+    return guard;
+  }
+  window.PACAdmin.guardUnsavedChanges = guardUnsavedChanges;
+
   function bindUI() {
     const themeBtn = $('#themeToggle');
     if (themeBtn && !themeBtn._bound) {
@@ -409,7 +472,15 @@
         if (window.innerWidth <= 900) closeSidebar();
       });
     });
-
+    // BUG FIX: this used to also addEventListener('click', toggleSidebar)
+    // on any #sidebarToggle element. Every page already calls
+    // toggleSidebar() via an inline onclick= attribute on that same
+    // button, so on the two pages that happened to also set
+    // id="sidebarToggle" (alert_log.html, holiday_management.html), a
+    // single tap fired toggleSidebar() TWICE -- open then immediately
+    // closed again, net zero visible change. That's very likely the
+    // "sidebar doesn't open/close on phone" bug. The inline onclick is
+    // sufficient everywhere; no extra binding needed.
     const ov = $('#sidebarOverlay');
     if (ov && !ov._bound) {
       ov.addEventListener('click', closeSidebar);
@@ -426,6 +497,9 @@
     startPolling();
   }
 
+  // If the browser restores a page from bfcache (back/forward nav), any
+  // in-flight nav progress bar from the click that navigated away would
+  // otherwise be stuck mid-animation on the restored page.
   window.addEventListener('pageshow', function (e) {
     if (e.persisted) {
       const bar = document.getElementById('navProgressBar');

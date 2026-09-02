@@ -584,11 +584,11 @@ function clearSelection() {
   onRowCheckChange();
 }
 
-function removeRowsByIds(ids) {
+function removeRowsByIds(ids, { animate = true } = {}) {
   const set = new Set(ids.map(String));
   const rows = [...document.querySelectorAll('#reportsTable tr[data-id]')].filter(r => set.has(String(r.dataset.id)));
   if (!rows.length) return Promise.resolve();
-  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reduce = !animate || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (reduce) {
     rows.forEach(r => r.remove());
     afterRemove();
@@ -802,8 +802,18 @@ document.getElementById('deleteConfirmBtn')?.addEventListener('click', async fun
   if (deleteMode === 'bulk' && (!deleteIds || !deleteIds.length)) return;
   deleteInFlight = true;
   const conf = this;
-  conf.disabled = true;
-  conf.innerHTML = '<span class="spinner"></span> Deleting…';
+  const idsToDelete = deleteMode === 'bulk' ? deleteIds.slice() : [deleteId];
+
+  // Optimistic delete: close the modal and fade the row(s) out right
+  // away instead of a spinner-then-wait. Rows are only hidden until the
+  // server confirms — a failure just un-hides them.
+  bootstrap.Modal.getInstance(document.getElementById('deleteModal'))?.hide();
+  const idSet = new Set(idsToDelete.map(String));
+  const rows = [...document.querySelectorAll('#reportsTable tr[data-id]')].filter(r => idSet.has(String(r.dataset.id)));
+  rows.forEach(r => r.classList.add('row-removing'));
+  await new Promise(res => setTimeout(res, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 220));
+  rows.forEach(r => { r.style.display = 'none'; });
+
   document.getElementById('btnBulkDelete')?.setAttribute('disabled', 'true');
   try {
     let deleted = [];
@@ -824,16 +834,21 @@ document.getElementById('deleteConfirmBtn')?.addEventListener('click', async fun
       });
       if (res.ok) deleted = [deleteId];
     }
-    bootstrap.Modal.getInstance(document.getElementById('deleteModal'))?.hide();
+
+    const deletedSet = new Set(deleted.map(String));
+    const notDeleted = rows.filter(r => !deletedSet.has(String(r.dataset.id)));
+    notDeleted.forEach(r => { r.style.display = ''; r.classList.remove('row-removing'); });
+
     if (deleted.length) {
-      await removeRowsByIds(deleted);
+      await removeRowsByIds(deleted, { animate: false });
       clearSelection();
       showToast(deleted.length === 1 ? 'Report deleted' : `${deleted.length} reports deleted`, 'danger');
     } else {
       showToast('Failed to delete', 'danger');
     }
   } catch (err) {
-    showToast('Error: ' + err.message, 'danger');
+    rows.forEach(r => { r.style.display = ''; r.classList.remove('row-removing'); });
+    showToast('Error: ' + err.message + ' — restored.', 'danger');
   } finally {
     deleteInFlight = false;
     deleteId = null;
