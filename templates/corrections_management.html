@@ -274,6 +274,11 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
   .filter-input { width:100%; max-width:none; }
   .table-card { overflow-x:auto; }
   .tbl { min-width:700px; }
+  /* BUG FIX: "Add correction" (icon + label) sat next to the refresh
+     button in a non-wrapping topbar alongside the page title -- on
+     phones there wasn't room for all of it. Icon-only on phones. */
+  #addCorrectionBtn .btn-label { display: none; }
+  #addCorrectionBtn { padding: .5rem .65rem; }
 }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: rgba(255,255,255,0.04); border-radius: 4px; }
@@ -355,7 +360,7 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
       <span class="topbar-title"><i class="bi bi-wrench-adjustable" style="color:var(--accent2)"></i> Corrections</span>
     </div>
     <div style="display:flex;align-items:center;gap:.6rem">
-      <button class="btn-add" onclick="openAddModal()"><i class="bi bi-plus-lg"></i> Add correction</button>
+      <button class="btn-add" onclick="openAddModal()" id="addCorrectionBtn"><i class="bi bi-plus-lg"></i> <span class="btn-label">Add correction</span></button>
       <button class="btn-refresh" onclick="softRefresh()" title="Refresh"><i class="bi bi-arrow-clockwise"></i></button>
     </div>
   </div>

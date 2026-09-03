@@ -204,12 +204,23 @@ def is_schedule_level_followup(question: str, ctx) -> bool:
     if _has_explicit_date_signal(q):
         return False
 
-    # Extremely short messages that contain any of these words are almost
-    # certainly continuing the previous schedule conversation
-    if len(q.split()) <= 6 and any(w in q for w in (
-        'all', 'level', 'college', 'elementary', 'high', 'tanan', 'lahat',
-        'everyone', 'whole', 'too', 'also', 'sa', 'for', 'school'
-    )):
+    # BUG FIX: this used to check `w in q` -- a raw substring test, not a
+    # word match -- against very short, common tokens like "sa" and "for".
+    # "sa" is a substring of "unsa" (Bisaya "what"), so almost ANY short
+    # Bisaya question starting with "unsa" (e.g. "unsa and dili dapat
+    # buhaton?" -- "what should not be done?", nothing to do with a
+    # schedule) was silently misdetected as a level/department follow-up
+    # whenever ctx.last_schedule_query happened to be set, and answered
+    # with a stale "today, all departments, open" sentence instead of
+    # being routed to handbook/FAQ at all. Word-boundary matching so a
+    # trigger word has to actually appear as its own word.
+    if len(q.split()) <= 6 and re.search(
+        r'\b(' + '|'.join(re.escape(w) for w in (
+            'all', 'level', 'college', 'elementary', 'high', 'tanan', 'lahat',
+            'everyone', 'whole', 'too', 'also', 'sa', 'for', 'school'
+        )) + r')\b',
+        q,
+    ):
         return True
 
     return bool(_SCHEDULE_LEVEL_FOLLOWUP_RE.search(q))

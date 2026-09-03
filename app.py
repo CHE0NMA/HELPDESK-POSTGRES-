@@ -237,7 +237,7 @@ app = create_app()
 
 if __name__ == "__main__":
     validate_config()
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 5001))
     debug_mode = os.environ.get("FLASK_ENV") == "development"
     print("=" * 55)
     print("PAC Helpdesk — modular edition")

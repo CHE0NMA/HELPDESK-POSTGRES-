@@ -90,7 +90,20 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
 .tbl { width:100%; border-collapse:collapse; }
 .tbl thead th { padding:.85rem 1rem; font-family:'Sora',sans-serif; font-weight:700; font-size:.68rem; text-transform:uppercase; letter-spacing:.06em; color:var(--text-dim); border-bottom:1px solid var(--border); background:rgba(20,40,70,.3); }
 [data-bs-theme="light"] .tbl thead th { background:rgba(200,210,224,.3); }
-.tbl th.chk-col, .tbl td.chk-col { width:42px; text-align:center; padding-left:.75rem; padding-right:.5rem; }
+.tbl th.chk-col, .tbl td.chk-col {
+  width:0; padding-left:0; padding-right:0; opacity:0; overflow:hidden; text-align:center;
+  transition:width .22s ease, opacity .18s ease, padding .22s ease;
+}
+.table-card.selecting .tbl th.chk-col, .table-card.selecting .tbl td.chk-col {
+  width:42px; opacity:1; padding-left:.75rem; padding-right:.5rem;
+}
+.btn-select-toggle {
+  display:inline-flex; align-items:center; gap:.4rem; padding:.45rem .85rem; border-radius:11px;
+  background:rgba(26,115,232,.1); border:1.5px solid var(--border2); color:var(--text-dim);
+  font-weight:600; font-size:.82rem; cursor:pointer; transition:all .18s ease;
+}
+.btn-select-toggle:hover { background:rgba(26,115,232,.18); color:var(--text); }
+.btn-select-toggle.active { background:var(--brand); border-color:var(--brand); color:#fff; }
 .tbl tbody td { padding:.82rem 1rem; font-size:.86rem; color:var(--text-dim); border-bottom:1px solid rgba(77,171,247,.06); vertical-align:middle; max-width:300px; }
 .tbl tbody tr { transition: opacity .28s ease, transform .28s ease, background .15s; }
 .tbl tbody tr:hover { background:rgba(26,115,232,.06); }
@@ -346,6 +359,9 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
     <div class="toolbar">
       <span class="page-title">All Negative Feedback</span>
       <input type="text" class="filter-input" id="searchInput" placeholder="Search by question or answer…" oninput="filterTable()" autocomplete="off">
+      <button type="button" class="btn-select-toggle" id="btnSelectToggle" onclick="toggleSelectionMode()">
+        <i class="bi bi-check2-square"></i> Select
+      </button>
       <button type="button" class="btn-bulk-del" id="btnBulkDelete" onclick="openBulkDelete()">
         <i class="bi bi-trash"></i> Delete selected (<span id="bulkCount">0</span>)
       </button>
@@ -359,7 +375,7 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
       </button>
     </div>
 
-    <div class="table-card">
+    <div class="table-card" id="reportsTableCard">
       <table class="tbl" id="reportsTable">
         <thead>
           <tr>
@@ -548,6 +564,20 @@ function getVisibleChecks() {
 }
 function getSelectedIds() {
   return [...document.querySelectorAll('#reportsTable .row-check:checked')].map(c => c.value).filter(Boolean);
+}
+let selectionModeOn = false;
+function toggleSelectionMode(forceOn) {
+  selectionModeOn = typeof forceOn === 'boolean' ? forceOn : !selectionModeOn;
+  const card = document.getElementById('reportsTableCard');
+  const btn = document.getElementById('btnSelectToggle');
+  if (card) card.classList.toggle('selecting', selectionModeOn);
+  if (btn) {
+    btn.classList.toggle('active', selectionModeOn);
+    btn.innerHTML = selectionModeOn
+      ? '<i class="bi bi-x-lg"></i> Cancel'
+      : '<i class="bi bi-check2-square"></i> Select';
+  }
+  if (!selectionModeOn) clearSelection();
 }
 function onRowCheckChange() {
   document.querySelectorAll('#reportsTable tr[data-id]').forEach(r => {

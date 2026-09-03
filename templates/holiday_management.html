@@ -799,6 +799,23 @@ textarea.form-control { resize:vertical; min-height:60px; }
   border-bottom:1px solid var(--border);
   padding-bottom:.75rem;
 }
+.sched-header-actions {
+  display: flex;
+  gap: .5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.sched-header-tools {
+  display: flex;
+  gap: .5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.sched-list-tabs {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .form-tab {
   padding:.38rem .9rem;
   border-radius:8px;
@@ -904,6 +921,70 @@ textarea.form-control { resize:vertical; min-height:60px; }
 .day-cell.today { border-color:rgba(81,207,102,.4); background:rgba(81,207,102,.06); }
 .day-cell.today .day-num { color:var(--success); }
 .day-cell.weekend .day-name { color:#ff9b9b; }
+
+/* ===== WEEK NAV ===== */
+.week-card-header {
+  flex-wrap: wrap;
+  gap: .65rem;
+}
+.week-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.week-header-title {
+  font-family: 'Sora', sans-serif;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.week-legend {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+  font-size: .72rem;
+  color: var(--text-dim);
+}
+.week-leg-item {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  white-space: nowrap;
+}
+.week-leg-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  border: 1px solid;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.week-nav-row {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  flex-shrink: 0;
+}
+.week-label {
+  font-size: .82rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+  text-align: center;
+  min-width: 7.5rem;
+}
+.week-nav-btn {
+  flex-shrink: 0;
+  padding: .4rem .55rem !important;
+}
+.week-today-btn {
+  flex-shrink: 0;
+  font-size: .75rem !important;
+  padding: .4rem .7rem !important;
+}
+
 .day-cell .day-dots { display:flex; gap:.2rem; justify-content:center; margin-top:.25rem; flex-wrap:wrap; }
 .day-dot { width:5px; height:5px; border-radius:50%; flex-shrink:0; }
 
@@ -1076,9 +1157,7 @@ textarea.form-control { resize:vertical; min-height:60px; }
   .sched-table { min-width: 920px; }
 }
 @media (max-width: 560px) {
-  /* Dept tabs: 6 pill tabs used to wrap into a messy multi-row block on
-     phones. One scrollable row reads much cleaner and matches how tab
-     strips behave everywhere else in the admin panel. */
+  /* Dept tabs: single scrollable row */
   .dept-tabs {
     flex-wrap: nowrap;
     overflow-x: auto;
@@ -1088,26 +1167,105 @@ textarea.form-control { resize:vertical; min-height:60px; }
   }
   .dept-tab { flex-shrink: 0; }
 
-  /* Week-overview header: legend + prev/next/today buttons were all
-     crammed into one card-header row and overlapped on phones. Hide the
-     color-key legend (it's a nice-to-have, not needed to use the nav)
-     and let the nav controls take their own full-width row, centered. */
-  .week-legend { display: none; }
-  .week-nav-row { width: 100%; justify-content: center; }
-  #weekLabel { flex: 1; text-align: center; }
+  /* Week Overview: title on top, nav full-width bottom row:
+     [←]  date range  [→]  [Today]  — no overlap, date always visible */
+  .week-card-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: .55rem;
+  }
+  .week-header-top {
+    width: 100%;
+  }
+  .week-legend { display: none !important; }
+  .week-nav-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
+    align-items: center;
+    gap: .35rem;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  .week-nav-btn {
+    width: 36px;
+    height: 36px;
+    padding: 0 !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .week-label,
+  #weekLabel {
+    min-width: 0 !important;
+    width: 100%;
+    max-width: 100%;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: .78rem !important;
+    line-height: 1.2;
+    padding: 0 .15rem;
+  }
+  .week-today-btn {
+    height: 36px;
+    padding: 0 .65rem !important;
+    font-size: .72rem !important;
+    white-space: nowrap;
+  }
 
-  /* Quick Add: the auto-fill grid could land on 1 or 3 columns
-     depending on exact width, which looked awkward. Force a clean
-     2-per-row layout on phones instead. */
+  /* Quick Add: 2 columns on phones */
   .quick-grid {
     grid-template-columns: 1fr 1fr;
     gap: .6rem;
   }
   .quick-btn { padding: .8rem .6rem; font-size: .78rem; }
 
-  /* Schedules-list filter tabs (All/Global/Exceptions/Emergency) sat in
-     a non-wrapping row and overflowed off-screen on phones. */
-  .form-tabs { flex-wrap: wrap; }
+  /* Form tabs: one horizontal scroll row */
+  .form-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: .3rem;
+    padding-bottom: .5rem;
+    margin-bottom: .75rem;
+    scrollbar-width: thin;
+  }
+  .form-tab {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  /* Schedules card header */
+  .sched-card .card-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: .6rem;
+  }
+  .sched-card .card-header > span {
+    flex-shrink: 0;
+  }
+  .sched-header-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: .5rem;
+  }
+  .sched-header-tools {
+    flex-wrap: wrap;
+  }
+  .sched-list-tabs.form-tabs {
+    width: 100%;
+    flex: none;
+    margin: 0;
+    padding: 0 0 .15rem;
+    border: none;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 @media(max-width:600px){
   .mode-switcher { flex-direction:column; width:100%; }
@@ -1291,19 +1449,21 @@ textarea.form-control { resize:vertical; min-height:60px; }
 
     <!-- Week Calendar -->
     <div class="card">
-      <div class="card-header">
-        <span><i class="bi bi-calendar3" style="color:var(--accent)"></i> Week Overview</span>
-        <div style="display:flex;gap:.5rem;align-items:center" class="week-nav-row">
-          <div style="display:flex;align-items:center;gap:.5rem;font-size:.72rem;color:var(--text-dim)" class="week-legend">
-            <span style="display:inline-flex;align-items:center;gap:.3rem"><span style="width:10px;height:10px;border-radius:2px;background:rgba(255,109,0,.3);border:1px solid #ff9800;display:inline-block"></span> Global</span>
-            <span style="display:inline-flex;align-items:center;gap:.3rem"><span style="width:10px;height:10px;border-radius:2px;background:rgba(170,0,255,.2);border:1px solid #aa00ff;display:inline-block"></span> Exception</span>
-            <span style="display:inline-flex;align-items:center;gap:.3rem"><span style="width:10px;height:10px;border-radius:2px;background:rgba(255,23,68,.2);border:1px solid #ff1744;display:inline-block"></span> Emergency</span>
-            <span style="display:inline-flex;align-items:center;gap:.3rem"><span style="width:10px;height:10px;border-radius:2px;background:rgba(255,82,82,.15);border:1px solid #ff5252;display:inline-block"></span> Closed</span>
+      <div class="card-header week-card-header">
+        <div class="week-header-top">
+          <span class="week-header-title"><i class="bi bi-calendar3" style="color:var(--accent)"></i> Week Overview</span>
+          <div class="week-legend">
+            <span class="week-leg-item"><span class="week-leg-swatch" style="background:rgba(255,109,0,.3);border-color:#ff9800"></span> Global</span>
+            <span class="week-leg-item"><span class="week-leg-swatch" style="background:rgba(170,0,255,.2);border-color:#aa00ff"></span> Exception</span>
+            <span class="week-leg-item"><span class="week-leg-swatch" style="background:rgba(255,23,68,.2);border-color:#ff1744"></span> Emergency</span>
+            <span class="week-leg-item"><span class="week-leg-swatch" style="background:rgba(255,82,82,.15);border-color:#ff5252"></span> Closed</span>
           </div>
-          <button class="btn-refresh" onclick="prevWeek()"><i class="bi bi-chevron-left"></i></button>
-          <span id="weekLabel" style="font-size:.82rem;color:var(--text-dim);white-space:nowrap"></span>
-          <button class="btn-refresh" onclick="nextWeek()"><i class="bi bi-chevron-right"></i></button>
-          <button class="btn-refresh" onclick="goToToday()" style="font-size:.75rem">Today</button>
+        </div>
+        <div class="week-nav-row">
+          <button type="button" class="btn-refresh week-nav-btn" onclick="prevWeek()" aria-label="Previous week"><i class="bi bi-chevron-left"></i></button>
+          <span id="weekLabel" class="week-label"></span>
+          <button type="button" class="btn-refresh week-nav-btn" onclick="nextWeek()" aria-label="Next week"><i class="bi bi-chevron-right"></i></button>
+          <button type="button" class="btn-refresh week-today-btn" onclick="goToToday()">Today</button>
         </div>
       </div>
       <div class="card-body">
@@ -1332,15 +1492,17 @@ textarea.form-control { resize:vertical; min-height:60px; }
     <div class="card sched-card" id="schedCard">
       <div class="card-header">
         <span><i class="bi bi-list-ul" style="color:var(--accent2)"></i> Upcoming Entries</span>
-        <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
-          <span id="schedCount" style="font-size:.75rem;color:var(--text-dim)"></span>
-          <button type="button" class="btn-select-toggle" id="btnSelectToggleSched" onclick="toggleSelectionModeSched()">
-            <i class="bi bi-check2-square"></i> Select
-          </button>
-          <button type="button" class="btn-bulk-del" id="btnBulkDeleteSched" onclick="openBulkDeleteSched()">
-            <i class="bi bi-trash"></i> Delete selected (<span id="bulkSchedCount">0</span>)
-          </button>
-          <div class="form-tabs" style="border:none;padding:0;margin:0">
+        <div class="sched-header-actions">
+          <div class="sched-header-tools">
+            <span id="schedCount" style="font-size:.75rem;color:var(--text-dim)"></span>
+            <button type="button" class="btn-select-toggle" id="btnSelectToggleSched" onclick="toggleSelectionModeSched()">
+              <i class="bi bi-check2-square"></i> Select
+            </button>
+            <button type="button" class="btn-bulk-del" id="btnBulkDeleteSched" onclick="openBulkDeleteSched()">
+              <i class="bi bi-trash"></i> Delete selected (<span id="bulkSchedCount">0</span>)
+            </button>
+          </div>
+          <div class="form-tabs sched-list-tabs" style="border:none;padding:0;margin:0">
             <div class="form-tab active" id="listTabAll" onclick="setListTab('all',this)">All</div>
             <div class="form-tab" id="listTabGlobal" onclick="setListTab('global',this)">🌐 Global</div>
             <div class="form-tab" id="listTabException" onclick="setListTab('exception',this)">🔀 Exceptions</div>
@@ -1960,11 +2122,11 @@ function onExcStatusChange() {
 // WEEK CALENDAR
 // ============================================================
 function getWeekStart(off=0) {
-  const now=new Date(); const day=now.getDay();
-  const diff=now.getDate()-day+(day===0?-6:1);
-  const mon=new Date(now.setDate(diff));
-  mon.setDate(mon.getDate()+off*7);
-  return new Date(mon.getFullYear(),mon.getMonth(),mon.getDate());
+  // Week starts on Sunday (day 0)
+  const now = new Date();
+  const day = now.getDay(); // 0=Sun … 6=Sat
+  const sun = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day + off * 7);
+  return sun;
 }
 function prevWeek(){weekOffset--;renderWeekCalendar();}
 function nextWeek(){weekOffset++;renderWeekCalendar();}
@@ -2115,7 +2277,7 @@ function dateInRange(ds, s, e) {
 
 function renderWeekCalendar() {
   const ws = getWeekStart(weekOffset);
-  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const today = toDateStr(new Date());
   const we = new Date(ws); we.setDate(we.getDate() + 6);
   const weekStartStr = toDateStr(ws);
@@ -2152,7 +2314,7 @@ function renderWeekCalendar() {
     const d = new Date(ws); d.setDate(d.getDate() + i);
     const ds = toDateStr(d);
     const isToday = ds === today;
-    const isWknd = i >= 5;
+    const isWknd = i === 0 || i === 6; // Sun or Sat (Sunday-start week)
 
     const globals = expandedGlobals.filter(s => dateInRange(ds, s._occStart, s._occEnd));
     const exceptions = expandedExceptions.filter(s => dateInRange(ds, s._occStart, s._occEnd));
@@ -3132,3 +3294,4 @@ function exportData(){ window.location.href='/api/export/faq'; showToast('Export
 <script src="/static/js/admin-common.js" defer></script>
 </body>
 </html>
+Socket Permission Error on Run - Grok

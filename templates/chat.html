@@ -419,6 +419,12 @@
     background:rgba(6,15,30,.88);border-top:1px solid var(--border);
     padding:.5rem calc(max(.75rem,(100% - 760px) / 2)) .4rem;
   }
+  /* While the user is typing a search query, related/most-asked must stay
+     completely hidden — even if async loaders try to set display:block.
+     This stops the blink behind the typeahead dropdown. */
+  .suggestions-wrap.is-suppressed {
+    display: none !important;
+  }
   .sugg-label {
     font-size:.68rem;color:var(--text-muted);letter-spacing:.06em;text-transform:uppercase;
     margin-bottom:.35rem;display:flex;align-items:center;gap:.4rem;
@@ -426,8 +432,22 @@
   .sugg-label i { font-size:.7rem; }
   .sugg-label.related-mode { color:var(--accent2); }
 
-  .suggestions-scroll { display:flex;gap:.45rem;overflow-x:auto;padding-bottom:.2rem;scrollbar-width:none; }
-  .suggestions-scroll::-webkit-scrollbar { display:none; }
+  .suggestions-scroll {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: .45rem;
+    overflow-x: auto;
+    padding-bottom: .2rem;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 10px), transparent);
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 10px), transparent);
+  }
+  .suggestions-scroll::-webkit-scrollbar { display: none; }
+  .suggestions-scroll .sugg-btn { flex-shrink: 0; }
+  @media (prefers-reduced-motion: reduce) {
+    .suggestions-scroll { mask-image: none; -webkit-mask-image: none; }
+  }
 
   .sugg-btn {
     flex-shrink:0;padding:.45rem .9rem;border-radius:20px; min-height: 36px;
@@ -1791,7 +1811,134 @@ function isCleanSuggestion(text) {
   return true;
 }
 
+/* ---------- related / most-asked horizontal marquee ---------- */
+let _suggMarqueeRaf = null;
+let _suggMarqueeDir = 1;
+let _suggMarqueePaused = false;
+let _suggMarqueeResumeTimer = null;
+let _suggMarqueeBound = false;
+const SUGG_MARQUEE_SPEED = 1.1;     // px/frame — noticeable but calm
+const SUGG_MARQUEE_PAUSE_MS = 1200; // pause at each end
+const SUGG_MARQUEE_IDLE_MS = 2500;  // resume after user interaction
+
+function stopSuggMarquee() {
+  if (_suggMarqueeRaf) {
+    cancelAnimationFrame(_suggMarqueeRaf);
+    _suggMarqueeRaf = null;
+  }
+  clearTimeout(_suggMarqueeResumeTimer);
+}
+
+function _suggCanMarquee() {
+  if (!suggestScroll || !suggestionsWrap) return false;
+  if (suggestionsWrap.style.display === 'none') return false;
+  if (suggestionsWrap.classList.contains('is-suppressed')) return false;
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    return false;
+  }
+  return suggestScroll.scrollWidth > suggestScroll.clientWidth + 4;
+}
+
+function _suggMarqueeTick() {
+  _suggMarqueeRaf = null;
+  if (!_suggCanMarquee() || _suggMarqueePaused) return;
+
+  const el = suggestScroll;
+  const max = el.scrollWidth - el.clientWidth;
+  if (max <= 0) return;
+
+  let next = el.scrollLeft + SUGG_MARQUEE_SPEED * _suggMarqueeDir;
+
+  if (next >= max - 0.5) {
+    el.scrollLeft = max;
+    _suggMarqueeDir = -1;
+    _suggMarqueePaused = true;
+    _suggMarqueeResumeTimer = setTimeout(() => {
+      _suggMarqueePaused = false;
+      _suggMarqueeRaf = requestAnimationFrame(_suggMarqueeTick);
+    }, SUGG_MARQUEE_PAUSE_MS);
+    return;
+  }
+  if (next <= 0.5) {
+    el.scrollLeft = 0;
+    _suggMarqueeDir = 1;
+    _suggMarqueePaused = true;
+    _suggMarqueeResumeTimer = setTimeout(() => {
+      _suggMarqueePaused = false;
+      _suggMarqueeRaf = requestAnimationFrame(_suggMarqueeTick);
+    }, SUGG_MARQUEE_PAUSE_MS);
+    return;
+  }
+
+  el.scrollLeft = next;
+  _suggMarqueeRaf = requestAnimationFrame(_suggMarqueeTick);
+}
+
+function startSuggMarquee(reset) {
+  stopSuggMarquee();
+  if (!suggestScroll) return;
+  if (reset) {
+    suggestScroll.scrollLeft = 0;
+    _suggMarqueeDir = 1;
+  }
+  _suggMarqueePaused = false;
+
+  // Wait 2 frames so layout (scrollWidth) is accurate after chips inject
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (!_suggCanMarquee()) return;
+      // short intro pause so first chips are readable
+      _suggMarqueePaused = true;
+      _suggMarqueeResumeTimer = setTimeout(() => {
+        _suggMarqueePaused = false;
+        if (_suggCanMarquee()) {
+          _suggMarqueeRaf = requestAnimationFrame(_suggMarqueeTick);
+        }
+      }, 600);
+    });
+  });
+
+  if (!_suggMarqueeBound && suggestScroll) {
+    _suggMarqueeBound = true;
+    const pauseForUser = () => {
+      stopSuggMarquee();
+      _suggMarqueePaused = true;
+      clearTimeout(_suggMarqueeResumeTimer);
+      _suggMarqueeResumeTimer = setTimeout(() => {
+        _suggMarqueePaused = false;
+        if (_suggCanMarquee()) {
+          _suggMarqueeRaf = requestAnimationFrame(_suggMarqueeTick);
+        }
+      }, SUGG_MARQUEE_IDLE_MS);
+    };
+    suggestScroll.addEventListener('pointerdown', pauseForUser, { passive: true });
+    suggestScroll.addEventListener('wheel', pauseForUser, { passive: true });
+    suggestScroll.addEventListener('touchstart', pauseForUser, { passive: true });
+  }
+}
+
+/**
+ * Related / Most Asked is ONLY hidden while the typeahead dropdown is
+ * actually showing results. Typing with no matches keeps related visible.
+ */
+function setSuggestionsVisible(show) {
+  if (!suggestionsWrap) return;
+  const typeaheadShowing = !!(_typeaheadOpen && typeaheadDropdown &&
+    typeaheadDropdown.classList.contains('show') && _taItems && _taItems.length);
+
+  if (show && !typeaheadShowing) {
+    suggestionsWrap.classList.remove('is-suppressed');
+    suggestionsWrap.style.display = 'block';
+    requestAnimationFrame(() => startSuggMarquee());
+  } else if (!show || typeaheadShowing) {
+    suggestionsWrap.classList.add('is-suppressed');
+    suggestionsWrap.style.display = 'none';
+    stopSuggMarquee();
+  }
+}
+
 function renderSuggestions(data, isRelated) {
+  if (!suggestScroll) return;
   suggestScroll.innerHTML = '';
   const mapped = (data || []).map(q => (typeof q === 'string' ? { user_message: q } : q));
   const filtered = mapped.filter(q => isCleanSuggestion(q.user_message || q.question || ''));
@@ -1804,10 +1951,9 @@ function renderSuggestions(data, isRelated) {
   }).slice(0, 10);
 
   if (!unique.length) {
-    suggestionsWrap.style.display = 'none';
+    setSuggestionsVisible(false);
     return;
   }
-  // Fill chips, but stay hidden while typeahead search is open
   unique.forEach(q => {
     const text = q.user_message || q.question;
     const btn = document.createElement('button');
@@ -1820,11 +1966,8 @@ function renderSuggestions(data, isRelated) {
     };
     suggestScroll.appendChild(btn);
   });
-  if (_typeaheadOpen) {
-    suggestionsWrap.style.display = 'none';
-  } else {
-    suggestionsWrap.style.display = 'block';
-  }
+  setSuggestionsVisible(true);
+  startSuggMarquee(true);
 }
 
 let _topSuggestionCache = [];
@@ -1832,12 +1975,12 @@ let _topSuggestionCache = [];
 function loadTopSuggestions() {
   fetch('/suggested_questions')
     .then(r => {
-      if (!r.ok) { suggestionsWrap.style.display = 'none'; return null; }
+      if (!r.ok) { setSuggestionsVisible(false); return null; }
       return r.json();
     })
     .then(data => {
       if (!data || !Array.isArray(data) || !data.length) {
-        suggestionsWrap.style.display = 'none';
+        setSuggestionsVisible(false);
         return;
       }
       _topSuggestionCache = data.map(q => (typeof q === 'string' ? q : (q.user_message || q.question || ''))).filter(Boolean);
@@ -1845,7 +1988,7 @@ function loadTopSuggestions() {
       suggLabel.className = 'sugg-label';
       renderSuggestions(data, false);
     })
-    .catch(() => { suggestionsWrap.style.display = 'none'; });
+    .catch(() => { setSuggestionsVisible(false); });
 }
 
 /* ---------- typeahead (search-style while typing) ---------- */
@@ -1862,9 +2005,11 @@ function hideTypeahead() {
   _taActive = -1;
   _taItems = [];
   _typeaheadOpen = false;
-  // Restore the related/most-asked bar if it has chips ready
-  if (suggestionsWrap && suggestScroll && suggestScroll.children.length) {
-    suggestionsWrap.style.display = 'block';
+  // No typeahead results → bring related/most-asked back if we have chips
+  if (suggestScroll && suggestScroll.children.length) {
+    setSuggestionsVisible(true);
+  } else {
+    setSuggestionsVisible(false);
   }
 }
 
@@ -1898,8 +2043,8 @@ function renderTypeahead(items) {
   });
   typeaheadDropdown.classList.add('show');
   _typeaheadOpen = true;
-  // Always hide related/most-asked while typeahead is open
-  if (suggestionsWrap) suggestionsWrap.style.display = 'none';
+  // Hide related only while typeahead actually has results to show
+  setSuggestionsVisible(false);
 }
 
 function runTypeahead(query) {
@@ -1978,9 +2123,8 @@ function scheduleTypeahead() {
     hideTypeahead();
     return;
   }
-  // Immediately hide related chips while the user is searching
-  _typeaheadOpen = true;
-  if (suggestionsWrap) suggestionsWrap.style.display = 'none';
+  // Keep related visible until typeahead actually returns matches.
+  // Hiding early caused the bar to disappear entirely on empty searches.
   _taTimer = setTimeout(() => runTypeahead(q), 220);
 }
 

@@ -127,6 +127,11 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
   .sidebar-toggle { display:inline-flex; }
   .page-body { padding:1.1rem; }
   .topbar { padding:0 1rem; }
+  /* 4 stat cards now sit 2-per-row on phones (see col-6 col-md-3 above)
+     instead of each wasting a full row for one number -- shrink the big
+     numbers slightly so two comfortably fit side by side. */
+  .avg-big { font-size:2.4rem; }
+  .stat-num { font-size:1.6rem; }
 }
 </style>
 </head>
@@ -192,26 +197,26 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
 
   <div class="page-body">
     <div class="row g-3 mb-4" id="statsRow">
-      <div class="col-md-3">
+      <div class="col-6 col-md-3">
         <div class="stat-card text-center">
           <div class="avg-big" id="avgRating">—</div>
           <div class="stars-big" id="avgStars">☆☆☆☆☆</div>
           <div class="stat-label">Average rating</div>
         </div>
       </div>
-      <div class="col-md-3">
+      <div class="col-6 col-md-3">
         <div class="stat-card">
           <div class="stat-num" id="totalRatings">—</div>
           <div class="stat-label">Total ratings</div>
         </div>
       </div>
-      <div class="col-md-3">
+      <div class="col-6 col-md-3">
         <div class="stat-card">
           <div class="stat-num" id="fiveStarPct">—</div>
           <div class="stat-label">5-star responses</div>
         </div>
       </div>
-      <div class="col-md-3">
+      <div class="col-6 col-md-3">
         <div class="stat-card">
           <div class="stat-num" id="commentCount">—</div>
           <div class="stat-label">Written comments</div>

@@ -81,7 +81,7 @@ class ConversationContext:
 
     def update(self, topic=None, intent=None, user_msg=None, bot_response=None,
                faq_answer=None, faq_question=None, detected_lang=None,
-               handbook_sections=None):
+               handbook_sections=None, clear_schedule_context=False):
         if topic:
             self.last_topic = topic
         if intent:
@@ -94,6 +94,26 @@ class ConversationContext:
             self.last_detected_lang = detected_lang
         if handbook_sections:
             self.last_handbook_sections = list(handbook_sections)[:3]
+
+        # BUG FIX: last_schedule_query was set by dates.py whenever a
+        # schedule question was answered, but NOTHING ever cleared it
+        # again -- not on a topic change, not ever. faq.py's find_answer()
+        # checks `if ctx.last_schedule_query:` as its very FIRST routing
+        # gate, before corrections, before cache, before classification --
+        # so once a student asked even one schedule question, every
+        # later message for the rest of the session got tested against
+        # date_service.answer_schedule_department_followup() first, no
+        # matter how unrelated. That function's own heuristics
+        # (is_schedule_level_followup's short-question word list, in
+        # particular) are permissive enough to misfire on ordinary short
+        # questions in a completely different topic -- producing a stale
+        # "here's today's schedule" answer to something that was never a
+        # schedule question at all. Every non-date answer path now calls
+        # update(..., clear_schedule_context=True) so a topic change
+        # actually ends the schedule follow-up window, the way it
+        # obviously should.
+        if clear_schedule_context:
+            self.last_schedule_query = None
 
         if user_msg and bot_response:
             self.conversation_history.append({

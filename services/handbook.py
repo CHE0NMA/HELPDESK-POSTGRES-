@@ -1460,23 +1460,27 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
             clean = content[:600].strip()
         page_note = f"\n\n(More detail is on page {page}.)" if page else ""
         final = f"{clean}{page_note}".strip()
-        # This fallback only runs when the AI-composed answer above failed
-        # (circuit breaker open, grounding/relevance rejected, or language
-        # drift retry also failed) -- `clean` is raw English excerpt text
-        # pulled straight from the handbook, with no language handling of
-        # its own. Route it through speak_naturally so a Bisaya/Tagalog
-        # question still gets a Bisaya/Tagalog reply here too, instead of
-        # silently dropping back to English only in the degraded path.
-        if detected_lang != 'english':
-            final = nlg.speak_naturally(final, question, detected_lang=detected_lang)
+        # BUG FIX: this only rephrased `clean` (raw excerpt text pulled
+        # straight from the handbook -- bullet lists, pledge wording,
+        # policy fragments) when detected_lang != 'english'. English
+        # questions landing on this fallback (AI-composed answer above
+        # failed grounding/relevance/self-check) got the raw excerpt
+        # verbatim, always -- no "sound like a chatbot" pass, no yes/no
+        # lead-in for yes/no-shaped questions, nothing. That's exactly
+        # what produced raw bullet-list/pledge-text answers to plain
+        # English questions like "What is the dress code policy?". Now
+        # unconditional -- speak_naturally() already fails safe (falls
+        # back to `final` unchanged if the AI is unavailable or its
+        # rephrase doesn't pass the grounding check), so this can only
+        # help, never make an English answer worse.
+        final = nlg.speak_naturally(final, question, detected_lang=detected_lang)
         return final
 
     if not clean or not _answer_relevant_to_question(question, clean):
         return None
     page_note = f"\n\n(More detail is on page {page}.)" if page else ""
     final = f"{clean}{page_note}".strip()
-    if detected_lang != 'english':
-        final = nlg.speak_naturally(final, question, detected_lang=detected_lang)
+    final = nlg.speak_naturally(final, question, detected_lang=detected_lang)
     return final
 
 
@@ -1659,8 +1663,11 @@ def answer_handbook_question(question: str, detected_lang: str = 'english',
         if ctx is not None:
             ctx.clear_disambiguation()
             used_titles = [c.get('section_title') for c in chunks[:3] if c.get('section_title')]
-            if used_titles:
-                ctx.update(handbook_sections=used_titles)
+            # PERF/correctness fix: also clears ctx.last_schedule_query --
+            # see conversation.ConversationContext.update()'s docstring
+            # comment for why a topic change must end the schedule
+            # follow-up window, not just update the handbook one.
+            ctx.update(handbook_sections=used_titles or None, clear_schedule_context=True)
     return response
 
 

@@ -323,7 +323,8 @@ def _try_resolve_pending_disambiguation(question: str, detected_lang: str, ctx):
         answer = handbook_service.answer_from_selected_chunk(original_q, choice['chunk'], lang)
         if not answer:
             return None
-        ctx.update(user_msg=question, bot_response=answer, faq_answer=answer, faq_question=original_q)
+        ctx.update(user_msg=question, bot_response=answer, faq_answer=answer, faq_question=original_q,
+                    clear_schedule_context=True)
         return (answer, 'Handbook', None, 'handbook_query', lang)
 
     if disamb['type'] == 'faq':
@@ -337,7 +338,7 @@ def _try_resolve_pending_disambiguation(question: str, detected_lang: str, ctx):
         img = row[8] if len(row) > 8 else None
         answer_text = answer + (f"\n\n[Image: {img}]" if img else "")
         ctx.update(topic=topic, intent=intent, user_msg=question, bot_response=answer_text,
-                    faq_answer=answer_text, faq_question=original_q)
+                    faq_answer=answer_text, faq_question=original_q, clear_schedule_context=True)
         return (answer_text, topic, row[2] if len(row) > 2 else None, intent, lang)
 
     if disamb['type'] == 'date':
@@ -812,7 +813,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 if len(short) > 400:
                     short = short[:397].rsplit(' ', 1)[0] + '…'
                 final_answer = short or src[:400]
-            ctx.update(user_msg=question, bot_response=final_answer)
+            ctx.update(user_msg=question, bot_response=final_answer, clear_schedule_context=True)
             result = (final_answer, 'Corrected', correction.get('faq_id'), None, detected_lang)
             return result if return_topic else result[0]
     except Exception as e:
@@ -823,7 +824,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
         from database import get_db as _gdb
         cached = get_cached_answer(_gdb, question, detected_lang)
         if cached:
-            ctx.update(user_msg=question, bot_response=cached['answer'])
+            ctx.update(user_msg=question, bot_response=cached['answer'], clear_schedule_context=True)
             result = (cached['answer'], 'Cached', cached.get('faq_id'), None, detected_lang)
             return result if return_topic else result[0]
     except Exception:
@@ -959,6 +960,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                     topic=search_topic, intent=search_intent,
                     user_msg=question, bot_response=search_ans,
                     faq_answer=search_ans, faq_question=question,
+                    clear_schedule_context=True,
                 )
                 result = (search_ans, search_topic or 'Handbook', None, search_intent, detected_lang)
                 return result if return_topic else result[0]
@@ -975,7 +977,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                         detected_lang=detected_lang,
                     )
                     if re_ans and not _looks_like_non_answer(re_ans):
-                        ctx.update(user_msg=question, bot_response=re_ans)
+                        ctx.update(user_msg=question, bot_response=re_ans, clear_schedule_context=True)
                         result = (re_ans, 'Follow-up', None, None, detected_lang)
                         return result if return_topic else result[0]
                 except Exception as e:
@@ -991,7 +993,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             )
 
             if ai_followup and not _looks_like_non_answer(ai_followup):
-                ctx.update(user_msg=question, bot_response=ai_followup)
+                ctx.update(user_msg=question, bot_response=ai_followup, clear_schedule_context=True)
                 result = (ai_followup, 'Follow-up', None, None, detected_lang)
                 return result if return_topic else result[0]
 
@@ -1027,6 +1029,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 intent=last_intent,
                 user_msg=question,
                 bot_response=combined,
+                clear_schedule_context=True,
             )
             result = (
                 combined,
@@ -1262,6 +1265,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                         bot_response=hb_ans,
                         faq_answer=hb_ans,
                         faq_question=question,
+                        clear_schedule_context=True,
                     )
                 result = (hb_ans, 'Handbook', None, 'handbook_query', detected_lang)
                 return result if return_topic else result[0]
@@ -1278,6 +1282,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                         bot_response=hb_ans,
                         faq_answer=hb_ans,
                         faq_question=question,
+                        clear_schedule_context=True,
                     )
                 result = (hb_ans, 'Handbook', None, 'handbook_query', detected_lang)
                 return result if return_topic else result[0]
@@ -1321,6 +1326,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                     bot_response=ai_ans,
                     faq_answer=answer,
                     faq_question=question_text,
+                    clear_schedule_context=True,
                 )
                 result_answer = ai_ans + (f"\n\n[Image: {img}]" if img else "")
                 result_data = (
@@ -1342,6 +1348,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 faq_question=question_text,
                 user_msg=question,
                 bot_response=answer_text,
+                clear_schedule_context=True,
             )
             result_data = (
                 (answer_text, topic, fid, intent, detected_lang)
@@ -1358,6 +1365,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                     bot_response=hb_ans,
                     faq_answer=hb_ans,
                     faq_question=question,
+                    clear_schedule_context=True,
                 )
             result = (hb_ans, 'Handbook', None, 'handbook_query', detected_lang)
             return result if return_topic else result[0]

@@ -19,9 +19,11 @@ import re
 from datetime import datetime
 from typing import Optional
 
-from ai_providers import ai_cache, circuit_breaker, llm_chat
-# PERF: FOLLOWUP/NEW is a one-word verdict call -- route through the
-# small/fast model (see ai_providers/providers.py's llm_chat_fast).
+from ai_providers import ai_cache, circuit_breaker
+# PERF: every AI call in this module is either a one-word verdict or a
+# bounded paraphrase-with-grounding-check -- routed through the small/
+# fast model (see ai_providers/providers.py's llm_chat_fast) rather than
+# the main answer-generation model.
 from ai_providers.providers import llm_chat_fast
 from services.grounding import answer_is_grounded
 from services.language import verify_output_language
@@ -201,7 +203,15 @@ def speak_naturally(canonical_text: str, question: str, detected_lang: str = 'en
     Rephrased answer:"""
 
     try:
-        response = llm_chat(prompt, max_tokens=200)
+        # PERF: this is a bounded paraphrase task (rephrase an already-
+        # correct canonical sentence) guarded by the grounding check and
+        # language-verification retry right below -- it doesn't need the
+        # main/slow model's extra quality, and this call fires on nearly
+        # every date/schedule answer. Fixing the dead-code bug above (see
+        # comment) means this now actually executes every time instead of
+        # silently no-op'ing, so routing it through the fast model claws
+        # back most of that newly-real latency.
+        response = llm_chat_fast(prompt, max_tokens=200)
         if not response:
             return canonical_text
         response = response.strip()
@@ -220,7 +230,7 @@ def speak_naturally(canonical_text: str, question: str, detected_lang: str = 'en
                 f"this time, not English."
             )
             try:
-                retry_response = llm_chat(retry_prompt, max_tokens=200)
+                retry_response = llm_chat_fast(retry_prompt, max_tokens=200)
             except Exception:
                 retry_response = None
             if (retry_response and retry_response.strip()

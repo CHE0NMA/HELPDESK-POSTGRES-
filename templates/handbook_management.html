@@ -219,6 +219,15 @@ textarea.form-control { resize:vertical; min-height:60px; }
      triggered on phones — columns just squeezed instead of scrolling. */
   .sched-table { min-width:640px; }
 }
+@media (max-width: 560px) {
+  /* BUG FIX: "Export Chunks" (icon + label) sat next to the refresh
+     button in a non-wrapping topbar alongside the "Student Handbook"
+     title -- on phones there wasn't room for all of it, so the button
+     visibly overlapped the title. Icon-only on phones fixes it cleanly
+     without needing to restructure the topbar into wrapping rows. */
+  #exportChunksBtn .btn-label { display: none; }
+  #exportChunksBtn { padding: .5rem .65rem; }
+}
   </style>
 </head>
 <body data-admin-page="handbook">
@@ -264,7 +273,7 @@ textarea.form-control { resize:vertical; min-height:60px; }
       <span class="topbar-title"><i class="bi bi-journal-bookmark-fill" style="color:var(--accent)"></i> Student Handbook</span>
     </div>
     <div style="display:flex;align-items:center;gap:.6rem">
-      <button class="btn-outline" onclick="exportHandbook(false)"><i class="bi bi-download"></i> Export Chunks</button>
+      <button class="btn-outline" onclick="exportHandbook(false)" id="exportChunksBtn"><i class="bi bi-download"></i> <span class="btn-label">Export Chunks</span></button>
       <button class="btn-refresh" onclick="refreshAll()"><i class="bi bi-arrow-clockwise"></i></button>
     </div>
   </div>
@@ -495,7 +504,6 @@ textarea.form-control { resize:vertical; min-height:60px; }
     <div class="card">
       <div class="card-header">
         <span><i class="bi bi-magic" style="color:var(--accent2)"></i> 2. Prompt to generate FAQ pairs (copy each time handbook changes)</span>
-        <button class="btn-outline" style="font-size:.78rem;padding:.35rem .85rem" onclick="copyPrompt()"><i class="bi bi-clipboard"></i> Copy prompt</button>
       </div>
       <div class="card-body">
         <div class="info-box">
