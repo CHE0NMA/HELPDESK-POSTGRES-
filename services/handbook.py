@@ -1405,21 +1405,66 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
                         )
                         response = None
                 if response and "CANNOT_ANSWER" not in response.upper():
-                    if len(chunks) > 1:
-                        # Diagnostic only (not a reject -- ranking isn't
-                        # perfect, so excerpt #2 being the real source is
-                        # sometimes correct). Logged so cross-contamination
-                        # between excerpts covering different topics/
-                        # offenses is visible for review rather than
-                        # silently possible. See _trim_to_close_contenders
-                        # above for the main structural guard against this.
+                    # BUG FIX #2 (regression from the fix above): a
+                    # legitimate "the handbook doesn't mention X" answer
+                    # was getting caught by this same gate and silently
+                    # discarded -- e.g. "No, the excerpts don't contain
+                    # any reference to the Anti-Bullying Act or RA 10627"
+                    # regressed from a correct answer to a give-up after
+                    # the fix above shipped. That's because a negation
+                    # answer's distinctive words (the topic being denied)
+                    # come from the QUESTION, not from chunks[0]'s content
+                    # -- there's genuinely nothing to overlap with when the
+                    # honest answer is "this isn't covered here", so
+                    # top_only_ratio is naturally low for a CORRECT
+                    # negation answer too, not just a contaminated one.
+                    # The contamination risk this gate exists for is
+                    # specific to POSITIVE factual claims sourced from the
+                    # wrong excerpt, so negation answers are exempted.
+                    _NEGATION_MARKERS = (
+                        "doesn't mention", "does not mention", "don't mention",
+                        "not mentioned", "no mention", "doesn't contain",
+                        "does not contain", "no reference", "isn't mentioned",
+                        "is not mentioned", "doesn't specifically address",
+                        "does not specifically address", "doesn't cover",
+                        "does not cover", "not covered", "doesn't say",
+                        "does not say",
+                    )
+                    _is_negation = any(m in response.lower() for m in _NEGATION_MARKERS)
+                    if len(chunks) > 1 and not _is_negation:
+                        # BUG FIX: this was "diagnostic only" -- it logged
+                        # a warning but let the answer through regardless.
+                        # This is very likely what produced the mixed-test
+                        # cases where a correct answer's tail bleeds into a
+                        # completely unrelated second excerpt (e.g. a Safe
+                        # Spaces Act answer trailing off into an unrelated
+                        # RA 11180 Athletic Programs excerpt): both
+                        # answer_is_grounded() and _answer_relevant_to_
+                        # question() above check the response AS A WHOLE,
+                        # so a response that's mostly correct with a
+                        # contaminated tail still has enough overlap with
+                        # BOTH the question and the combined source_blob
+                        # (which includes every offered excerpt, not just
+                        # the right one) to pass both checks. Grounding
+                        # against the union of excerpts can't tell "this
+                        # answer legitimately covers excerpt 1" apart from
+                        # "this answer bled from excerpt 1 into excerpt 2"
+                        # -- only a per-excerpt check can. Now an actual
+                        # reject (falls through to the deterministic
+                        # single-chunk extraction path below, which only
+                        # ever reads chunks[0] and so can't blend excerpts
+                        # at all) instead of a log line nobody was
+                        # monitoring in real time.
                         top_only_ratio = grounding_ratio(response, chunks[0].get('content', ''))
                         if top_only_ratio < 0.15:
                             logger.info(
                                 f"handbook answer for q={question[:80]!r} grounds mostly in a "
                                 f"NON-top excerpt ({len(chunks)} excerpts offered, top-excerpt "
-                                f"overlap={top_only_ratio:.2f}) -- worth a look if this looks wrong."
+                                f"overlap={top_only_ratio:.2f}) -- rejecting, falling through to "
+                                f"single-excerpt extraction."
                             )
+                            response = None
+                if response and "CANNOT_ANSWER" not in response.upper():
                     # Final independent self-check -- a second opinion that
                     # actually reads question+answer+source and judges fit,
                     # on top of the word-overlap heuristics above (grounding
@@ -1458,6 +1503,46 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
     if forced and content:
         if not clean:
             clean = content[:600].strip()
+        # BUG FIX: this branch used to return unconditionally, with NO
+        # relevance check at all -- unlike the non-forced branch just
+        # below it, which already calls _answer_relevant_to_question().
+        # "forced" means topic_aliases.py's regex matched the QUESTION to
+        # a TOPIC with high confidence, but that says nothing about
+        # whether chunks[0] (the top-scored chunk within that topic) is
+        # actually the right chunk -- if it isn't, this path returned a
+        # confident, unvalidated wrong answer, no safety net at all. This
+        # is almost certainly what produced answers like a "what is the
+        # school's full name" question landing on an unrelated
+        # organizational-goals excerpt: the question matched some forced
+        # identity/general topic, chunks[0] within that topic was wrong,
+        # and nothing downstream ever checked whether the extracted text
+        # had anything to do with what was actually asked. Same lenient
+        # min_overlap=1 as the non-forced path below -- forced matches
+        # are usually right, so this only rejects genuinely unrelated
+        # text, not a differently-phrased correct answer.
+        # BUG FIX #2 (regression from the fix above): checking `clean`
+        # (the narrowly keyword-extracted sentences) was too strict --
+        # _extract_relevant_sentences() picks sentences by literal
+        # keyword hits, and when the question's wording doesn't literally
+        # appear anywhere in the chunk (e.g. question says "strands", the
+        # chunk says "Senior High School" / "K-12 Program" / "track"),
+        # its fallback just grabs the first few sentences of the chunk --
+        # which may not happen to repeat the question's specific words
+        # even though the CHUNK ITSELF is genuinely the right one (that's
+        # exactly what "forced" already established). This regressed a
+        # correct "what SHS strands are available" answer into a give-up.
+        # Checking against the full `content` instead is more forgiving:
+        # the whole chunk is far more likely to contain some genuinely
+        # overlapping term than six cherry-picked sentences are, while
+        # still correctly rejecting a chunk that's simply about a
+        # different topic altogether (content wouldn't share any specific
+        # word with the question either way in that case).
+        if not _answer_relevant_to_question(question, content):
+            logger.info(
+                f"handbook forced-topic fallback REJECTED (chunk irrelevant to question) "
+                f"for q={question[:80]!r} chunk={title!r}"
+            )
+            return None
         page_note = f"\n\n(More detail is on page {page}.)" if page else ""
         final = f"{clean}{page_note}".strip()
         # BUG FIX: this only rephrased `clean` (raw excerpt text pulled

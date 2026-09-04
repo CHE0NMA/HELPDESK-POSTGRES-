@@ -120,14 +120,42 @@ def fuzzy_score(a: str, b: str) -> float:
 
 
 def fuzzy_contains(text: str, keywords: list, threshold: int = 82) -> bool:
+    """Fuzzy/typo-tolerant "does any of these keywords appear in text"
+    check, used by dates.py's is_date_question/_has_day_word to spot
+    day-word and class/office mentions even when misspelled.
+
+    BUG FIX: this used to open with a raw substring test --
+        for kw in keywords:
+            if kw in t: return True
+    -- against EVERY keyword regardless of length. A short single-word
+    keyword like "sa" (present in some day/schedule word lists) is a
+    substring of plenty of unrelated words in Bisaya/Tagalog -- most
+    notably "unsa" ("what"), so `fuzzy_contains(q, [...,'sa',...])`
+    returned True for almost any Bisaya question starting with "unsa",
+    no matter the actual topic. (The confirmed real-world case of this
+    exact bug pattern was a hand-rolled copy of the same substring check
+    in dates.py's is_schedule_level_followup, not this function directly
+    -- but this shared helper has the identical footgun for any caller
+    that ever adds a short keyword to its list.)
+
+    Now: single-word keywords must match an actual WORD boundary (either
+    exactly, via `words`, or fuzzily via fuzz.ratio against a real token)
+    -- never merely as a substring of a longer, unrelated word.
+    Multi-word phrases keep the substring check, since a multi-word
+    phrase is long enough that the false-positive risk is negligible and
+    phrase-boundary matching isn't worth the complexity.
+    """
     t = text.lower()
-    for kw in keywords:
-        if kw in t:
-            return True
     words = re.findall(r'[a-z\-]+', t)
+    word_set = set(words)
     for kw in keywords:
+        kw = kw.lower()
         if ' ' in kw:
+            if kw in t:
+                return True
             continue
+        if kw in word_set:
+            return True
         for w in words:
             if len(w) >= 4 and fuzz.ratio(w, kw) >= threshold:
                 return True

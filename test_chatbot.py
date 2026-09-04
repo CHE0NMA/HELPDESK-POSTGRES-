@@ -1,3 +1,13 @@
+#!/usr/bin/env python3
+"""
+test_chatbot.py — mixed regression suite for the PAC helpdesk bot.
+
+Usage:
+    python test_chatbot.py
+
+Requires the Flask app running on CHATBOT_URL (default http://127.0.0.1:5000/chat).
+"""
+
 import requests
 import time
 import json
@@ -5,9 +15,11 @@ from datetime import datetime
 from collections import defaultdict
 
 # ====================== CONFIG ======================
-CHATBOT_URL = "http://127.0.0.1:5000/chat"
+CHATBOT_URL = "http://127.0.0.1:5001/chat"
 SESSION_ID = f"mixed_test_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-DELAY_BETWEEN_QUESTIONS = 1.4
+DELAY_BETWEEN_QUESTIONS = 2.0          # was 1.4 — give LLM + DB pool room
+REQUEST_TIMEOUT = 90                   # was 55
+DEBUG_FIRST_N = 3                      # print full status/body for first N calls
 # ====================================================
 
 TEST_CASES = [
@@ -56,8 +68,7 @@ TEST_CASES = [
     {"cat": "Programs-FAQ", "q": "What are the current dormitory charges?"},
     {"cat": "Programs-FAQ", "q": "Is a drug test required for incoming first-year students?"},
 
-    # ========== 6. Schedule + immediate follow-ups (critical) ==========
-    # Each block is one schedule question followed by its real clarifying follow-ups
+    # ========== 6. Schedule + immediate follow-ups ==========
     {"cat": "Schedule", "q": "Do we have classes this week?"},
     {"cat": "Follow-up", "q": "Does that apply to all levels?"},
     {"cat": "Follow-up", "q": "College too?"},
@@ -91,7 +102,6 @@ TEST_CASES = [
     {"cat": "Vague", "q": "What is the maximum residency period to finish a degree?"},
 ]
 
-# Stronger failure detection
 FALLBACK_PHRASES = [
     "i don't have a confirmed answer",
     "i've saved it so our staff",
@@ -111,7 +121,6 @@ FALLBACK_PHRASES = [
     "i don't have specific information",
 ]
 
-# Phrases that almost always mean the wrong chunk was retrieved
 WRONG_CHUNK_MARKERS = [
     "the treasurer shall only be the one",
     "regular meetings of the members",
@@ -138,7 +147,7 @@ def is_bad_answer(answer: str, question: str = "") -> bool:
         return True
     if any(m in lower for m in WRONG_CHUNK_MARKERS):
         return True
-    # Extra hard checks for known high-value questions
+
     q = question.lower()
     if "jewelry" in q or "necklace" in q or "ring" in q:
         if "wedding ring" not in lower and "not permitted" not in lower and "jewelry" not in lower:
@@ -155,40 +164,118 @@ def is_bad_answer(answer: str, question: str = "") -> bool:
     if "anti-bullying" in q or "10627" in q:
         if "10627" not in lower and "bullying" not in lower:
             return True
-    if "residency" in q or "maximum" in q and "year" in q:
+    if ("residency" in q or "maximum" in q) and "year" in q:
         if "5 year" not in lower and "five year" not in lower and "maximum of 5" not in lower:
             return True
     return False
 
 
-def ask_chatbot(question: str) -> str:
-    payload = {"message": question, "session_id": SESSION_ID}
+def _extract_answer(data) -> str | None:
+    """Pull the bot text out of the many shapes the endpoint can return."""
+    if data is None:
+        return None
+    if isinstance(data, str):
+        text = data.strip()
+        if text and not text.lower().startswith("<!doctype"):
+            return text
+        return None
+    if not isinstance(data, dict):
+        return str(data)
+
+    for key in (
+        "reply", "answer", "response", "message", "bot_response",
+        "text", "content", "html", "bot_message",
+    ):
+        val = data.get(key)
+        if val and isinstance(val, str) and val.strip():
+            return val.strip()
+
+    # nested under "data"
+    nested = data.get("data")
+    if isinstance(nested, dict):
+        for key in ("reply", "answer", "message", "text"):
+            val = nested.get(key)
+            if val and isinstance(val, str) and val.strip():
+                return val.strip()
+
+    return None
+
+
+def ask_chatbot(question: str, call_index: int = 0) -> str:
+    """
+    Try the payload shapes the frontend and older code actually use.
+    Prints diagnostic info for the first few calls so you can see the real
+    status / body when something is wrong.
+    """
+    payloads = [
+        {"message": question, "session_id": SESSION_ID},
+        {"question": question, "session_id": SESSION_ID},
+        {"q": question, "session_id": SESSION_ID},
+        {"text": question, "session_id": SESSION_ID},
+    ]
     headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
         "Cache-Control": "no-cache, no-store, must-revalidate",
         "Pragma": "no-cache",
-        "Expires": "0",
     }
-    try:
-        r = requests.post(CHATBOT_URL, json=payload, headers=headers, timeout=55)
-        r.raise_for_status()
-        data = r.json()
-        if isinstance(data, dict):
-            return (
-                data.get("reply")
-                or data.get("answer")
-                or data.get("response")
-                or data.get("message")
-                or str(data)
+
+    last_error = None
+    for payload in payloads:
+        try:
+            r = requests.post(
+                CHATBOT_URL,
+                json=payload,
+                headers=headers,
+                timeout=REQUEST_TIMEOUT,
             )
-        return str(data)
-    except Exception as e:
-        return f"[ERROR] {e}"
+
+            if call_index < DEBUG_FIRST_N:
+                print(f"  [debug] status={r.status_code} "
+                      f"payload_keys={list(payload.keys())} "
+                      f"content-type={r.headers.get('Content-Type', '')}")
+                if r.status_code >= 400 or call_index == 0:
+                    print(f"  [debug] body[:400]={r.text[:400]!r}")
+
+            if r.status_code >= 400:
+                last_error = f"HTTP {r.status_code}: {r.text[:300]}"
+                continue
+
+            # Prefer JSON
+            try:
+                data = r.json()
+            except Exception:
+                text = (r.text or "").strip()
+                if text and len(text) > 20 and not text.lower().startswith("<!doctype"):
+                    return text
+                last_error = f"Non-JSON body: {text[:200]}"
+                continue
+
+            answer = _extract_answer(data)
+            if answer:
+                return answer
+
+            last_error = (
+                f"JSON keys={list(data.keys()) if isinstance(data, dict) else type(data)} "
+                f"body={str(data)[:200]}"
+            )
+
+        except requests.exceptions.Timeout:
+            last_error = f"Timeout after {REQUEST_TIMEOUT}s"
+        except requests.exceptions.ConnectionError as e:
+            last_error = f"Connection error — is the app running on {CHATBOT_URL}? ({e})"
+            break  # no point trying other payloads
+        except Exception as e:
+            last_error = str(e)
+
+    return f"[ERROR] {last_error}"
 
 
 def main():
     results = []
     print(f"\nStarting MIXED test — {len(TEST_CASES)} questions")
     print(f"Session: {SESSION_ID}")
+    print(f"Endpoint: {CHATBOT_URL}")
     print("=" * 80)
 
     current_cat = None
@@ -196,12 +283,12 @@ def main():
         cat = item["cat"]
         q = item["q"]
         if cat != current_cat:
-            print(f"\n{'─'*28} {cat} {'─'*28}")
+            print(f"\n{'─' * 28} {cat} {'─' * 28}")
             current_cat = cat
 
         print(f"\n[{i:02d}/{len(TEST_CASES)}] {q}")
-        answer = ask_chatbot(q)
-        failed = is_bad_answer(answer, q)
+        answer = ask_chatbot(q, call_index=i - 1)
+        failed = is_bad_answer(answer, q) or answer.startswith("[ERROR]")
         status = "❌ FAILED" if failed else "✅ PASSED"
         print(f" → {status}")
         print(f" → {answer[:240]}{'...' if len(answer) > 240 else ''}")
@@ -246,6 +333,7 @@ def main():
     print("By category:")
     for cat, stats in by_cat.items():
         print(f"  {cat:20} {stats['passed']:2}/{stats['total']}")
+    print("\nWrote test_results_mixed.json and test_results_mixed.md")
 
 
 if __name__ == "__main__":

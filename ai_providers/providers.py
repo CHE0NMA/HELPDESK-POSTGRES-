@@ -65,6 +65,18 @@ SOFT_DAILY_LIMIT = 150
 HARD_DAILY_LIMIT = 200
 COOLDOWN_MINUTES = 35
 
+# PERF: neither the Groq nor the Gemini SDK call below had an explicit
+# timeout. With no ceiling, a single stalled/slow connection can hang far
+# longer than a normal request -- and _call_groq tries EVERY configured
+# key in sequence on failure, so a systemic issue (bad model name, network
+# path, expired key) could compound into a very long wait before ever
+# reaching the Gemini fallback. This is the most likely explanation for
+# reports of occasional 15-50s responses (vs. a typical few seconds) --
+# a bounded timeout turns a silent multi-second-or-longer stall into a
+# fast, logged failure that moves on to the next key/provider instead.
+GROQ_TIMEOUT_SECONDS = float(os.getenv("GROQ_TIMEOUT_SECONDS", "12"))
+GEMINI_TIMEOUT_SECONDS = float(os.getenv("GEMINI_TIMEOUT_SECONDS", "15"))
+
 
 _key_lock = threading.Lock()
 _key_usage_today = defaultdict(int)
@@ -173,7 +185,7 @@ def _call_groq(prompt: str, max_tokens: int = 400, model: str = None) -> str:
 
         try:
             from groq import Groq
-            client = Groq(api_key=api_key)
+            client = Groq(api_key=api_key, timeout=GROQ_TIMEOUT_SECONDS)
             resp = client.chat.completions.create(
                 model=use_model,
                 messages=[{"role": "user", "content": prompt}],
@@ -189,6 +201,15 @@ def _call_groq(prompt: str, max_tokens: int = 400, model: str = None) -> str:
             if "429" in err_str or "rate_limit" in err_str or "rate limit" in err_str:
                 _mark_key_rate_limited(api_key)
                 continue
+            if "timeout" in err_str or "timed out" in err_str:
+                # A timeout is far more likely to be a systemic network
+                # issue than something specific to this one key -- trying
+                # 19 more keys at 12s each would risk turning one slow
+                # request into a multi-minute one. Fail fast here so
+                # call_with_fallback/call_fast_with_fallback moves on to
+                # the Gemini fallback instead of exhausting every key.
+                logger.warning(f"Groq timeout (>{GROQ_TIMEOUT_SECONDS}s) on ...{api_key[-6:]}: {e}")
+                return ""
             logger.error(f"Groq error on ...{api_key[-6:]}: {e}")
             return ""
 
@@ -206,6 +227,7 @@ def _call_gemini(prompt: str, max_tokens: int = 400) -> str:
                 max_output_tokens=max_tokens,
                 temperature=0.1,
             ),
+            request_options={"timeout": GEMINI_TIMEOUT_SECONDS},
         )
         return resp.text.strip()
     except Exception as e:
