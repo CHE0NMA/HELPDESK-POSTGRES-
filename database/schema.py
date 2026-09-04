@@ -38,6 +38,105 @@ from database import get_db
 
 logger = logging.getLogger("pac_helpdesk.database.schema")
 
+# BUG FIX (production deadlocks): every ensure_*/migrate_* function below
+# already catches ITS OWN "concurrent DDL" errors individually (see each
+# function's except block) -- but nothing coordinated them AGAINST EACH
+# OTHER across concurrent processes. On Vercel, a burst of traffic after
+# any idle period can spin up several serverless instances at once, each
+# a fresh cold start that (per this module's own "run at startup"
+# contract) tries to run the full CREATE TABLE / CREATE TRIGGER sequence
+# simultaneously. Postgres DDL takes AccessExclusiveLock on the objects
+# involved, so N processes racing through overlapping DDL statements in
+# different orders is a textbook recipe for the exact deadlock chains
+# seen in production ("Process A waits for lock held by B; B waits for a
+# lock held by A") -- and because ensure_core_tables/migrate_create_chat_
+# sessions/etc. are seemingly invoked on every request (not guarded by
+# any "already done" check), this can keep recurring rather than being a
+# one-time cold-start cost, taking down completely unrelated endpoints
+# (even static file routes) whenever it happens to fire mid-request.
+#
+# Fix: a Postgres advisory lock serializes the ENTIRE migration sequence
+# across every concurrent process/connection, regardless of which
+# serverless instance it's running in -- only one process ever runs the
+# DDL at a time; everyone else just blocks briefly on the lock (typically
+# milliseconds, since CREATE TABLE IF NOT EXISTS is a fast no-op once the
+# first process has created everything) instead of racing into a
+# deadlock. Combined with the in-process _SCHEMA_MIGRATIONS_DONE flag,
+# this also means a warm (reused) Vercel instance stops re-running the
+# entire ~20-statement DDL sequence on every single request -- it was
+# previously eating that cost (and that deadlock risk) over and over.
+#
+# Advisory lock keys are arbitrary but must be consistent -- this one is
+# just a fixed constant scoped to this app so it never collides with a
+# different application's advisory locks on the same Postgres instance.
+_SCHEMA_MIGRATION_LOCK_KEY = 7241_0925  # arbitrary, app-specific constant
+_SCHEMA_MIGRATIONS_DONE = False
+
+
+def run_all_schema_migrations(force: bool = False) -> bool:
+    """Single entry point for app startup: runs every ensure_*/migrate_*
+    function below in dependency order, serialized against concurrent
+    processes via a Postgres advisory lock. Call this ONCE from app
+    startup instead of calling the individual functions directly.
+
+    Safe to call on every cold start -- the in-process flag makes repeat
+    calls within the same warm instance a no-op, and the advisory lock
+    makes concurrent cold starts across different instances safe (wait,
+    not deadlock). Returns True if migrations ran (or were already done),
+    False if the lock/connection itself couldn't be acquired (caller
+    should treat that as "schema might not be ready yet" but the app can
+    typically still start -- individual queries will just surface their
+    own errors rather than the app failing to boot).
+    """
+    global _SCHEMA_MIGRATIONS_DONE
+    if _SCHEMA_MIGRATIONS_DONE and not force:
+        return True
+
+    conn = None
+    got_lock = False
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        try:
+            # Blocking advisory lock -- waits (doesn't error) if another
+            # process currently holds it, then proceeds once released.
+            cur.execute("SELECT pg_advisory_lock(%s)", (_SCHEMA_MIGRATION_LOCK_KEY,))
+            got_lock = True
+        finally:
+            cur.close()
+
+        ensure_core_tables()
+        ensure_updated_at_trigger_fn()
+        ensure_admin_exists()
+        ensure_schedule_schema()
+        migrate_create_chat_sessions()
+        migrate_add_uuid_to_faq()
+        ensure_faq_embedding_column()
+        ensure_handbook_fulltext_search()
+        ensure_learning_layer()
+
+        _SCHEMA_MIGRATIONS_DONE = True
+        logger.info("Schema migrations complete.")
+        return True
+    except Exception as e:
+        logger.error(f"run_all_schema_migrations: {e}")
+        return False
+    finally:
+        if got_lock and conn is not None:
+            try:
+                cur2 = conn.cursor()
+                try:
+                    cur2.execute("SELECT pg_advisory_unlock(%s)", (_SCHEMA_MIGRATION_LOCK_KEY,))
+                finally:
+                    cur2.close()
+            except Exception as e:
+                logger.warning(f"run_all_schema_migrations: advisory unlock failed: {e}")
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
 
 def ensure_core_tables():
     """Create every table the app needs if it doesn't exist yet.
