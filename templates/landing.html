@@ -932,9 +932,39 @@ function observe() {
   document.querySelectorAll('.rv:not(.vis)').forEach(el => ob.observe(el));
 }
 
+// BUG FIX: every load* function below fires an independent fetch() in
+// parallel on DOMContentLoaded, each hitting the DB directly. On a
+// serverless host (Vercel), the first request after a cold start pays
+// the full connection-pool spin-up cost (see database/pool.py's own
+// cold-start notes) -- so under load some of these six calls time out
+// or 500 while others succeed, which is exactly "half the page shows,
+// half doesn't, refresh fixes it": whichever call drew the cold
+// instance failed, the rest didn't. A local dev server has no cold
+// starts, so this never showed up there. Retrying failed/5xx requests
+// a couple of times with a short backoff covers the overwhelming
+// majority of cold-start failures without a full page reload.
+async function fetchWithRetry(url, options = {}, retries = 2, baseDelayMs = 600) {
+  let lastErr = null;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(url, options);
+      // 4xx won't fix itself on retry (bad request, unauthorized, etc.);
+      // only retry on network failure or a 5xx (the cold-start shape).
+      if (res.ok || res.status < 500) return res;
+      lastErr = new Error('HTTP ' + res.status);
+    } catch (e) {
+      lastErr = e;
+    }
+    if (attempt < retries) {
+      await new Promise(r => setTimeout(r, baseDelayMs * (attempt + 1)));
+    }
+  }
+  throw lastErr;
+}
+
 async function loadVisitorStats() {
   try {
-    const r = await fetch('/api/visitor_stats');
+    const r = await fetchWithRetry('/api/visitor_stats');
     if (!r.ok) return;
     const d = await r.json();
 
@@ -971,7 +1001,7 @@ async function loadReviews() {
   const grid = document.getElementById('reviewsGrid');
   if (!grid) return;
   try {
-    const r = await fetch('/api/public_reviews');
+    const r = await fetchWithRetry('/api/public_reviews');
     if (!r.ok) throw new Error('fail');
     const d = await r.json();
     const items = d.reviews || [];
@@ -1000,7 +1030,7 @@ async function loadReviews() {
 
 async function loadHandbookStats() {
   try {
-    const r = await fetch('/api/handbook_stats');
+    const r = await fetchWithRetry('/api/handbook_stats');
     if (!r.ok) throw new Error('not available');
     const d = await r.json();
     const chunks   = d.chunk_count   ?? 0;
@@ -1028,13 +1058,13 @@ async function loadFeatured() {
   let items = [];
 
   try {
-    const r = await fetch('/api/featured');
+    const r = await fetchWithRetry('/api/featured');
     if (r.ok) items = await r.json();
   } catch {}
 
   if (!items.length) {
     try {
-      const r = await fetch('/suggested_questions');
+      const r = await fetchWithRetry('/suggested_questions');
       const d = await r.json();
       items = (d.questions || d || []).slice(0, 6).map(q => ({
         question: q.user_message || q.question || q,
@@ -1080,7 +1110,7 @@ async function loadNew() {
   const scroll = document.getElementById('newScroll');
   let items = [];
   try {
-    const r = await fetch('/api/recent');
+    const r = await fetchWithRetry('/api/recent');
     if (r.ok) items = await r.json();
   } catch {}
 
@@ -1184,7 +1214,7 @@ let catsExpanded = false;
 
 async function loadCats() {
   try {
-    const r    = await fetch('/api/categories');
+    const r    = await fetchWithRetry('/api/categories');
     const data = await r.json();
     const grid = document.getElementById('catGrid');
     grid.innerHTML = '';

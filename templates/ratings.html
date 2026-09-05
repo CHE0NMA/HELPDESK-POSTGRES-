@@ -95,14 +95,22 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
 .card-body { padding:1.25rem; }
 
 .bar-wrap { display:flex; align-items:center; gap:10px; margin:6px 0; }
-.bar-label { font-size:13px; color:var(--text-dim); width:50px; text-align:right; flex-shrink:0; }
+/* BUG FIX: no white-space:nowrap + a width too tight for 5 star glyphs
+   at this font-size meant the 5-star row's label ("★★★★★") could wrap
+   onto a second line, making it look like a stray extra "4 stars + 1
+   star" row instead of one row of 5. Widened slightly and forced
+   nowrap so every row (1 through 5 stars) always renders on one line,
+   and switched to inline-flex so the stars themselves don't get any
+   inherited line-wrapping behavior either. */
+.bar-label { font-size:14px; color:var(--text-dim); width:68px; text-align:right; flex-shrink:0;
+  white-space:nowrap; display:inline-flex; justify-content:flex-end; letter-spacing:1px; }
 .bar-bg { flex:1; height:10px; background:rgba(77,171,247,.1); border-radius:10px; overflow:hidden; }
 .bar-fill { height:100%; border-radius:10px; transition:width .6s ease; }
 .bar-count { font-size:12px; color:var(--text-dim); width:30px; }
 
 .comment-row { border-bottom:1px solid rgba(77,171,247,.08); padding:.85rem 0; }
 .comment-row:last-child { border-bottom:none; }
-.comment-stars { color:#F59E0B; font-size:14px; }
+.comment-stars { color:#F59E0B; font-size:14px; white-space:nowrap; }
 .comment-text { font-size:14px; color:var(--text); margin-top:4px; }
 .comment-meta { font-size:11px; color:var(--muted); margin-top:4px; }
 

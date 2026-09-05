@@ -130,7 +130,7 @@ def analytics_chart_data():
             FROM chat_history
             GROUP BY user_message
             ORDER BY freq DESC
-            LIMIT 5
+            LIMIT 20
         """)
         popular = cur.fetchall()
 
@@ -162,13 +162,19 @@ def analytics_chart_data():
         cur.execute("SELECT COUNT(*) FROM faq")
         total_faqs = cur.fetchone()[0]
 
+        # BUG FIX: this only ever looked at faq.category, but (per the
+        # COALESCE(category, topic, 'General') pattern already used
+        # elsewhere in this file, e.g. the FAQ search endpoint) FAQs added
+        # through bulk import get classified into 'topic' instead --
+        # "category IS NOT NULL AND category != ''" was excluding almost
+        # every real FAQ, not just genuinely uncategorized ones.
         cur.execute("""
-            SELECT category, COUNT(*) as count
+            SELECT COALESCE(NULLIF(TRIM(category), ''), NULLIF(TRIM(topic), ''), 'General') AS cat,
+                   COUNT(*) as count
             FROM faq
-            WHERE category IS NOT NULL AND category != ''
-            GROUP BY category
+            GROUP BY cat
             ORDER BY count DESC
-            LIMIT 5
+            LIMIT 25
         """)
         categories = cur.fetchall()
 
@@ -202,28 +208,20 @@ def api_response_times():
         return jsonify({'error': 'Unauthorized'}), 403
 
     from ai_providers import model_metrics
-    stats = model_metrics.get_stats()
-    total_tracked = stats['successful_calls'] + stats['failed_calls']
-    cache_hit_count = model_metrics.cache_hits
-
-    # A cache hit is an in-memory dict lookup (see ai_providers/cache.py) --
-    # genuinely sub-millisecond, and nothing currently times it precisely.
-    # Reporting a small fixed estimate rather than a fabricated exact number;
-    # 'timing_note' says so explicitly so this isn't read as a real measurement.
-    estimated_cache_ms = 1
-    avg_db_ms = round(stats['avg_response_time_ms'], 1)
+    timing = model_metrics.get_answer_timing_stats()
+    total_tracked = timing['cache_hit_count'] + timing['computed_count']
 
     return jsonify({
-        'average_response_time_cache_ms': estimated_cache_ms,
-        'average_response_time_db_ms': avg_db_ms,
-        'cache_hit_count': cache_hit_count,
+        'average_response_time_cache_ms': timing['avg_cache_ms'],
+        'average_response_time_db_ms': timing['avg_db_ms'],
+        'cache_hit_count': timing['cache_hit_count'],
+        'computed_count': timing['computed_count'],
         'total_queries_tracked': total_tracked,
-        'success_rate': round(stats['success_rate'] * 100, 1),
-        'p95_response_time_ms': round(stats['p95_response_time_ms'], 1),
-        'timing_note': (
-            'average_response_time_cache_ms is a fixed estimate (in-memory '
-            'lookup, not individually timed); average_response_time_db_ms is '
-            'the real measured average AI/provider call latency.'
+        'note': (
+            'Classified by end-to-end response time (>300ms = a real AI '
+            'provider call happened) since the fast path can be served by '
+            'faq_cache, answer_success_cache, or admin corrections -- not '
+            'just the in-memory AI cache.'
         ),
     })
 

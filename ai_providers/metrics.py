@@ -15,6 +15,41 @@ class ModelMetrics:
         self.cache_hits: int = 0
         self.cache_misses: int = 0
         self._lock = Lock()
+        # End-to-end answer timing, separate from the raw-AI-call tracking
+        # above. record_response_time() only ever fires for an actual Groq/
+        # Gemini round-trip (ai_cache misses) -- it has no idea a question
+        # was served instantly out of faq_cache or the DB-backed
+        # answer_success_cache, which is most of what makes repeat traffic
+        # fast. This tracks the FULL find_answer() latency for every chat
+        # request and buckets it by how it was actually served.
+        self.cache_path_times: List[float] = []
+        self.computed_path_times: List[float] = []
+        # Anything answered this fast almost certainly never made a real
+        # AI provider call (those take hundreds of ms to multiple seconds);
+        # generous on purpose so a fast local DB lookup still counts.
+        self.ANSWER_CACHE_THRESHOLD_MS = 300.0
+
+    def record_answer_timing(self, duration_ms: float):
+        with self._lock:
+            if duration_ms <= self.ANSWER_CACHE_THRESHOLD_MS:
+                self.cache_path_times.append(duration_ms)
+            else:
+                self.computed_path_times.append(duration_ms)
+            if len(self.cache_path_times) > 1000:
+                self.cache_path_times = self.cache_path_times[-1000:]
+            if len(self.computed_path_times) > 1000:
+                self.computed_path_times = self.computed_path_times[-1000:]
+
+    def get_answer_timing_stats(self) -> dict:
+        with self._lock:
+            cache_times = list(self.cache_path_times)
+            db_times = list(self.computed_path_times)
+        return {
+            'avg_cache_ms': round(float(np.mean(cache_times)), 1) if cache_times else 0.0,
+            'avg_db_ms': round(float(np.mean(db_times)), 1) if db_times else 0.0,
+            'cache_hit_count': len(cache_times),
+            'computed_count': len(db_times),
+        }
 
     def record_response_time(self, duration_ms: float, success: bool):
         with self._lock:

@@ -18,11 +18,13 @@
 """
 import logging
 import re
+import time
 import uuid
 from datetime import datetime, timedelta
 
 from flask import Blueprint, jsonify, request, session
 
+from ai_providers import model_metrics
 from database import get_db
 from extensions import csrf
 from services import language as lang_service
@@ -178,7 +180,9 @@ def chat():
                              'chat_uuid': session.get('current_chat_uuid'), 'new_chat': started_new_chat})
 
 
+        _t0 = time.perf_counter()
         result = find_answer(user_msg, return_topic=True, session_id=session_id)
+        model_metrics.record_answer_timing((time.perf_counter() - _t0) * 1000)
         if isinstance(result, tuple):
             answer, topic = result[0], (result[1] if len(result) > 1 else 'Unknown')
             faq_id = result[2] if len(result) > 2 else None
