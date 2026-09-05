@@ -20,8 +20,10 @@ from .providers import (
     call_gemini_then_groq,
     call_for_ingest,
     get_groq_usage_report,
+    get_gemini_usage_report,
     current_model,
     GROQ_API_KEYS,
+    GEMINI_API_KEYS,
 )
 
 __all__ = [

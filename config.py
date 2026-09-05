@@ -119,23 +119,19 @@ GROQ_API_KEY_5 = os.environ.get("GROQ_API_KEY_5", "")
 GROQ_API_KEY_6 = os.environ.get("GROQ_API_KEY_6", "")
 GROQ_API_KEY_7 = os.environ.get("GROQ_API_KEY_7", "")
 GROQ_API_KEY_8 = os.environ.get("GROQ_API_KEY_8", "")
-GROQ_API_KEY_9 = os.environ.get("GROQ_API_KEY_9", "")
-GROQ_API_KEY_10 = os.environ.get("GROQ_API_KEY_10", "")
-GROQ_API_KEY_11 = os.environ.get("GROQ_API_KEY_11", "")
-GROQ_API_KEY_12 = os.environ.get("GROQ_API_KEY_12", "")
-GROQ_API_KEY_13 = os.environ.get("GROQ_API_KEY_13", "")
-GROQ_API_KEY_14 = os.environ.get("GROQ_API_KEY_14", "")
-GROQ_API_KEY_15 = os.environ.get("GROQ_API_KEY_15", "")
-GROQ_API_KEY_16 = os.environ.get("GROQ_API_KEY_16", "")
-GROQ_API_KEY_17 = os.environ.get("GROQ_API_KEY_17", "")
-GROQ_API_KEY_18 = os.environ.get("GROQ_API_KEY_18", "")
-GROQ_API_KEY_19 = os.environ.get("GROQ_API_KEY_19", "")
-GROQ_API_KEY_20 = os.environ.get("GROQ_API_KEY_20", "")
 
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 
-# Gemini
+# Gemini (supports multiple keys)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_API_KEY_2 = os.environ.get("GEMINI_API_KEY_2", "")
+GEMINI_API_KEY_3 = os.environ.get("GEMINI_API_KEY_3", "")
+GEMINI_API_KEY_4 = os.environ.get("GEMINI_API_KEY_4", "")
+GEMINI_API_KEY_5 = os.environ.get("GEMINI_API_KEY_5", "")
+GEMINI_API_KEY_6 = os.environ.get("GEMINI_API_KEY_6", "")
+GEMINI_API_KEY_7 = os.environ.get("GEMINI_API_KEY_7", "")
+GEMINI_API_KEY_8 = os.environ.get("GEMINI_API_KEY_8", "")
+
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
 
 
