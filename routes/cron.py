@@ -77,6 +77,22 @@ def cron_maintenance():
         except Exception as e:
             results["cleanup_sessions"] = str(e)
 
+        # BUG FIX: on Vercel, app.py's APScheduler block (the only place
+        # run_self_heal_pass was previously wired up) never runs at all --
+        # so the "answer it correctly enough times and it fixes itself"
+        # loop was silently dead in production unless an admin manually
+        # clicked "Run now" on /self_heal. This cron job is the Vercel-safe
+        # equivalent of the interval job database/learning_schema.py sets
+        # up for non-serverless deployments.
+        try:
+            from database import get_db
+            from services.self_heal import run_self_heal_pass
+            n = run_self_heal_pass(get_db, min_count=2, limit=50)
+            results["self_heal"] = f"ok ({n} draft(s))"
+        except Exception as e:
+            results["self_heal"] = str(e)
+            logger.error(f"self_heal: {e}")
+
         return jsonify({"ok": True, "results": results})
     except Exception as e:
         logger.error(f"cron_maintenance: {e}", exc_info=True)
@@ -101,6 +117,17 @@ def cron_stale_faqs():
     from services.alerts import check_stale_faqs
     check_stale_faqs()
     return jsonify({"ok": True})
+
+
+@bp.route("/api/cron/self_heal", methods=["GET", "POST"])
+@csrf.exempt
+def cron_self_heal():
+    if not _authorized():
+        return jsonify({"error": "Unauthorized"}), 401
+    from database import get_db
+    from services.self_heal import run_self_heal_pass
+    n = run_self_heal_pass(get_db, min_count=2, limit=50)
+    return jsonify({"ok": True, "drafts_created_or_updated": n})
 
 @bp.route("/api/health")
 def health():

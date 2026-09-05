@@ -45,7 +45,13 @@ GREETING_RX = re.compile(
     r'|maayong buntag|maayong hapon|maayong gabii)\b', re.IGNORECASE)
 
 MATH_PATTERNS = [
-    r'\d+\s*[\+\-\*\/x]\s*\d+', r'\d+\s*times\s*\d+', r'what is \d+',
+    r'\d+\s*[\+\*\/x]\s*\d+',
+    # Subtraction, specifically excluded from matching a 4-digit year range
+    # ("2025-2026", "SY 2025-2026") -- (?<!\d) / (?!\d) stop a partial match
+    # from landing inside a longer digit run, and the explicit \d{4} block
+    # on either side of the dash rules out exactly the "YYYY-YYYY" shape.
+    r'(?<!\d)(?!\d{4}\s*-\s*\d{4}\b)\d+\s*-\s*\d+(?!\d)',
+    r'\d+\s*times\s*\d+', r'what is \d+',
     r'calculate', r'math', r'plus', r'minus', r'times', r'divided by',
 ]
 

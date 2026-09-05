@@ -1,15 +1,15 @@
 # Chatbot Mixed Test Report
-**Date:** 2026-09-04 09:46
+**Date:** 2026-09-05 12:45
 
-**Session:** mixed_test_20260904_093126
+**Session:** mixed_test_20260905_123103
 
-**Overall Score:** 54/59 passed
+**Overall Score:** 53/59 passed
 
 ## Score by Category
 
 - **Handbook-Identity**: 7/7
 - **Handbook-Vision**: 4/5
-- **Handbook-Conduct**: 10/10
+- **Handbook-Conduct**: 9/10
 - **Handbook-Legal**: 3/4
 - **Programs-FAQ**: 9/9
 - **Schedule**: 6/6
@@ -30,7 +30,7 @@
 
 **Answer:**
 
-<div class="text"><strong>Hillside View Elementary School (HVES)</strong> was the original name of PAC before it later became an academy and then a college.  <br><br><em>(More detail is on page 6.)</em></div>
+<div class="text">Before it became a college, PAC was originally known as the <strong>Hillside View Elementary School (HVES)</strong>! <br><br>(More detail is on page 6.)</div>
 
 ---
 
@@ -38,7 +38,7 @@
 
 **Answer:**
 
-<div class="text"><strong>Philippine Advent College was founded in 1975.</strong>  <br><br>• It started as the Hillside View Elementary School (HVES) and became an academy that year before later evolving into a college.  <br>• The founders were former Mayor Mariano J.S. Macias and Margie C. Macias.  <br><br>(You can find more detail on page 6.)<br><br><strong>Founders of Philippine Advent College (PAC)</strong>  <br><br>• <strong>Mariano J.S. Macias</strong> – former mayor, co‑founder  <br>• <strong>Margie C. Macias</strong> – co‑founder  <br><br>They were joined by their children, who also played a foundational role:  <br><br>• <strong>Marquinjo K.C. Macias</strong>  <br>• <strong>Marictibert C. Macias</strong>  <br>• <strong>Mariano J.C. Macias, Jr.</strong>  <br>• <strong>Margerald C. Macias</strong>  <br>• <strong>Maresnena C. Macias</strong>  <br><br>These six family members are identified in the handbook as the founders of PAC.  <br><br><em>(More detail is on page 6.)</em></div>
+<div class="text">Philippine Advent College was founded in <strong>1975</strong> (originally as Hillside View Elementary School before becoming an academy and later a college).<br><br>Hey there! <br><br>The institution was founded by <strong>former Mayor Mariano J.S. Macias</strong> and <strong>Margie C. Macias</strong>, alongside their children (<strong>Marquinjo K.C. Macias</strong>, <strong>Marictibert C. Macias</strong>, <strong>Mariano J. C. Macias, Jr.</strong>, <strong>Margerald C. Macias</strong>, and <strong>Maresnena C. Macias</strong>). <br><br>They established the school driven by a strong desire to impart knowledge and values to their family, playing a foundational role as the founders!<br><br>(More detail is on page 6.)</div>
 
 ---
 
@@ -46,7 +46,7 @@
 
 **Answer:**
 
-<div class="text">Sure! The official <strong>PAC logo</strong> is packed with meaning:<br><br>• <strong>Bible (open)</strong> – Represents the foundation of Christian education.  <br>• <strong>Torch of light</strong> behind the Bible – Shows that the light of God guides the Bible and the whole institution, reaching out to everyone involved.  <br>• <strong>1975</strong> – The year the college was founded and began spreading its light.  <br>• <strong>Blue background</strong> – Symbolizes royalty.  <br>• <strong>Red lettering</strong> – Stands for passion, love, and the power to carry the light.  <br>• <strong>White center (behind the Bible)</strong> – Signifies the purity of the college’s mission.  <br><br>(You can see more details on page 10.)</div>
+<div class="text">Hey there! I'd be happy to help you with that! <br><br>The official Philippine Advent College, Inc. logo has some great symbolism behind it:<br><br>• <strong>The Bible</strong>: Sitting wide open right in the center, it represents the foundation of Christian education.<br>• <strong>The Torch</strong>: Positioned right behind the Bible, it symbolizes the light that illuminates both the Bible and the institution acting as its guide.<br>• <strong>The Color Blue</strong>: Used in the background, it stands for royalty.<br>• <strong>The Color Red</strong>: Found in the school's name, it signifies passion, love, and the power to carry the light.<br><br>You can also check out page 10 if you want to read a bit more detail about it! Let me know if you need anything else.</div>
 
 ---
 
@@ -54,7 +54,7 @@
 
 **Answer:**
 
-<div class="text">Alma Mater dear,<br>We’ll praise and honor thee forever,<br>And always pledge our loyalty,<br>To thee we’ll be true eternally<br>Wherever you may be someday,<br>In this big wide world,<br>Thy standards we’ll uphold through<br>Till the coming of the Lord. Pilon & Lyrics by SL La Sage)<br>Among the hills and valleys, of our dear Zamboanga fair<br>Stands the school that trains for service,<br>P.A.C.<br><br>(More detail is on page 7.)</div>
+<div class="text">Hey there! The music for the PAC Hymn was composed by <strong>L.V. Pilon</strong>, and the lyrics were written by <strong>SL La Sage</strong>. <br><br>(More detail is on page 7.)</div>
 
 ---
 
@@ -62,7 +62,7 @@
 
 **Answer:**
 
-<div class="text"><strong>1975</strong> is a landmark year for <strong>Philippine Advent College (PAC)</strong>.  <br><br>• That’s the year the school, originally <strong>Hillside View Elementary School (HVES)</strong>, <strong>became an academy</strong> and later evolved into a college.  <br>• It marks the <strong>founding of PAC</strong> by former Mayor <strong>Mariano J.S. Macias</strong> and <strong>Margie C. Macias</strong>, together with their children, who served as the first governing incorporators.  <br>• The transition was strongly supported by the local <strong>Seventh‑day Adventist (SDA) church community</strong> and elders from surrounding towns.<br><br>So, 1975 is significant because it’s the year PAC was officially established and began its journey from an elementary school to a full‑scale college.  <br><br><em>(More detail is on page 6.)</em></div>
+<div class="text">Hey there! <br><br>In <strong>1975</strong>, the institution originally known as the <strong>Hillside View Elementary School (HVES)</strong> became an <strong>academy</strong> and later a <strong>college</strong>, officially being founded by former Mayor <strong>Mariano J.S. Macias</strong> and <strong>Margie C. Macias</strong> along with their children and the local Seventh-day Adventist church community.<br><br>(More detail is on page 6.)</div>
 
 ---
 
@@ -70,7 +70,7 @@
 
 **Answer:**
 
-<div class="text"><strong>The Macias family were the founders of PAC</strong>  <br><br>• <strong>Mariano J.S. Macias</strong> (the former mayor) and <strong>Margie C. Macias</strong> officially founded the college.  <br>• Their children – Marquinjo, Marictibert, Mariano J.C., Margerald, and Maresnena – also took part in the <strong>foundational work</strong>.  <br>• Together with local SDA church elders, the Macias couple and their kids formed the <strong>first governing incorporators</strong> of the institution.  <br><br>So the Macias family didn’t just support PAC; they <strong>created and led its establishment</strong>.  <br><br><em>(More detail is on page 6.)</em></div>
+<div class="text">Hey there! <br><br>Former Mayor <strong>Mariano J.S. Macias</strong> and <strong>Margie C. Macias</strong>, along with their children (<strong>Marquinjo K.C. Macias</strong>, <strong>Marictibert C. Macias</strong>, <strong>Mariano J. C. Macias, Jr.</strong>, <strong>Margerald C. Macias</strong>, and <strong>Maresnena C. Macias</strong>), played a foundational role in establishing the institution as its <strong>founders</strong> because they wanted to impart knowledge and values to their children.<br><br>Additionally, Mayor Mariano J.S. Macias and Margie C. Macias teamed up with local church elders to form the <strong>first governing incorporators</strong> of the school.<br><br>(More detail is on page 6.)</div>
 
 ---
 
@@ -78,7 +78,7 @@
 
 **Answer:**
 
-<div class="text"><strong>Philippine Advent College’s philosophy of education</strong>  <br><br>• <strong>God is the source of true education</strong> – the college believes that real learning starts with Him.  <br><br>• It is <strong>committed to reflecting Christ</strong> in every aspect of the faculty’s and students’ lives.  <br><br>• The goal is to shape <strong>useful and fruitful citizenship</strong> for today’s world <strong>and</strong> to prepare people for <strong>fitness in the world to come</strong>.  <br><br>(More detail is on page 8.)</div>
+<div class="text">Hey there! At Philippine Advent College, the <strong>philosophy of education</strong> is built on the belief that <strong>God is the source of true education</strong>. <br><br>The college is fully committed to helping both faculty and students reflect <strong>Christ in their total lifestyle</strong>, preparing everyone for a <strong>useful and fruitful citizenship</strong> right now in this present world, as well as <strong>fitness for the world to come</strong>.<br><br>(More detail is on page 8.)</div>
 
 ---
 
@@ -86,7 +86,7 @@
 
 **Answer:**
 
-<div class="text"><strong>PAC’s vision:</strong>  <br><br>To be a <strong>Center of Excellence in Christian Education</strong> by promoting world‑class academic excellence, globally competitive technical education, and skill‑based learning in an environment that encourages discovery and investigation—while always remembering the true Source of Knowledge.  <br><br><em>(More detail is on page 8.)</em></div>
+<div class="text">Hmm, I couldn't find a solid answer for that one — I've saved your question so our staff can add it soon. In the meantime, feel free to try rephrasing it, or ask me something else!</div>
 
 ---
 
@@ -94,7 +94,7 @@
 
 **Answer:**
 
-<div class="text"><strong>Purpose‑Driven</strong>  <br><strong>Academic Excellence Oriented</strong>  <br><strong>Christ‑Centered</strong>  <br><br>These three pillars—<strong>Purpose‑Driven</strong>, <strong>Academic Excellence Oriented</strong>, and <strong>Christ‑Centered</strong>—are the core values that guide PAC. (More detail is on page 8.)</div>
+<div class="text">Hi there! Here are the three core values of PAC:<br><br>• <strong>P</strong> – Purpose-Driven<br>• <strong>A</strong> – Academic Excellence Oriented<br>• <strong>C</strong> – Christ-Centered<br><br>Let me know if you need anything else! <br><br>(More detail is on page 8.)<br><br>They produce goods or related services within an economy.<br><br>(More detail is on page 13.)</div>
 
 ---
 
@@ -102,7 +102,7 @@
 
 **Answer:**
 
-<div class="text"><strong>Christ‑Centered</strong> at PAC means:<br><br>• <strong>Faculty and students live with a focus on Christ</strong> – their daily life and learning are rooted in Christian faith.  <br>• <strong>Teaching is driven by love and purpose</strong>, reflecting Christian education that goes beyond academics.  <br>• <strong>Students develop virtues</strong> that spark their potential for excellence, always remembering <strong>the Almighty as the true source of wisdom</strong>.  <br><br>(See more on page 8.)</div>
+<div class="text">Hey there! Philippine Advent College describes being Christ-centered through its <strong>Philosophy</strong>, which states that the school is committed to reflecting Christ in the total lifestyle of both the <strong>faculty</strong> and the <strong>students</strong> to help prepare everyone for useful citizenship right now and for fitness in the world to come. <br><br>(More detail is on page 8.)</div>
 
 ---
 
@@ -118,7 +118,7 @@
 
 **Answer:**
 
-<div class="text">Hi there! Happy to help clarify that for you. <br><br>At the start of every semester, <strong>each student begins with 30 merit points</strong>. <br><br>Just a heads-up on how the demerit system works:<br>• <strong>First-degree offense</strong>: 5 demerits<br>• <strong>Second-degree offense</strong>: 15 demerits<br>• <strong>Third-degree offense</strong>: 30 demerits<br><br>Every violation carries a corresponding demerit based on how serious it is. The goal of this is to minimize misbehavior so teachers can focus more on promoting your growth and development instead of settling problems, helping prepare everyone to be law-abiding and useful citizens for service in this world and hereafter. <br><br>You can check out page 16 for the full list of specific violations and their corresponding demerits! Let me know if you need anything else.</div>
+<div class="text">Hey there! Every student starts each semester with <strong>30 merit points</strong>. <br><br>Just a quick heads-up on how the demerits work out:<br>• <strong>First-degree offense</strong>: 5 demerits<br>• <strong>Second-degree offense</strong>: 15 demerits<br>• <strong>Third-degree offense</strong>: 30 demerits<br><br>Every violation has corresponding demerit points in proportion to its degree. If misbehavior is minimized on this campus, teachers can spend much of their time promoting students’ growth/development instead of settling problems. You can check out page 16 for all the specific violations and their corresponding demerits! <br><br>This college aims to provide an education that prepares students to be law-abiding and useful citizens and to be prepared for service in this world and hereafter. Let me know if you need anything else!</div>
 
 ---
 
@@ -126,7 +126,7 @@
 
 **Answer:**
 
-<div class="text"><strong>A first‑degree offense carries 5 demerits.</strong>  <br><br>That’s the number listed for any violation classified as a first‑degree offense.  <br><br><em>(More detail is on page 17.)</em></div>
+<div class="text">A first-degree offense is worth <strong>5 demerits</strong>. <br><br>(More detail is on page 17.)</div>
 
 ---
 
@@ -134,7 +134,7 @@
 
 **Answer:**
 
-<div class="text"><strong>30 demerits</strong>  <br><br>That’s the amount assigned to a <strong>third‑degree offense</strong>.  <br><br>(More detail is on page 19.)</div>
+<div class="text">A third-degree offense is <strong>30 demerits</strong>.<br><br>(More detail is on page 19.)</div>
 
 ---
 
@@ -142,7 +142,7 @@
 
 **Answer:**
 
-<div class="text"><strong>When a student hits 20 or more demerits</strong>  <br><br>• The student is <strong>placed on probation immediately</strong> (as long as the demerits are earned less than one month before the term ends).  <br><br>• While on probation they <strong>cannot hold any office or responsibility</strong> for the rest of the midterm or semester.  <br><br>• The <strong>Student Disciplinary Committee</strong> will review the probation status, and it may be kept or lifted based on recommendations from the home dean and academic chairpersons.  <br><br>• No student may stay on probation for more than <strong>one semester</strong>; if it isn’t lifted, the student is <strong>denied admission for the next term</strong>.  <br><br>(See page 14 for the full list of measures.)</div>
+<div class="text">Hey there! If you incur <strong>20 demerits or more</strong> less than one month before the end of the term, you will be placed on <strong>probation</strong> immediately. <br><br>(More detail is on page 14.)</div>
 
 ---
 
@@ -150,7 +150,7 @@
 
 **Answer:**
 
-<div class="text">You have <strong>15 days</strong> from the moment you receive the committee’s order to file an appeal.  <br><br>(More detail is on page 22.)</div>
+<div class="text">Hey there! <br><br>You have <strong>15 days</strong> from the time you receive the order to appeal a decision made by the Student Disciplinary Committee to the Administrative Council. <br><br><em>(More detail is on page 22.)</em></div>
 
 ---
 
@@ -158,7 +158,7 @@
 
 **Answer:**
 
-<div class="text"><strong>No</strong>, jewelry such as rings, bracelets, or necklaces isn’t allowed on campus (the only exception is a wedding ring).  <br><br>• <strong>Leave all jewelry</strong> at home or in its box.  <br>• <strong>Exception:</strong> you may wear a <strong>wedding ring</strong>.  <br><br>Hope that helps! (More detail is on page 25.)</div>
+<div class="text">No, jewelry such as rings, bracelets, and necklaces is <strong>not permitted</strong> inside the campus, except for a <strong>wedding ring</strong>. You should leave them at home or in their box.<br><br>(More detail is on page 25.)</div>
 
 ---
 
@@ -166,15 +166,15 @@
 
 **Answer:**
 
-<div class="text">Hey there! Here’s the quick rundown of the <strong>official dress and appearance policy</strong> for students at PAC:<br><br><strong>General guidelines</strong><br>• Dress <strong>modestly</strong> and in a simple, neat style that matches PAC’s standards.  <br>• <strong>No jewelry</strong> (rings, bracelets, necklaces) is allowed on campus — the only exception is a wedding ring.<br><br><strong>For ladies</strong><br>• <strong>Jeans and square pants</strong> are not permitted during religious or formal services/programs.  <br>• Dresses must <strong>cover the knee</strong> when you’re sitting or standing.  <br>• Any <strong>slits</strong> on a dress must be <strong>at least 3 inches below the knee</strong>.  <br>• Avoid dresses that are <strong>transparent, sleeveless, or snug‑fitting</strong>.  <br>• No T‑shirts with <strong>indecent or obscene words/prints</strong>.<br><br><strong>For men</strong><br>• No T‑shirts with <strong>indecent or obscene words/prints</strong>.  <br>• Avoid <strong>tight‑fitting pants</strong> with suggestive patches or prints.  <br>• For</div>
+<div class="text">Hey there! I'd be happy to help you with that. <br><br>As Ellen G. White wrote in <em>Education</em> (page 24): “A person’s character is judged by his style of dress. Chaste simplicity in dress, when united with modesty of demeanor, will go far toward surrounding a young woman with that atmosphere of sacred reserve that will be to her a shield from a thousand perils.”<br><br>Here at PAC, you should:<br><br>• Dress modestly and in harmony with the standards and ideals of the PAC.<br>• Be seen only in dresses that adequately cover the knee when sitting or standing.<br>• Make sure dress slits are three (3) inches below the knee.<br>• Dress in good taste by avoiding dresses that are transparent without proper lining, sleeveless, and skirts that are snug-fitting.<br><br>You can find even more details on page 25! Let me know if you need anything else.</div>
 
 ---
 
-### ✅ Q20 [Handbook-Conduct]: Are slippers allowed on campus?
+### ❌ Q20 [Handbook-Conduct]: Are slippers allowed on campus?
 
 **Answer:**
 
-<div class="text">No, unfortunately the specific dress code details we have don't mention slippers, but we do have a few other guidelines to keep in mind for campus attire! <br><br>Here is what you need to know about what to wear and bring:<br><br>• <strong>Religious and formal services/programs:</strong> Wearing jeans and square pants is not allowed. <br>• <strong>Attire choice:</strong> A refined taste and a cultivated mind will be revealed in the choice of simple and appropriate attire.<br>• <strong>Jewelry:</strong> Leave all jewelry, such as rings, bracelets, and necklaces, at home or in their box, as they are not permitted inside the campus, except for wedding rings.<br>• <strong>T-shirts and pants:</strong> Avoid using T-shirts with indecent and obscene words/prints, as well as pants that are tight-fitting and with suggestive patches, prints, etc.<br><br>You can find more detail on page 25! Let me know if you need help with anything else</div>
+<div class="text">Remember that wearing jeans and square pants is not allowed during religious and formal services/programs. A refined taste, a cultivated mind, will be revealed in the choice of simple and appropriate attire. Leave all jewelry, such as rings, bracelets, and necklaces, at home or in their box, as they are not permitted inside the campus, except for wedding ring. Avoid using T-shirts with indecent and obscene words/prints and pants that are tight-fitting and with suggestive patches, prints, etc.<br><br>(More detail is on page 25.)</div>
 
 ---
 
@@ -182,7 +182,7 @@
 
 **Answer:**
 
-<div class="text"><strong>Yes</strong>, showing <strong>public displays of affection</strong> is listed as a violation.  <br><br>• It appears in the first‑degree offense list (5 demerits) as “showing public displays of affection.”  <br><br>So doing that on campus can lead to disciplinary action.  <br><br><em>(More detail is on page 17.)</em></div>
+<div class="text">Yes, showing <strong>public displays of affection</strong> or excessive going together of sweethearts in isolated places or restricted areas is considered a first-degree offense (5 demerits) and is subject to disciplinary action.<br><br>(More detail is on page 17.)</div>
 
 ---
 
@@ -190,7 +190,7 @@
 
 **Answer:**
 
-<div class="text"><strong>Missing dormitory worships</strong><br><br>• <strong>Free excused absences:</strong> You get <strong>3 excused absences each month</strong> automatically.  <br><br>• <strong>Unexcused absences:</strong> Each unexcused miss counts as <strong>2 demerit points</strong>.  <br><br>• <strong>Probation:</strong> If you <strong>exceed 20 absences</strong> (including the demerit‑converted ones) you’ll be placed on <strong>probation</strong>.  <br><br>• <strong>Denial of admission:</strong> Reaching <strong>30 worship absences</strong> in a semester means you will be <strong>denied admission</strong> to the college.  <br><br>• <strong>Tardiness conversion:</strong> Three tardies are treated as <strong>one absence</strong> for these counts.  <br><br>Hope that clears it up! (More detail on page 90.)</div>
+<div class="text">Hey there! Here is the policy on missing dormitory worships:<br><br>• You get <strong>three free excused absences</strong> every month.<br>• Every unexcused absence is given <strong>two points’ demerit</strong>, and <strong>three instances of tardiness</strong> count as one absence.<br>• If you go over <strong>20 absences</strong>, you will be placed on <strong>probation</strong>.<br>• If you accumulate <strong>30 worship absences</strong> during the entire semester, you will be <strong>denied admission</strong>.<br><br>(More detail is on page 90.)</div>
 
 ---
 
@@ -206,7 +206,7 @@
 
 **Answer:**
 
-<div class="text"><strong>Safe Spaces Act (RA 11313)</strong>  <br><br>• It’s a Philippine law passed in 2019 that aims to create <strong>safe, respectful, and inclusive</strong> environments in schools and other places.  <br><br>• The act focuses on preventing and addressing <strong>Gender‑Based Sexual Harassment (GBSH)</strong>, which the handbook defines as any unwelcome sexual behavior—verbal, physical, or online—directed at someone because of their sex, gender, sexual orientation, gender identity, or gender expression.  <br><br>• Examples of prohibited behavior under the act include:  <br>  - Catcalling, sexist remarks, intrusive comments or looks  <br>  - Unwanted touching or physical contact  <br>  - Stalking  <br>  - Sharing or posting sexual content without consent (including nude images)  <br>  - Cyber‑harassment, sexual advances online, or inappropriate messages  <br>  - Homophobic or transphobic slurs  <br><br>• The law applies to <strong>all spaces</strong> where the school community interacts:  <br>  - School premises and facilities  <br>  - Online platforms used for classes or communication  <br>  - School activities, on‑ or off‑campus  <br>  - Public spaces within the educational environment  <br><br>(More detail is on page 22 of the handbook.)<br><br><strong>Republic Act No. 11180</strong> is the law that governs the Sports Development Program.  <br><br>(You can find more details on page 102.)</div>
+<div class="text">Hey there! The Safe Spaces Act (Republic Act 11313) is a policy that the school follows in accordance with CHED policies to ensure a safe, respectful, and inclusive learning environment. <br><br>It outlines the standards, responsibilities, and procedures for addressing <strong>Gender-Based Sexual Harassment (GBSH)</strong> in all spaces of the school community.<br><br>(More detail is on page 22.)<br><br>Hey! That would be <strong>Republic Act 11180</strong> (the Athletic Programs Report Act)! Let me know if you need anything else from page 102!</div>
 
 ---
 
@@ -214,7 +214,7 @@
 
 **Answer:**
 
-<div class="text"><strong>RA 11313 – the Safe Spaces Act of 2019</strong> is the law that the handbook uses to shape its gender‑based harassment policy.  <br><br>It <strong>covers</strong>:<br><br>• <strong>Gender‑Based Sexual Harassment (GBSH)</strong> – any unwelcome sexual behavior (verbal, physical, or online) directed at someone because of sex, gender, sexual orientation, gender identity, or gender expression.  <br>  - Examples listed:  <br>    - Catcalling, sexist remarks, intrusive comments or looks  <br>    - Unwanted touching or physical contact  <br>    - Stalking  <br>    - Sharing or posting sexual content without consent (including nude images, voyeurism, or selling such photos)  <br>    - Cyber‑harassment, sexual advances or</div>
+<div class="text">Hey there! Republic Act 11313, also known as the <strong>Safe Spaces Act of 2019</strong>, covers standards, responsibilities, and procedures for addressing <strong>Gender-Based Sexual Harassment (GBSH)</strong> in all spaces of the school community. <br><br><em>(More detail is on page 22.)</em></div>
 
 ---
 
@@ -230,7 +230,7 @@
 
 **Answer:**
 
-<div class="text">PAC offers programs under Teacher Education, Business Education, Computer Studies, and others depending on campus. Examples include BEEd, BSEd majors, BSBA, BSIT, BSCS, BPEd, and Social Work.</div>
+<div class="text">Hey there! Philippine Advent College offers programs under:<br><br>• <strong>Teacher Education</strong> (such as BEEd, BSEd majors, and BPEd)<br>• <strong>Business Education</strong> (such as BSBA)<br>• <strong>Computer Studies</strong> (such as BSIT and BSCS)<br>• <strong>Other programs</strong> depending on the campus, such as Social Work<br><br>Let me know if you need help with anything else!</div>
 
 ---
 
@@ -246,7 +246,7 @@
 
 **Answer:**
 
-<div class="text">Bachelor of Science in Nursing (Main Campus only)<br>2. Bachelor of Midwifery (Main Campus only)<br><br>SCHOOL OF TEACHER EDUCATION & ARTS<br>1. Bachelor of Science in Secondary Education Major in English (Main Campus only)<br>4. Bachelor of Science in Secondary Education Major in Math (Main Campus only)<br>5. Bachelor of Science in Secondary Education Major in Filipino (Main Campus only)<br>6. Bachelor of Science in Social Work (Salug Campus only)<br><br>SCHOOL OF BUSINESS EDUCATION<br>1.<br><br>(More detail is on page 11.)</div>
+<div class="text">No, the provided information does not specifically mention Bachelor of Science in Nursing and Midwifery. PAC offers programs under Teacher Education, Business Education, Computer Studies, and others such as BEEd, BSEd majors, BSBA, BSIT, BSCS, BPEd, and Social Work, depending on the campus.</div>
 
 ---
 
@@ -254,7 +254,7 @@
 
 **Answer:**
 
-<div class="text">Hey there! I'd be happy to help you out with the TESDA programs we offer. Based on our details, here is what's available:<br><br>• Food and Beverage Services NC II Accountancy, Business, and Management (ABM)<br>• <strong>NC II UNDER TECHNICAL EDUCATION AND SKILLS DEVELOPMENT AUTHORITY (TESDA)</strong><br>• Housekeeping NC II<br><br>You can also check out page 11 for a bit more detail! Let me know if you need anything else.</div>
+<div class="text">Hey there! I'd be happy to help you with that. <br><br>Here are the TESDA NC II programs we offer:<br><br>• <strong>Food and Beverage Services NC II Accountancy, Business, and Management (ABM)</strong><br>• <strong>Housekeeping NC II</strong><br><br>You can also check out page 11 for a bit more detail! Let me know if you need anything else.</div>
 
 ---
 
@@ -262,7 +262,7 @@
 
 **Answer:**
 
-<div class="text">Here are the <strong>teacher‑education programs</strong> offered:<br><br>• <strong>Bachelor of Early Childhood Education</strong> – Main & Salug Campus  <br>• <strong>Bachelor of Elementary Education</strong> – Main Campus only  <br>• <strong>Bachelor of Science in Secondary Education</strong> – Major in English, Main Campus only  <br>• <strong>Bachelor of Science in Secondary Education</strong> – Major in Math, Main Campus only  <br>• <strong>Bachelor of Science in Secondary Education</strong> – Major in Filipino, Main Campus only  <br>• <strong>Bachelor of Physical Education</strong> – Main & LBP Campus  <br>• <strong>Bachelor of Technical‑Vocational Teacher Education</strong> – LBP Campus only  <br>• <strong>Bachelor of Science in Social Work</strong> – Salug Campus only  <br><br>These are all the programs listed under the **School of Teacher</div>
+<div class="text">Hey there! I'd be happy to help you with the teacher education programs we have available. <br><br>Here are the programs under the School of Teacher Education & Arts and School of Business Education:<br><br>• <strong>Bachelor of Technical-Vocational Teacher Education</strong> (LBP Campus only)<br>• <strong>Bachelor of Science in Social Work</strong> (Salug Campus only)<br>• <strong>Bachelor of Early Childhood Education</strong> (Main & Salug Campus)<br>• <strong>Bachelor of Elementary Education</strong> (Main Campus only)<br><br>You can also check out page 11 of our handbook if you need more details! Let me know if you have any other questions.</div>
 
 ---
 
@@ -270,7 +270,7 @@
 
 **Answer:**
 
-<div class="text"><strong>Yes</strong>, the <strong>Bachelor of Science in Business Administration</strong> is offered – specifically as <strong>Bachelor of Science in Business Administration Major in Human Resource and Management</strong> (Main Campus only).  <br><br><em>(More detail is on page 11.)</em></div>
+<div class="text">Yes, the <strong>Bachelor of Science in Business Administration Major in Human Resource and Management</strong> is offered under the <strong>School of Business Education</strong> (available at the <strong>Main Campus only</strong>). <br><br>(More detail is on page 11.)</div>
 
 ---
 
@@ -278,7 +278,7 @@
 
 **Answer:**
 
-<div class="text">No, there isn't a family scholarship or sibling discount mentioned in our official guidelines. <br><br>However, we do have other great scholarship programs available starting from School Year 2024–2025 to help support your education through tuition fee credits:<br><br>• <strong>Office Work</strong>: Php 3,800.00 credit to tuition fee<br>• <strong>Field Work</strong>: Php 4,500.00 credit to tuition fee<br><br>You can find more detailed information on page 78 of the handbook! Let me know if you need help with anything else.</div>
+<div class="text">No, there isn't a family scholarship or discount specifically for siblings mentioned in our guidelines. <br><br>However, we do have other great scholarship programs available to help you with your educational goals, starting from School Year 2024–2025, which offer tuition fee credits:<br><br>• <strong>Office Work</strong>: Php 3,800.00 credit to tuition fee<br>• <strong>Field Work</strong>: Php 4,500.00 credit to tuition fee<br><br>You can check page 78 for more details on these programs! Let me know if you need help with anything else.</div>
 
 ---
 
@@ -286,7 +286,7 @@
 
 **Answer:**
 
-<div class="text"><strong>Dormitory charges (per month)</strong>  <br><br>• <strong>Old Room:</strong> 717.99  <br>• <strong>New Room:</strong> 938.91  <br>• <strong>Bed Space:</strong> 331.38  <br>• <strong>Electricity:</strong> 165.69  <br><br>Hope that helps! (More detail is on page 42.)</div>
+<div class="text">Here are the current dormitory charges:<br><br>• <strong>Dormitory fee (Old Room)/Month</strong>: 717.99<br>• <strong>Dormitory fee (New Room)/Month</strong>: 938.91<br>• <strong>Dormitory fee (Bed Space)/Month</strong>: 331.38<br>• <strong>Electricity/Month</strong>: 165.69<br><br>(More detail is on page 42.)</div>
 
 ---
 
@@ -294,7 +294,7 @@
 
 **Answer:**
 
-<div class="text">No, the provided text doesn't specifically mention a drug test requirement for incoming first-year students, but here is what is required for your admission and enrollment:<br><br>• You must comply with <strong>pre-enrollment or annual medical examinations</strong> as required by the College to ensure you meet required health standards.<br>• Philippine Advent College (PAC) provides <strong>comprehensive Health Services</strong> including accessible first-aid and emergency care on campus, quality health care, preventive services, and wellness education.<br><br>You can find more detail on page 82! Let me know if you need anything else!</div>
+<div class="text">No, the exact requirement for a specific drug test isn't mentioned in the guidelines, but incoming students must complete <strong>pre-enrollment or annual medical examinations</strong> to meet required health standards. <br><br>Here is what you need to know about student health requirements:<br><br>• Students must comply with <strong>pre-enrollment or annual medical examinations</strong> as required by the College.<br>• Philippine Advent College (PAC) provides comprehensive <strong>Health Services</strong> to promote your physical, mental, and emotional well-being.<br>• The College ensures you have access to quality health care, preventive services, and wellness education.<br>• The campus also provides accessible <strong>first-aid and emergency care</strong>.<br><br>(You can find more detail on page 82.)</div>
 
 ---
 
@@ -302,7 +302,7 @@
 
 **Answer:**
 
-<div class="text">Yes, we do have classes this week! <br><br>Nothing special is scheduled for today through next Thursday, September 10, 2026—just our regular school days. <br><br>If you need anything, office hours are <strong>08:00–17:00</strong> on <strong>Monday–Friday</strong>. <br><br>Let me know if you need help with anything else!</div>
+<div class="text">Yes, we do have classes this week! <br><br>Nothing special is scheduled for <strong>September 05–September 11, 2026</strong> — just the <strong>regular school days</strong>. <br><br>Office hours are from <strong>08:00–17:00</strong> on <strong>Monday–Friday</strong>. Let me know if you need anything else!</div>
 
 ---
 
@@ -310,7 +310,7 @@
 
 **Answer:**
 
-<div class="text">Yes, because the <strong>treasurer</strong> is the only one authorized to process and apply requisitions for all organization activities, and all requested funds from the business office are automatically charged against their personal account until cleared through the liquidation process.<br><br>Here are the details you need to keep in mind:<br><br>• <strong>Liquidation timeline:</strong> Liquidate all expenses incurred within the prescribed period set by the business office, and do this after purchasing all materials or items intended for the requisition.<br>• <strong>Account clearance:</strong> The personal account charge is only cleared upon the approval of the liquidation process.<br>• <strong>Accepted receipts:</strong> Only the official receipt is accepted upon liquidation.<br><br>You can find more detail on page 69 of the manual! Let me know if you need help with anything else.</div>
+<div class="text">Yes, that applies to all organization activities! Here are the key guidelines to keep in mind:<br><br>• Only the <strong>treasurer</strong> is authorized to process and apply requisitions.<br>• You must <strong>liquidate all expenses</strong> incurred within the prescribed period set by the business office.<br>• All requested funds from the business office are <strong>automatically charged against their personal account</strong>, and it will only be cleared once the liquidation process is approved.<br>• Liquidation must be done <strong>after</strong> purchasing all materials or items intended for the requisition.<br>• Only the <strong>official receipt</strong> will be accepted during the liquidation process.<br><br><em>(More detail is on page 69.)</em></div>
 
 ---
 
@@ -326,7 +326,7 @@
 
 **Answer:**
 
-<div class="text">Yes, <strong>Bachelor of Elementary Education</strong> is available, but it's offered at the <strong>Main Campus only</strong>. <br><br>You can also check page 11 if you want to see a bit more detail!</div>
+<div class="text">Yes, the Bachelor of Elementary Education is offered, specifically at the <strong>Main Campus only</strong>.<br><br>(More detail is on page 11.)</div>
 
 ---
 
@@ -334,7 +334,7 @@
 
 **Answer:**
 
-<div class="text">No, there's no class tomorrow, Saturday, September 05, 2026, and the office is closed too for all departments.<br><br>From the handbook, for the general policy: No, the provided text doesn't mention whether or not there is class tomorrow. <br><br>Here are the attendance and class guidelines we do have:<br><br>• <strong>Attendance & Punctuality:</strong> Regularity of attendance and punctuality are required in all classes.<br>• <strong>Absence Limit:</strong> If you incur absences of more than twenty percent of the prescribed number of class or laboratory periods or related learning education during the semester, you will be considered dropped and given no credit for the course.<br>• <strong>Valid Reasons:</strong> Valid reasons or excusable absences are those who suffered the loss of a member of the immediate family up to the fourth degree of consanguinity or affinity and those who suffered health issues, provided that a medical certificate is presented before returning back to class.<br>• <strong>Instructor Delay:</strong> If the instructor/professor fails to show up on time (unannounced), you must wait until 15 minutes on the said class schedule.<br><br>(More detail is on page</div>
+<div class="text">On Sunday, September 06, 2026, all departments — there's no class and the office is closed too.<br><br>From the handbook, for the general policy: No, the provided details don't explicitly mention whether there is class tomorrow. <br><br>However, here are the attendance guidelines we have on file:<br><br>• <strong>Attendance and punctuality</strong> are required in all classes.<br>• <strong>Absences</strong> of more than twenty percent of the prescribed number of class or laboratory periods or related learning education during the semester mean a student will be considered dropped and given no credit for the course.<br>• <strong>Valid reasons</strong> or excusable absences include suffering the loss of a member of the immediate family up to the fourth degree of consanguinity or affinity, and health issues (provided a medical certificate is presented before returning back to class).<br>• <strong>Instructor tardiness:</strong> If the instructor or professor fails to show up on time (unannounced), you must wait until 15 minutes on the said class schedule.<br><br>(More detail is on page 30.)</div>
 
 ---
 
@@ -358,7 +358,7 @@
 
 **Answer:**
 
-<div class="text">Yes! For this month of September 2026, here is what is scheduled:<br><br>• Tuesday, September 15: <strong>Midterm Examination Week</strong><br><br>Let me know if you need anything else to prepare!</div>
+<div class="text">Yes, we do have something coming up! <br><br>For September 2026, here's what's scheduled:<br>• Tuesday, September 15: <strong>Midterm Examination Week</strong></div>
 
 ---
 
@@ -366,7 +366,7 @@
 
 **Answer:**
 
-<div class="text">No, high school isn't mentioned here, as this policy specifically covers attendance requirements, the dean's discretion for absences exceeding the twenty percent limit for valid and acceptable reasons, and exceptions for serving as a hospital patient watcher for a family member (with more details on page 30).</div>
+<div class="text">No, high school still requires regular attendance and punctuality for all classes! <br><br>Just keep in mind that:<br>• The <strong>dean</strong> can, at their discretion, exempt a student who goes over the <strong>twenty percent limit</strong> if the reasons are valid and acceptable to the school.<br>• This exemption also applies to students who serve as a <strong>patient watcher</strong> for a family member admitted to the hospital.<br><br>You can check out <strong>page 30</strong> for more details! Let me know if you need anything else.</div>
 
 ---
 
@@ -382,7 +382,7 @@
 
 **Answer:**
 
-<div class="text">Yes, high school has classes this week! <br><br>Nothing special is scheduled for <strong>September 04–September 10, 2026</strong> — just the regular school days. <br><br>Office hours are <strong>08:00–17:00</strong> on <strong>Monday–Friday</strong>. <br><br>Let me know if you need anything else!</div>
+<div class="text">Yes, high school has regular classes this week, and nothing special is scheduled from <strong>September 05–September 11, 2026</strong>. <br><br>Here are the details:<br>• It's just regular school days.<br>• Office hours are <strong>08:00–17:00</strong> on <strong>Monday–Friday</strong>. <br><br>Let me know if you need anything else!</div>
 
 ---
 
@@ -398,7 +398,7 @@
 
 **Answer:**
 
-<div class="text">Yes, <strong>Bachelor of Elementary Education</strong> is available, but it's offered at the <strong>Main Campus only</strong>. <br><br>You can also check page 11 if you want to see a bit more detail!</div>
+<div class="text">Yes, the Bachelor of Elementary Education is offered, specifically at the <strong>Main Campus only</strong>.<br><br>(More detail is on page 11.)</div>
 
 ---
 
@@ -414,7 +414,7 @@
 
 **Answer:**
 
-<div class="text">It applies to all units of PAC, not just Student Affairs! <br><br>Here are the specific offices and groups included:<br><br>• <strong>Office of Student Affairs</strong><br>• <strong>Community Engagement/Extension Office</strong><br>• <strong>Academic Departments</strong><br>• <strong>Student Organizations</strong></div>
+<div class="text">Not just the <strong>Office of Student Affairs</strong>! This applies to <strong>all units of PAC</strong>. <br><br>Here are the units included:<br><br>• <strong>Office of Student Affairs</strong><br>• <strong>Community Engagement/Extension Office</strong><br>• <strong>Academic Departments</strong><br>• <strong>Student Organizations</strong><br><br>They all need to align their programs with this manual. Let me know if you need more details from page 106!</div>
 
 ---
 
@@ -422,7 +422,7 @@
 
 **Answer:**
 
-<div class="text">No suspension announced! <br><br>Just a heads-up on our campus policies regarding announcements:<br><br>• <strong>Unauthorized boards</strong>: Unauthorized bulletin boards and billboards are not permitted on any campus property.<br>• <strong>Poster removal</strong>: Posters must be removed immediately after the termination of the announced activity by the organization sponsoring the activity.<br>• <strong>Violations</strong>: Any violation of the provisions shall cause the removal of the posters by authorized persons, or if it constitutes damage to the facility, the one who put the announcement or poster without permission shall pay the damages.<br><br>(More detail is on page 65.)</div>
+<div class="text">No, there haven't been any class suspensions announced. <br><br>Instead, just a quick reminder about campus postings:<br><br>• <strong>Unauthorized bulletin boards and billboards</strong> are not permitted on any campus property.<br>• <strong>Posters must be removed immediately</strong> after the termination of the announced activity by the sponsoring organization.<br>• Any violations will lead to authorized persons removing the posters, and if there's damage to the facility, the person who put up the unauthorized announcement will <strong>pay for the damages</strong>.<br><br>You can check out page 65 for more details! Let me know if you need anything else.</div>
 
 ---
 
@@ -462,7 +462,7 @@
 
 **Answer:**
 
-<div class="text"><strong>Week of Spiritual Emphasis</strong><br><br>• PAC <strong>sponsors a Week of Spiritual Emphasis every semester</strong>.  <br>• The activities during that week are <strong>organized and led by faculty and student leaders</strong>.  <br>• It’s part of the college’s multifaith program, aimed at giving everyone a chance to grow spiritually and share their faith experiences.<br><br>(See more on page 91.)</div>
+<div class="text">Hey there! <br><br>Philippine Advent College sponsors a <strong>week of spiritual emphasis</strong> every semester, which is handled by both faculty and student leaders. <br><br>(More detail is on page 91.)</div>
 
 ---
 
@@ -470,7 +470,7 @@
 
 **Answer:**
 
-<div class="text"><strong>Yes</strong>, an incomplete grade can’t stay on your record for longer than <strong>one (1) academic year</strong>.  <br><br>• After that period the “INC” must be resolved or it will be changed according to the grading rules.  <br><br>(See page 32 for more detail.)</div>
+<div class="text">Yes, an incomplete or <strong>"INC"</strong> mark cannot remain for more than <strong>one (1) academic year</strong>. <br><br>(More detail is on page 32.)</div>
 
 ---
 
@@ -486,7 +486,7 @@
 
 **Answer:**
 
-<div class="text">Hey there! 😊 <br><br>To answer your question, the exact maximum residency period isn't explicitly detailed in the current text we have on hand, but here are the key guidelines for completing your bachelor's degree:<br><br>• Your bachelor's degree must be completed within the specified timeframe.<br>• You need to complete a minimum of <strong>75%</strong> of your total academic units right here at Philippine Advent College, Inc.<br>• You must not have withdrawn or incurred incomplete grades.<br><br>Plus, to be eligible for honors upon graduation:<br>• You must successfully complete your four- or five-year curriculum with the required <strong>GPAs</strong>.<br>• You must not have undergone <strong>character probation</strong> or committed any major infraction of school rules and regulations during your entire collegiate residency.<br><br>For even more details, you can check out page 35! Let me know if you need help with anything else.</div>
+<div class="text">Hey there! 😊 <br><br>So, regarding your question, the text doesn't actually state a specific maximum number of years or residency period to finish a degree. However, it does note a few important requirements you'll need to keep in mind:<br><br>• The bachelor's degree must have been completed within the specified timeframe.<br>• You must complete a minimum of <strong>75% of the total academic units</strong> at Philippine Advent College, Inc.<br>• You must <strong>not have withdrawn or incurred incomplete grades</strong>.<br>• If you're aiming for honors, you must not have undergone character probation or committed any major infraction of school rules and regulations during your entire collegiate residency.<br><br>You can also check out page <strong>35</strong> for more details! Let me know if you need anything else.</div>
 
 ---
 

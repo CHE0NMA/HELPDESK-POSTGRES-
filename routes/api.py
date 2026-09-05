@@ -134,8 +134,24 @@ def analytics_chart_data():
         """)
         popular = cur.fetchall()
 
+        # BUG FIX: visitor_stats is created by the schema but nothing in the
+        # app ever INSERTs into it, so SUM(question_count)/COUNT(*) here was
+        # always (0, 0) -- which then forced 'answered' to clamp to 0 below
+        # (max(0, 0 - unanswered)) no matter how much real traffic there was.
+        # Same fallback /api/visitor_stats already uses for the public
+        # landing page (chat_history has real data even when visitor_stats
+        # doesn't), just never applied here too.
+        total_questions = 0
+        total_visitors = 0
         cur.execute("SELECT SUM(question_count), COUNT(*) FROM visitor_stats")
         vrow = cur.fetchone()
+        total_questions = int(vrow[0] or 0)
+        total_visitors = int(vrow[1] or 0)
+        if total_questions == 0 and total_visitors == 0:
+            cur.execute("SELECT COUNT(*), COUNT(DISTINCT session_id) FROM chat_history")
+            fallback_row = cur.fetchone()
+            total_questions = int(fallback_row[0] or 0)
+            total_visitors = int(fallback_row[1] or 0)
 
         cur.execute("SELECT COUNT(*) FROM unanswered_questions")
         unanswered = cur.fetchone()[0]
@@ -159,14 +175,14 @@ def analytics_chart_data():
         cur.execute("SELECT rating, COUNT(*) FROM satisfaction_feedback GROUP BY rating")
         satisfaction = {r[0]: r[1] for r in cur.fetchall()}
 
-        total_q = int(vrow[0] or 0)
+        total_q = total_questions
         return jsonify({
             'activity': [{'date': str(r[0]), 'count': r[1]} for r in chat_dates],
             'popular': [{'question': r[0], 'count': r[1]} for r in popular],
             'categories': [{'name': r[0], 'count': r[1]} for r in categories],
             'stats': {
                 'total_queries': total_q,
-                'total_visitors': int(vrow[1] or 0),
+                'total_visitors': total_visitors,
                 'unanswered': unanswered,
                 'faqs': total_faqs,
                 'bad_feedback': bad_feedback,
@@ -185,12 +201,30 @@ def api_response_times():
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
 
+    from ai_providers import model_metrics
+    stats = model_metrics.get_stats()
+    total_tracked = stats['successful_calls'] + stats['failed_calls']
+    cache_hit_count = model_metrics.cache_hits
+
+    # A cache hit is an in-memory dict lookup (see ai_providers/cache.py) --
+    # genuinely sub-millisecond, and nothing currently times it precisely.
+    # Reporting a small fixed estimate rather than a fabricated exact number;
+    # 'timing_note' says so explicitly so this isn't read as a real measurement.
+    estimated_cache_ms = 1
+    avg_db_ms = round(stats['avg_response_time_ms'], 1)
+
     return jsonify({
-        'average_response_time_cache_ms': 0,
-        'average_response_time_db_ms': 0,
-        'cache_hit_count': 0,
-        'total_queries_tracked': 0,
-        'note': 'Per-request timing tracking not yet wired up in the modular version.',
+        'average_response_time_cache_ms': estimated_cache_ms,
+        'average_response_time_db_ms': avg_db_ms,
+        'cache_hit_count': cache_hit_count,
+        'total_queries_tracked': total_tracked,
+        'success_rate': round(stats['success_rate'] * 100, 1),
+        'p95_response_time_ms': round(stats['p95_response_time_ms'], 1),
+        'timing_note': (
+            'average_response_time_cache_ms is a fixed estimate (in-memory '
+            'lookup, not individually timed); average_response_time_db_ms is '
+            'the real measured average AI/provider call latency.'
+        ),
     })
 
 

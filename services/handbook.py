@@ -743,6 +743,17 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8,
             if re.search(r'\bdress\s*code|\buniform|\bjewelry|\bappearance\b', q_l):
                 if 'dress' in title_l or 'appearance' in title_l or 'uniform' in title_l:
                     title_boost = max(title_boost, 3.0)
+            # "slippers" on its own (no "dress"/"jewelry"/"appearance" word)
+            # matched none of the boost rules above, so it lost the keyword
+            # race to "Dress and Appearance" (which mentions jewelry/uniform/
+            # attire heavily but never actually says "slippers") instead of
+            # "First-Degree Offense", which is the section that actually
+            # lists "wearing slippers ... on campus" as a violation.
+            if re.search(r'\bslippers?\b|\btsinelas\b', q_l):
+                if 'first' in title_l and ('degree' in title_l or 'demerit' in title_l):
+                    title_boost = max(title_boost, 4.0)
+                elif 'dress' in title_l or 'appearance' in title_l:
+                    title_boost *= 0.15
             if re.search(r'\bappeal\b', q_l):
                 if 'appeal' in title_l or 'prescription' in title_l:
                     title_boost = max(title_boost, 3.0)
@@ -1170,9 +1181,18 @@ def get_relevant_chunks(question: str, candidates: List[Dict]) -> List[Dict]:
     if not candidates:
         return []
     ai_picked = [c for c in candidates if c.get('_ai_picked')]
+    forced_title = [c for c in candidates if c.get('_forced')]
+    if forced_title and ai_picked:
+        # Regex-forced matches are hand-curated for exact facts (RA
+        # numbers, demerit counts, specific offense lists) that the AI
+        # router can't see past a bare section title -- union them,
+        # forced-first, rather than letting a title-only guess silently
+        # discard a match we already know is right. See BUG FIX note
+        # above get_top_handbook_chunks's AI-router injection point.
+        merged = forced_title + [c for c in ai_picked if c not in forced_title]
+        return _trim_to_close_contenders(merged, max_n=3)
     if ai_picked:
         return _trim_to_close_contenders(ai_picked, max_n=3)
-    forced_title = [c for c in candidates if c.get('_forced')]
     if forced_title:
         return forced_title[:3]
     forced_content = [c for c in candidates if c.get('_forced_content')]
@@ -1682,11 +1702,6 @@ def answer_handbook_question(question: str, detected_lang: str = 'english',
     if circuit_breaker.is_open():
         return None
 
-    cache_key = f"handbook_{hash(question.lower().strip())}"
-    cached = ai_cache.get(cache_key)
-    if cached:
-        return cached
-
     # Anchor retrieval to what the conversation was already about, so a
     # short follow-up with almost no content words of its own ("does that
     # apply to all levels?", "whole school?") still routes to the right
@@ -1708,6 +1723,21 @@ def answer_handbook_question(question: str, detected_lang: str = 'english',
             hint_parts.append(f"Previous answer given: {(last_ex[0].get('bot', '') or '')[:300]}")
         if hint_parts:
             context_hint = "\n".join(hint_parts)
+
+    # BUG FIX: this cache key used to be built from the question text ALONE
+    # (hash(question) only), with no context component at all. A short,
+    # generic follow-up like "For the whole school?" or "whole school?"
+    # then collided in the cache across completely unrelated conversations
+    # -- whichever conversation happened to ask that exact phrase FIRST
+    # silently "won" the cached answer for every other student's differently
+    # -themed follow-up that happened to be worded the same way, since the
+    # cache had no way to tell them apart. Folding context_hint into the key
+    # means a follow-up is only ever served a cached answer that was
+    # produced under the same preceding context.
+    cache_key = f"handbook_{hash(question.lower().strip())}_{hash(context_hint or '')}"
+    cached = ai_cache.get(cache_key)
+    if cached:
+        return cached
 
     parts = split_compound_question(question)
     if len(parts) >= 2:
