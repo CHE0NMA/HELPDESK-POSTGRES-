@@ -914,27 +914,53 @@ def api_categories():
 
 @bp.route('/api/export/faq')
 def export_faq():
+    """Export all FAQs as a downloadable JSON file.
+
+    BUG FIX (Vercel 500): previously wrote to current_app.config['BACKUP_FOLDER']
+    then send_file(). That key was never set in app config, and even if it were,
+    Vercel's filesystem is read-only except /tmp — so open() always raised and
+    the endpoint returned Internal Server Error. Stream the JSON the same way
+    /api/admin/export_handbook does (make_response + Content-Disposition) so
+    nothing touches the disk.
+    """
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
-    import json
-    from flask import current_app, send_file
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT id, topic, intent, question, answer, keywords, priority_score FROM faq")
-    faqs = cur.fetchall()
-    cur.close()
-    conn.close()
-    export_data = {
-        'export_date': datetime.now().isoformat(), 'version': '4.0',
-        'faqs': [{'id': f[0], 'topic': f[1], 'intent': f[2], 'question': f[3], 'answer': f[4],
-                  'keywords': f[5], 'priority_score': f[6]} for f in faqs],
-    }
-    fname = f"faq_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-    fpath = os.path.join(current_app.config['BACKUP_FOLDER'], fname)
-    with open(fpath, 'w', encoding='utf-8') as f:
-        json.dump(export_data, f, indent=2, ensure_ascii=False)
-    return send_file(fpath, as_attachment=True, download_name=fname)
-
+    try:
+        cur.execute(
+            "SELECT id, topic, intent, question, answer, keywords, priority_score "
+            "FROM faq ORDER BY id"
+        )
+        faqs = cur.fetchall()
+        export_data = {
+            'export_date': datetime.now().isoformat(),
+            'version': '4.0',
+            'total': len(faqs),
+            'faqs': [
+                {
+                    'id': f[0],
+                    'topic': f[1],
+                    'intent': f[2],
+                    'question': f[3],
+                    'answer': f[4],
+                    'keywords': f[5],
+                    'priority_score': f[6],
+                }
+                for f in faqs
+            ],
+        }
+        fname = f"faq_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        response = make_response(json.dumps(export_data, ensure_ascii=False, indent=2))
+        response.headers['Content-Type'] = 'application/json; charset=utf-8'
+        response.headers['Content-Disposition'] = f'attachment; filename="{fname}"'
+        return response
+    except Exception as e:
+        logger.error(f"export_faq error: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
 
 @bp.route('/api/export/faq/csv')
 def export_faq_csv():
@@ -987,6 +1013,7 @@ def bulk_import_faq():
     invalidate_response_tables()
     invalidate_dashboard_cache()
     return jsonify({'success': True, 'imported': imported})
+
 
 @bp.route('/api/check_admin')
 def api_check_admin():
