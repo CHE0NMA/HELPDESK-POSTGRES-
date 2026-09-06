@@ -37,50 +37,40 @@ IS_ONLINE = _is_online()
 IS_LOCAL = not IS_ONLINE
 
 
-# ---------------------------------------------------------------------
-# Database
-# ---------------------------------------------------------------------
 def _build_database_config() -> dict:
     """
     Build DATABASE_CONFIG for local or online use.
 
-    Priority:
-      1. Individual DB_* environment variables
-      2. DATABASE_URL (Render / Heroku style) if individual host is missing
-      3. Sensible local defaults
+    Priority controlled by DB_TARGET:
+      - "neon" / "online"  → use DATABASE_URL (Neon)
+      - "local" (default)  → use individual DB_* vars
+    When running on Vercel/Render (IS_ONLINE), always prefer DATABASE_URL
+    if it exists.
     """
-    host = os.environ.get("DB_HOST")
-    user = os.environ.get("DB_USER")
-    password = os.environ.get("DB_PASSWORD")
-    database = os.environ.get("DB_NAME")
-    port = os.environ.get("DB_PORT")
-    sslmode = os.environ.get("DB_SSLMODE")
-
-    # Fall back to DATABASE_URL if the host looks like a full URL or is missing
+    target = (os.environ.get("DB_TARGET") or "local").lower().strip()
     database_url = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL")
-    if database_url and (not host or host.startswith("postgresql://") or host.startswith("postgres://")):
+
+    # Force Neon when explicitly requested or when deployed online
+    use_neon = target in ("neon", "online") or (IS_ONLINE and database_url)
+
+    if use_neon and database_url:
         parsed = urlparse(database_url)
-        host = parsed.hostname or host
-        user = parsed.username or user
-        password = parsed.password or password
-        database = (parsed.path or "/").lstrip("/") or database
-        port = str(parsed.port) if parsed.port else port
-        # Render always needs SSL
-        if sslmode is None:
-            sslmode = "require"
+        return {
+            "host": parsed.hostname or "localhost",
+            "user": parsed.username or "postgres",
+            "password": parsed.password or "",
+            "database": (parsed.path or "/").lstrip("/") or "neondb",
+            "port": int(parsed.port or 5432),
+            "sslmode": "require",
+        }
 
-    # Final defaults
-    host = host or "localhost"
-    user = user or "postgres"
-    password = password or ""
-    database = database or "school_chatbot"
-    port = int(port or 5432)
-
-    # SSL policy
-    if sslmode is None:
-        # Online (Render) → require SSL
-        # Local → disable so plain local Postgres works
-        sslmode = "require" if IS_ONLINE else "disable"
+    # Local (individual vars)
+    host = os.environ.get("DB_HOST") or "localhost"
+    user = os.environ.get("DB_USER") or "postgres"
+    password = os.environ.get("DB_PASSWORD") or ""
+    database = os.environ.get("DB_NAME") or "school_chatbot"
+    port = int(os.environ.get("DB_PORT") or 5432)
+    sslmode = os.environ.get("DB_SSLMODE") or ("require" if IS_ONLINE else "disable")
 
     return {
         "host": host,
@@ -90,7 +80,6 @@ def _build_database_config() -> dict:
         "port": port,
         "sslmode": sslmode,
     }
-
 
 DATABASE_CONFIG = _build_database_config()
 
