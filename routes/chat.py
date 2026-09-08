@@ -249,39 +249,55 @@ def satisfaction_feedback():
     sid = data.get('session_id') or session.get('chat_session') or 'anonymous'
     if not rating or not question:
         return jsonify({'status': 'error', 'message': 'Missing data'}), 400
+
     conn = get_db()
     cur = conn.cursor()
     try:
         cur.execute("""
             INSERT INTO satisfaction_feedback (session_id, question, answer, rating, created_at)
             VALUES (%s, %s, %s, %s, NOW())
-        """, (sid, question[:500], (answer or '')[:1000], rating))
+        """, (sid, (question or '')[:500], (answer or '')[:1000], rating))
         conn.commit()
-        # Continuous-learning: lock in good answers / drop bad cache entries
-        try:
-            from services.answer_memory import promote_from_thumbs_up, record_feedback
-            if rating == 'thumbs_up':
-                promote_from_thumbs_up(
-                    get_db, question, answer or '',
-                    detected_lang='english', source_type='chat',
-                )
-            else:
-                record_feedback(
-                    get_db, question, 'thumbs_down',
-                    session_id=sid, source_type='chat',
-                )
-        except Exception as mem_err:
-            logger.debug(f"answer_memory hook: {mem_err}")
-        if rating == 'thumbs_down':
-            log_unanswered_standalone(question, session_id=sid)
-        return jsonify({'status': 'success'})
     except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         logger.error(f"Satisfaction feedback error: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
     finally:
-        cur.close()
-        conn.close()
+        try:
+            cur.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
 
+    # Best-effort learning hooks — failures here must not fail the request.
+    try:
+        from services.answer_memory import promote_from_thumbs_up, record_feedback
+        if rating == 'thumbs_up':
+            promote_from_thumbs_up(
+                get_db, question, answer or '',
+                detected_lang='english', source_type='chat',
+            )
+        else:
+            record_feedback(
+                get_db, question, 'thumbs_down',
+                session_id=sid, source_type='chat',
+            )
+    except Exception as mem_err:
+        logger.debug(f"answer_memory hook: {mem_err}")
+
+    if rating == 'thumbs_down':
+        try:
+            log_unanswered_standalone(question, session_id=sid)
+        except Exception as uq_err:
+            logger.debug(f"log_unanswered_standalone after thumbs_down: {uq_err}")
+
+    return jsonify({'status': 'success'})
 
 @bp.route('/api/chat_rating', methods=['POST'])
 @csrf.exempt
