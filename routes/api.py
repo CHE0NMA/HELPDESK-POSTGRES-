@@ -134,13 +134,7 @@ def analytics_chart_data():
         """)
         popular = cur.fetchall()
 
-        # BUG FIX: visitor_stats is created by the schema but nothing in the
-        # app ever INSERTs into it, so SUM(question_count)/COUNT(*) here was
-        # always (0, 0) -- which then forced 'answered' to clamp to 0 below
-        # (max(0, 0 - unanswered)) no matter how much real traffic there was.
-        # Same fallback /api/visitor_stats already uses for the public
-        # landing page (chat_history has real data even when visitor_stats
-        # doesn't), just never applied here too.
+
         total_questions = 0
         total_visitors = 0
         cur.execute("SELECT SUM(question_count), COUNT(*) FROM visitor_stats")
@@ -298,34 +292,8 @@ def chat_ratings_data():
         conn.close()
 
 
-# ---------------------------------------------------------------------
-# Admin live badge counts — shared by the sidebar poller (admin-common.js)
-# and the alert log page.
-#
-# BUG FIX (root cause of the "laggy when deployed" reports): this used to
-# be two near-duplicate endpoints (/api/admin/alert_counts here and
-# /api/admin/realtime below), each opening its own connection and running
-# 4-6 COUNT() queries with a bare `finally: cur.close(); conn.close()` and
-# NO `except` clause. If any single query failed (e.g. a table missing in
-# a given environment), the exception propagated with the transaction
-# still aborted -- Postgres then refuses every further statement on that
-# connection ("current transaction is aborted") until something issues a
-# ROLLBACK. Since the pooled connection just got closed (returned to the
-# pool, not actually reset) rather than rolled back, the NEXT request
-# anywhere in the app that happened to check out that same pooled
-# connection would immediately fail too -- on Vercel the pool is only 3
-# connections (see database/pool.py), so this could poison a third of the
-# whole pool from a single bad badge poll, and every open admin tab was
-# hitting this every 8-15 seconds. That cascading failure is what
-# presented as general "laggy"/flaky behavior across the site.
-#
-# Fixed by: (1) always rolling back on error before the connection goes
-# back to the pool, (2) caching the result for a few seconds so N open
-# tabs/admins share one DB round trip instead of one each, and
-# (3) serving the last-known-good snapshot instead of erroring out (and
-# flashing every badge to 0) if a single poll fails.
 _badge_counts_cache = {'data': None, 'ts': 0.0}
-_BADGE_COUNTS_TTL = 8  # seconds
+_BADGE_COUNTS_TTL = 8
 
 
 def _compute_admin_badge_counts() -> dict:
@@ -342,9 +310,6 @@ def _compute_admin_badge_counts() -> dict:
         """)
         sat_reports = cur.fetchone()[0]
 
-        # Matches the merged /reports page: satisfaction_feedback +
-        # bad_feedback (routes/chat.py's /feedback, routes/api.py's
-        # /api/report) so the badge doesn't undercount detailed reports.
         cur.execute(
             "SELECT COUNT(*) FROM bad_feedback WHERE created_at > NOW() - INTERVAL '7 days'"
         )
@@ -357,9 +322,6 @@ def _compute_admin_badge_counts() -> dict:
         cur.execute("SELECT COUNT(*) FROM pending_faq_drafts WHERE status = 'pending'")
         drafts = cur.fetchone()[0]
 
-        # alert_history has no read/unread flag, so "new" = raised in the
-        # last 24h. chat_ratings has no reviewed flag either, so "needs a
-        # look" = 1-2 star in the last 7 days.
         cur.execute(
             "SELECT COUNT(*) FROM alert_history WHERE created_at > NOW() - INTERVAL '24 hours'"
         )
@@ -716,6 +678,68 @@ def api_my_chats():
     finally:
         cur.close()
         conn.close()
+
+@bp.route('/api/chat_history/<string:chat_uuid>')
+def api_chat_history(chat_uuid):
+    """JSON equivalent of routes/pages.py's /chat/<uuid> page, for the
+    Flutter app (which can't render the server-side Jinja chat.html
+    template). Web and app both end up reading the exact same
+    chat_history rows, so a conversation started on one is fully
+    readable on the other — that's the "connect the app and web" part:
+    both clients hit this same backend/session-cookie/DB, there is no
+    separate app-only data path.
+
+    Looks up chat_sessions by public_uuid (same as pages.py) rather than
+    trusting the caller's own session cookie for the lookup, so a chat
+    opened from the app's local "recent chats" list (saved client-side,
+    same as chat.html's localStorage list) resolves correctly even if
+    the app's cookie jar was cleared/reinstalled -- matching how
+    /api/my_chats already works.
+    """
+    from services.formatting import format_bot_message
+
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT session_id FROM chat_sessions WHERE public_uuid = %s",
+            (chat_uuid,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return jsonify({'ok': False, 'error': 'not_found', 'messages': []}), 404
+        session_id = row[0]
+
+        cur.execute(
+            """
+            SELECT user_message, bot_response, category, created_at
+            FROM chat_history
+            WHERE session_id = %s
+            ORDER BY created_at ASC
+            LIMIT 200
+            """,
+            (session_id,),
+        )
+        messages = []
+        for user_message, bot_response, category, created_at in cur.fetchall():
+            try:
+                bot_html = format_bot_message(bot_response, show_images=True)
+            except Exception:
+                bot_html = bot_response or ''
+            messages.append({
+                'user': user_message,
+                'bot': bot_html,
+                'category': category,
+                'created_at': created_at.isoformat() if created_at else None,
+            })
+        return jsonify({'ok': True, 'chat_uuid': chat_uuid, 'messages': messages})
+    except Exception as e:
+        logger.error(f"api_chat_history error: {e}")
+        return jsonify({'ok': False, 'error': str(e), 'messages': []}), 500
+    finally:
+        cur.close()
+        conn.close()
+
 
 @bp.route("/api/admin/realtime")
 def api_admin_realtime():

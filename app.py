@@ -133,13 +133,46 @@ def create_app():
         storage_uri="memory://",
     )
 
+    # CORS for the Flutter app. Native Android/iOS builds aren't subject to
+    # browser CORS at all (only Flutter *Web* is), but this is what makes a
+    # `flutter run -d chrome` build -- or any other cross-origin client --
+    # work against this same backend without a proxy. Off by default (no
+    # env var set = no behavior change from before); set
+    # CORS_ALLOWED_ORIGINS to a comma-separated list of exact origins the
+    # app is served from, e.g.:
+    #   CORS_ALLOWED_ORIGINS=http://localhost:5173,https://app.pachelpdesk.example
+    # Deliberately NOT a wildcard: /chat and friends rely on the Flask
+    # session cookie for conversation continuity, and
+    # Access-Control-Allow-Credentials only works with an explicit origin,
+    # never "*".
+    _cors_origins = [
+        o.strip() for o in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",") if o.strip()
+    ]
+
     @app.after_request
     def security_headers(response):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+        if _cors_origins:
+            from flask import request as _req
+            origin = _req.headers.get("Origin")
+            if origin and origin in _cors_origins:
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Credentials"] = "true"
+                response.headers["Vary"] = "Origin"
+                if _req.method == "OPTIONS":
+                    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+                    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+                    response.headers["Access-Control-Max-Age"] = "3600"
         return response
+
+    if _cors_origins:
+        @app.route("/<path:_any>", methods=["OPTIONS"])
+        def _cors_preflight(_any):
+            return "", 204
 
     app.register_blueprint(chat_bp)
     app.register_blueprint(admin_bp)
