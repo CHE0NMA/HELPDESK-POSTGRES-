@@ -13,7 +13,11 @@
   ],
   "functions": {
     "app.py": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "includeFiles": [
+        "templates/**",
+        "static/**"
+      ]
     }
   }
 }
