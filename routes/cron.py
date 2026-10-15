@@ -16,14 +16,12 @@ CRON_SECRET = os.environ.get("CRON_SECRET", "")
 
 def _authorized() -> bool:
     if not CRON_SECRET:
-        # Fail closed in production; allow empty secret only in local dev
         if os.environ.get("FLASK_ENV") == "production" or os.environ.get("VERCEL"):
             return False
         return True
     header = request.headers.get("Authorization", "")
     token = header.replace("Bearer ", "").strip()
-    # Vercel Cron sends: Authorization: Bearer <CRON_SECRET>
-    # Also accept ?secret= for simple external cron services
+
     q = request.args.get("secret", "")
     return token == CRON_SECRET or q == CRON_SECRET
 
@@ -77,13 +75,6 @@ def cron_maintenance():
         except Exception as e:
             results["cleanup_sessions"] = str(e)
 
-        # BUG FIX: on Vercel, app.py's APScheduler block (the only place
-        # run_self_heal_pass was previously wired up) never runs at all --
-        # so the "answer it correctly enough times and it fixes itself"
-        # loop was silently dead in production unless an admin manually
-        # clicked "Run now" on /self_heal. This cron job is the Vercel-safe
-        # equivalent of the interval job database/learning_schema.py sets
-        # up for non-serverless deployments.
         try:
             from database import get_db
             from services.self_heal import run_self_heal_pass

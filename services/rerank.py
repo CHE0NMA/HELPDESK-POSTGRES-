@@ -30,7 +30,7 @@ import re
 import threading
 import time
 from collections import Counter
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Tuple
 
 _STOPWORDS = {
     'the', 'a', 'an', 'and', 'or', 'of', 'to', 'in', 'is', 'are', 'was',
@@ -73,7 +73,7 @@ class _IDFCache:
 _cache = _IDFCache()
 
 
-def _build_idf(documents: List[str]) -> (Dict[str, float], Dict[str, float]):
+def _build_idf(documents: List[str]) -> Tuple[Dict[str, float], Dict[str, float]]:
     n_docs = max(1, len(documents))
     df = Counter()
     for doc in documents:

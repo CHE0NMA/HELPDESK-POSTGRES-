@@ -48,10 +48,7 @@ GREETING_RX = re.compile(
 
 MATH_PATTERNS = [
     r'\d+\s*[\+\*\/x]\s*\d+',
-    # Subtraction, specifically excluded from matching a 4-digit year range
-    # ("2025-2026", "SY 2025-2026") -- (?<!\d) / (?!\d) stop a partial match
-    # from landing inside a longer digit run, and the explicit \d{4} block
-    # on either side of the dash rules out exactly the "YYYY-YYYY" shape.
+
     r'(?<!\d)(?!\d{4}\s*-\s*\d{4}\b)\d+\s*-\s*\d+(?!\d)',
     r'\d+\s*times\s*\d+', r'what is \d+',
     r'calculate', r'math', r'plus', r'minus', r'times', r'divided by',
@@ -159,9 +156,6 @@ def chat():
         if not user_msg:
             return jsonify({'reply': 'Please type a message.'})
 
-        # Pass the conversation's established language as a prior — matters
-        # most for short replies ("opo", "3") that carry no language signal
-        # on their own. See services/language.py's detect_language().
         ctx_for_lang = get_conversation_context(session_id)
         detected_lang = lang_service.detect_language(user_msg, prior_lang=ctx_for_lang.last_detected_lang)
         ctx_for_lang.last_detected_lang = detected_lang
@@ -246,9 +240,12 @@ def satisfaction_feedback():
     rating = data.get('rating')
     question = data.get('question')
     answer = strip_html(data.get('answer') or '')
+    correction = strip_html(str(data.get('correction') or '')).strip()[:2000]
     sid = data.get('session_id') or session.get('chat_session') or 'anonymous'
-    if not rating or not question:
+    if rating not in ('thumbs_up', 'thumbs_down') or not question:
         return jsonify({'status': 'error', 'message': 'Missing data'}), 400
+    if correction and rating != 'thumbs_down':
+        return jsonify({'status': 'error', 'message': 'Corrections require a thumbs-down rating'}), 400
 
     conn = get_db()
     cur = conn.cursor()
@@ -276,6 +273,7 @@ def satisfaction_feedback():
             pass
 
     # Best-effort learning hooks — failures here must not fail the request.
+    correction_queued = False
     try:
         from services.answer_memory import promote_from_thumbs_up, record_feedback
         if rating == 'thumbs_up':
@@ -284,10 +282,14 @@ def satisfaction_feedback():
                 detected_lang='english', source_type='chat',
             )
         else:
-            record_feedback(
+            feedback_saved = record_feedback(
                 get_db, question, 'thumbs_down',
+                correction=correction,
                 session_id=sid, source_type='chat',
             )
+            if correction and feedback_saved:
+                from services.self_heal import save_feedback_draft
+                correction_queued = save_feedback_draft(get_db, question, correction)
     except Exception as mem_err:
         logger.debug(f"answer_memory hook: {mem_err}")
 
@@ -297,7 +299,10 @@ def satisfaction_feedback():
         except Exception as uq_err:
             logger.debug(f"log_unanswered_standalone after thumbs_down: {uq_err}")
 
-    return jsonify({'status': 'success'})
+    return jsonify({
+        'status': 'success',
+        'correction_queued': correction_queued,
+    })
 
 @bp.route('/api/chat_rating', methods=['POST'])
 @csrf.exempt
@@ -395,9 +400,7 @@ def related_suggestions():
             """, (user_msg, user_msg))
             rows = cur.fetchall()
         except Exception:
-            # Postgres aborts the whole transaction on a failed statement —
-            # unlike MySQL, the connection can't run another query until
-            # this is rolled back.
+
             conn.rollback()
             cur.execute("""
                 SELECT user_message FROM (

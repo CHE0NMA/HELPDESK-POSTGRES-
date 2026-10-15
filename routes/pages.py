@@ -65,7 +65,7 @@ def _prefill_query_string() -> str:
 @bp.route("/")
 def landing():
     try:
-        return render_template("landing.html")
+        return render_template("public/landing.html")
     except Exception as e:
         logger.error(f"landing error: {e}", exc_info=True)
         return (
@@ -204,7 +204,7 @@ def new_chat():
         logger.error(f"new_chat fatal: {e}", exc_info=True)
         try:
             return render_template(
-                "chat.html",
+                "public/chat.html",
                 chats=[],
                 chat_uuid=str(uuid.uuid4()),
                 prefill=(request.args.get("q") or "")[:500],
@@ -268,7 +268,7 @@ def chat_with_uuid(chat_uuid):
                 pass
 
             return render_template(
-                "chat.html",
+                "public/chat.html",
                 chats=chats,
                 chat_uuid=chat_uuid,
                 prefill=qs_prefill,
@@ -284,7 +284,7 @@ def chat_with_uuid(chat_uuid):
         logger.error(f"chat_with_uuid error: {e}", exc_info=True)
         try:
             return render_template(
-                "chat.html",
+                "public/chat.html",
                 chats=[],
                 chat_uuid=chat_uuid or str(uuid.uuid4()),
                 prefill=qs_prefill,
@@ -297,7 +297,7 @@ def chat_with_uuid(chat_uuid):
 @bp.route("/privacy")
 def privacy_policy():
     try:
-        return render_template("privacy.html")
+        return render_template("public/privacy.html")
     except Exception:
         return redirect("/")
 
@@ -305,7 +305,7 @@ def privacy_policy():
 @bp.route("/terms")
 def terms_of_use():
     try:
-        return render_template("terms.html")
+        return render_template("public/terms.html")
     except Exception:
         return redirect("/")
 

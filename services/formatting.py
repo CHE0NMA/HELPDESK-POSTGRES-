@@ -28,7 +28,6 @@ def format_bot_message(answer: str, show_images: bool = True) -> str:
 
     text = answer
 
-    # Bold first, then italic (so ** doesn't get eaten as italic)
     text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
     text = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'<em>\1</em>', text)
 

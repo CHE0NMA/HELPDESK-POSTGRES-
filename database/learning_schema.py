@@ -13,12 +13,9 @@ logger = logging.getLogger("pac_helpdesk.learning_schema")
 def ensure_learning_schema(get_db_fn) -> None:
     try:
         from services.topic_aliases import ensure_topic_alias_schema, seed_default_aliases
-    except ImportError:
-        try:
-            from topic_aliases import ensure_topic_alias_schema, seed_default_aliases
-        except ImportError as e:
-            logger.error(f"topic_aliases import failed: {e}")
-            return
+    except ImportError as e:
+        logger.error(f"topic_aliases import failed: {e}")
+        return
 
     ensure_topic_alias_schema(get_db_fn)
     n = seed_default_aliases(get_db_fn, force=False)

@@ -16,20 +16,16 @@ import logging
 import re
 import time
 from threading import Lock
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger("pac_helpdesk.topic_aliases")
 
-# In-process cache so every question doesn't hit the DB.
 _CACHE: List[dict] = []
 _CACHE_TS: float = 0.0
 _CACHE_TTL = 120.0  # seconds
 _LOCK = Lock()
 
 
-# ---------------------------------------------------------------------------
-# Schema
-# ---------------------------------------------------------------------------
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS handbook_topic_aliases (
@@ -118,9 +114,6 @@ def ensure_topic_alias_schema(get_db_fn) -> None:
 
 
 _SEED_ALIASES: List[dict] = [
-    # ------------------------------------------------------------------
-    # Identity / History / Founders / Logo / Hymn
-    # ------------------------------------------------------------------
     {
         "topic_key": "full_name_campuses",
         "match_pattern": (
@@ -200,9 +193,6 @@ _SEED_ALIASES: List[dict] = [
         "priority": 90,
     },
 
-    # ------------------------------------------------------------------
-    # Philosophy / Vision / Mission / Core Values / Goals
-    # ------------------------------------------------------------------
     {
         "topic_key": "vision",
         "match_pattern": (
@@ -362,9 +352,6 @@ _SEED_ALIASES: List[dict] = [
         "priority": 100,
     },
 
-    # ------------------------------------------------------------------
-    # Dress / Conduct / Dorm / PDA / Curfew / Music / Worship
-    # ------------------------------------------------------------------
     {
         "topic_key": "jewelry_dress",
         "match_pattern": (
@@ -508,9 +495,7 @@ _SEED_ALIASES: List[dict] = [
     "source_priority": "handbook_only",
     "priority": 115,
 },
-    # ------------------------------------------------------------------
-    # Legal / Safe Spaces / Anti-Bullying / Hazing / Social Media
-    # ------------------------------------------------------------------
+
     {
         "topic_key": "safe_spaces",
         "match_pattern": (
@@ -524,14 +509,7 @@ _SEED_ALIASES: List[dict] = [
         "priority": 100,
     },
     {
-        # BUG FIX: only matched "anti-bullying"/"bullying law"/the RA
-        # number -- a bare "bully"/"bullies"/"bullied" (e.g. "what would
-        # happen if I bully someone") never matched at all. Added bare
-        # word forms + common Filipino phrasing. NOTE: if this alias set
-        # was already seeded into handbook_topic_aliases, this in-code
-        # seed change alone won't update the live DB rows -- re-run
-        # seed_default_aliases(force=True) or edit the row from the
-        # admin dashboard for it to take effect.
+
         "topic_key": "anti_bullying",
         "match_pattern": (
             r"\b(anti.?bullying|ra.?10627|bullying law|10627|"
@@ -568,9 +546,6 @@ _SEED_ALIASES: List[dict] = [
         "priority": 90,
     },
 
-    # ------------------------------------------------------------------
-    # Academic Programs / Strands / TESDA / Campuses for programs
-    # ------------------------------------------------------------------
     {
         "topic_key": "programs",
         "match_pattern": (
@@ -608,9 +583,6 @@ _SEED_ALIASES: List[dict] = [
         "priority": 90,
     },
 
-    # ------------------------------------------------------------------
-    # Academic policies / Fees / Scholarships / Incomplete / Residency
-    # ------------------------------------------------------------------
     {
         "topic_key": "incomplete_grades",
         "match_pattern": (
@@ -705,9 +677,6 @@ _SEED_ALIASES: List[dict] = [
         "priority": 80,
     },
 
-    # ------------------------------------------------------------------
-    # People / Staff / Faculty / Offices (for future data you will insert)
-    # ------------------------------------------------------------------
     {
         "topic_key": "staff_people",
         "match_pattern": (
@@ -776,9 +745,6 @@ def seed_default_aliases(get_db_fn, force: bool = False) -> int:
         conn.close()
 
 
-# ---------------------------------------------------------------------------
-# Load / match
-# ---------------------------------------------------------------------------
 
 def invalidate_alias_cache():
     global _CACHE, _CACHE_TS
@@ -846,11 +812,7 @@ def match_aliases(question: str, get_db_fn=None) -> List[dict]:
     aliases = _load_aliases(get_db_fn) if get_db_fn else [
         {"id": -(i + 1), **a} for i, a in enumerate(_SEED_ALIASES)
     ]
-    # Callers (e.g. handbook._forced_topic_for) already normalize before
-    # calling in, but normalize here too -- defense in depth for any other
-    # caller, and cheap/idempotent if already done. Fixes vernacular
-    # spelling (bulan/bulana, suoton, haxing, ...) and unwraps hypothetical
-    # ("what would happen if I ___") framing into direct-question keywords.
+
     try:
         from services.language import expand_query as _expand_query
     except Exception:
@@ -871,14 +833,8 @@ def match_aliases(question: str, get_db_fn=None) -> List[dict]:
 
 _hit_dedup_lock = Lock()
 _recent_alias_hits: Dict[tuple, float] = {}
-_HIT_DEDUP_WINDOW = 3.0  # seconds — handbook.py calls forced_topic_for()
-# several times (once early, once in main retrieval, and once per
-# candidate chunk inside chunk_is_relevant_hard's loop) for what is
-# logically ONE student question. Bumping hit_count on every call would
-# inflate it 5-20x per real question. This collapses those repeat calls
-# within one answer-pipeline run into a single increment, without
-# caching (and thus staling) the needles themselves — those are always
-# recomputed fresh.
+_HIT_DEDUP_WINDOW = 3.0  
+
 
 
 def _should_bump(alias_id: int, question: str) -> bool:
@@ -954,17 +910,12 @@ def bump_alias_hit(alias_id: int, get_db_fn) -> None:
         logger.debug(f"bump_alias_hit: {e}")
 
 
-# ---------------------------------------------------------------------------
-# Apply boosts to scored handbook chunks (same semantics as old forced boost)
-# ---------------------------------------------------------------------------
-
 def apply_alias_boosts(question: str, scored: List[dict], get_db_fn=None) -> List[dict]:
     """Mutate scored chunk dicts with _forced / _forced_content and score multipliers."""
     hits = match_aliases(question, get_db_fn)
     if not hits or not scored:
         return scored
 
-    # Merge needles from all matching aliases (highest priority first)
     title_needles: List[str] = []
     content_needles: List[str] = []
     for h in hits:
@@ -1013,10 +964,6 @@ def apply_alias_boosts_light(question: str, scored: List[dict], get_db_fn=None) 
             s["_forced_content"] = True
     return scored
 
-
-# ---------------------------------------------------------------------------
-# Suggest new aliases from unanswered traffic
-# ---------------------------------------------------------------------------
 
 def suggest_aliases_from_unanswered(get_db_fn, min_count: int = 3, limit: int = 20) -> List[dict]:
     """

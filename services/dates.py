@@ -20,7 +20,7 @@ sentence into something warmer (services.nlg.speak_naturally).
 import json
 import logging
 import re
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from services.tz import ph_today  # BUG FIX: server clock is UTC, school is Asia/Manila (UTC+8) -- see services/tz.py
 from typing import Dict, List, Optional, Tuple
 
@@ -72,21 +72,6 @@ LAST_MONTH_WORDS = [
     'sa milabay nga bulan', 'kaniadtong bulan',
 ]
 
-# BUG FIX: "unsay holiday nga naa karon nga bulan/bulana" ("what holiday
-# is there this month") used to come back as if answering about TODAY,
-# open-for-business and all -- two compounding bugs:
-#   1. "bulan"/"bulana" (Bisaya for "month") was never recognized at all;
-#      only the Tagalog spelling "buwan" was, and only in the narrow forms
-#      "ngayong buwan" / "karong buwana" -- "karon nga bulan" matched
-#      neither wording.
-#   2. Even when a broader month wording is used, "karon" ("now"/"today")
-#      is *also* a TODAY_WORDS hit, and the TODAY_WORDS check ran BEFORE
-#      the this-month check in parse_date_with_regex(), so "karon nga
-#      bulan" short-circuited to "today" before month-detection ever ran.
-# Fixed by (a) normalizing bulan/buwan spelling variants up front (see
-# services.language.normalize_vernacular_spelling) and (b) moving the
-# broadened this/next-month checks ahead of the bare TODAY_WORDS check
-# below, mirroring how the this-week check already precedes it.
 THIS_MONTH_RE = re.compile(
     r'\b(this\s+month|this\s+mo\.?|ngayong\s+buwan|ngayon\s+(?:na\s+)?buwan|'
     r'karon(?:g)?\s+(?:nga\s+)?buwan(?:a)?|'
@@ -100,15 +85,7 @@ NEXT_MONTH_RE = re.compile(
     re.IGNORECASE,
 )
 
-# "whole week" / "buong linggo" / "tibuok (nga) semana" mean the same
-# thing as "this week" for scheduling purposes (student wants the full
-# current week's status, not just today) but don't share any words with
-# "this week" itself, so they need their own alternation rather than
-# relying on the THIS/NEXT WEEK regexes elsewhere in this file to catch
-# them by accident. Centralized here and reused everywhere "this week"
-# is checked (parse_date_with_regex, is_date_question,
-# _has_explicit_date_signal) so a fix here doesn't need to be repeated
-# in three places again.
+
 THIS_WEEK_RE = re.compile(
     r'\b(this\s+week|this\s+wk|whole\s+week|entire\s+week|the\s+whole\s+week|'
     r'ngayong\s+linggo|buong\s+linggo|buo(?:ng)?\s+linggo|'
@@ -161,9 +138,6 @@ OPEN_CLOSED_PATTERNS = [
     r'\b(registrar|business office|cashier)\b.{0,20}\b(open|closed|open ba|sarado)\b',
 ]
 
-# ------------------------------------------------------------------
-# Stronger schedule follow-up detection
-# ------------------------------------------------------------------
 _SCHEDULE_LEVEL_FOLLOWUP_RE = re.compile(
     r'(?i)\b(?:'
     r'all levels?|all departments?|whole school|everyone|all of us|for all|'
@@ -186,34 +160,10 @@ def is_schedule_level_followup(question: str, ctx) -> bool:
     if not q:
         return False
 
-    # BUG FIX: this used to fire on ANY short message containing a bare
-    # word like "high", "school", "college", "for", "sa", "too" -- which
-    # matches almost any self-contained new schedule question, not just
-    # a level/department follow-up. "Does high school have classes this
-    # week?" contains "high" and "school"; "whole week there is class?"
-    # contains "whole" -- both got (wrongly) treated as "just re-answer
-    # the PREVIOUS date with a different department" and silently reused
-    # ctx.last_schedule_query's stale date instead of parsing the new
-    # question's own "this week"/"whole week" at all. If the new message
-    # carries its OWN explicit date signal, it is never a bare
-    # level-only follow-up -- let it fall through to full re-parsing
-    # (services.dates.answer_date_question), which resolves the date
-    # correctly AND still picks up the department via
-    # services.schedule.detect_dept_from_question. This check must run
-    # before the aggressive word-list heuristic below, not after.
+
     if _has_explicit_date_signal(q):
         return False
 
-    # BUG FIX: this used to check `w in q` -- a raw substring test, not a
-    # word match -- against very short, common tokens like "sa" and "for".
-    # "sa" is a substring of "unsa" (Bisaya "what"), so almost ANY short
-    # Bisaya question starting with "unsa" (e.g. "unsa and dili dapat
-    # buhaton?" -- "what should not be done?", nothing to do with a
-    # schedule) was silently misdetected as a level/department follow-up
-    # whenever ctx.last_schedule_query happened to be set, and answered
-    # with a stale "today, all departments, open" sentence instead of
-    # being routed to handbook/FAQ at all. Word-boundary matching so a
-    # trigger word has to actually appear as its own word.
     if len(q.split()) <= 6 and re.search(
         r'\b(' + '|'.join(re.escape(w) for w in (
             'all', 'level', 'college', 'elementary', 'high', 'tanan', 'lahat',
@@ -246,7 +196,6 @@ def answer_schedule_department_followup(question: str, ctx) -> Optional[str]:
     if not q:
         return None
 
-    # --- 1. Explicit "all levels / whole school" expansion ---------------
     if is_schedule_level_followup(q, ctx):
         # Force all departments
         dept = 'all'
@@ -266,7 +215,6 @@ def answer_schedule_department_followup(question: str, ctx) -> Optional[str]:
         if natural and not answer_is_grounded(natural, canonical, min_overlap=0.25):
             natural = canonical
 
-        # Update context so further follow-ups stay correct
         ctx.last_schedule_query = {
             'query_date': query_date,
             'dept': dept,
@@ -277,10 +225,6 @@ def answer_schedule_department_followup(question: str, ctx) -> Optional[str]:
         }
         return natural
 
-    # --- 2. Normal department switch (existing logic, kept intact) -------
-    # Same guard as is_schedule_level_followup above: a new question with
-    # its own explicit date signal is never just a department switch on
-    # the OLD date -- fall through to full re-parsing instead.
     if _has_explicit_date_signal(q):
         return None
 
@@ -349,13 +293,6 @@ def is_date_question(question: str, ctx=None) -> bool:
     ):
         return True
 
-    # BUG FIX: the "how about X" follow-up check above only fired when a
-    # WEEKDAY name was present, so a bare range follow-up like "how about
-    # last week" or "and holidays?" right after a schedule answer fell
-    # through entirely and got treated as a brand new (non-date)
-    # question -- landing on handbook retrieval instead of continuing
-    # the date conversation. Mirrors the weekday check but for
-    # short/relative-range follow-ups instead of specific weekdays.
     if ctx and getattr(ctx, 'last_schedule_query', None):
         is_range_word = (
             _has_day_word(q, LAST_WEEK_WORDS) or _has_day_word(q, LAST_MONTH_WORDS)
@@ -395,8 +332,6 @@ def is_date_question(question: str, ctx=None) -> bool:
     if (THIS_MONTH_RE.search(q) or NEXT_MONTH_RE.search(q)) and schedule_context:
         return True
 
-    # Class / weather suspension only — NOT disciplinary "grounds for suspension".
-    # Topic shape, not handbook facts: stays valid across handbook editions.
     if any(kw in q for kw in (
         'holiday', 'holidays', 'no class day', 'no classes day',
         'class suspended', 'classes suspended', 'class suspension',
@@ -405,14 +340,13 @@ def is_date_question(question: str, ctx=None) -> bool:
         return True
 
     if 'suspension' in q or 'suspended' in q:
-        # weather / operations cues → schedule
         if re.search(
             r'\b(class|classes|school|work|office|weather|typhoon|storm|'
             r'rain|flood|pasok|klase|holiday)\b',
             q, re.I,
         ):
             return True
-        # disciplinary cues → not a date question (handbook owns these)
+        
         if re.search(
             r'\b(grounds?|reason|cause|demerit|offense|offence|expulsion|'
             r'dismissal|disciplinary|violation|fraternity|pregnant|'
@@ -480,7 +414,7 @@ def check_department_disambiguation(question: str, detected_lang: str = 'english
 
     options = []
     lines = []
-    for i, (dept_code, score) in enumerate(contenders, 1):
+    for i, (dept_code, _) in enumerate(contenders, 1):
         label = sched.DEPT_LABELS.get(dept_code, dept_code)
         lines.append(f"{i}. {label}")
         options.append({'label': label, 'dept': dept_code})
@@ -509,7 +443,7 @@ def _next_weekday_from_date(start_date, target_weekday: int):
     return start_date + timedelta(days=days_ahead)
 
 
-def parse_date_with_ai(question: str) -> Optional[Tuple[datetime.date, str, str]]:
+def parse_date_with_ai(question: str) -> Optional[Tuple[date, str, str]]:
     if circuit_breaker.is_open():
         return None
     today = ph_today()
@@ -555,11 +489,8 @@ Only respond with the JSON, nothing else."""
         return None
 
 
-def parse_date_with_regex(question: str) -> Tuple[datetime.date, str, str]:
-    # normalize_vernacular_spelling folds "bulan"/"bulana" (Bisaya) into
-    # "buwan" so every "this month" pattern below works regardless of
-    # which spelling the student used -- see THIS_MONTH_RE/NEXT_MONTH_RE
-    # comment above for the full bug writeup.
+def parse_date_with_regex(question: str) -> Tuple[date, str, str]:
+
     q = normalize_vernacular_spelling(question.lower())
     today = ph_today()
     current_year, next_year = today.year, today.year + 1
@@ -579,8 +510,6 @@ def parse_date_with_regex(question: str) -> Tuple[datetime.date, str, str]:
         last_week_start = today - timedelta(days=7)
         for name, wd in WEEKDAY_NAMES.items():
             if re.search(rf'\b{name}\b', q, re.IGNORECASE):
-                # Nearest occurrence of that weekday within the 7 days
-                # ending yesterday, not next week's or today's.
                 target = last_week_start + timedelta(days=(wd - last_week_start.weekday()) % 7)
                 return target, 'specific', target.strftime('%B %d, %Y')
         return last_week_start, 'last_week', 'last week'
@@ -598,15 +527,6 @@ def parse_date_with_regex(question: str) -> Tuple[datetime.date, str, str]:
                 return target, 'specific', target.strftime('%B %d, %Y')
         return today, 'this_week', 'this week'
 
-    # BUG FIX: this/next-month detection MUST run before the bare
-    # TOMORROW/YESTERDAY/TODAY_WORDS check further down -- "karon" ("now")
-    # is itself a TODAY_WORDS hit, so a question like "karon nga bulan"
-    # ("this month") used to get short-circuited to plain "today" before
-    # ever reaching the month check that used to live near the bottom of
-    # this function. Checking month-scope first (mirroring how the
-    # this-week check above already runs before the today check) fixes
-    # "unsay holiday nga naa karon nga bulan/bulana" replying with
-    # today's single-day status instead of the month's holidays.
     if NEXT_MONTH_RE.search(q):
         nm = (today.replace(day=1) + timedelta(days=32)).replace(day=1)
         return nm, 'next_month', nm.strftime('%B %Y')
@@ -639,8 +559,7 @@ def parse_date_with_regex(question: str) -> Tuple[datetime.date, str, str]:
     ):
         next_week = today + timedelta(days=7)
         return next_week, 'next_week', 'next week'
-    # (this_month/next_month already handled earlier, before the bare
-    # TODAY_WORDS check -- see the BUG FIX comment above.)
+
 
     dm = re.search(r'\b(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})\b', q)
     if dm:
@@ -683,7 +602,7 @@ def parse_date_with_regex(question: str) -> Tuple[datetime.date, str, str]:
     return today, 'today', today.strftime('%B %d, %Y')
 
 
-def parse_date_from_question(question: str) -> Tuple[datetime.date, str, str]:
+def parse_date_from_question(question: str) -> Tuple[date, str, str]:
     """Regex-first, AI as enhancement only."""
     regex_date, regex_type, regex_display = parse_date_with_regex(question)
 
@@ -813,13 +732,6 @@ def gather_range_facts(query_date, date_type: str, dept: str = 'all') -> Dict:
     if date_type in ('this_month', 'next_month', 'last_month'):
         first = query_date.replace(day=1)
         last = (first + timedelta(days=32)).replace(day=1) - timedelta(days=1)
-        # BUG FIX: get_events_for_week() previously always used
-        # start_date + 6 days internally, so a "this month"/"next month"
-        # query only ever saw the FIRST WEEK of the month's events —
-        # "do we have holidays this month" on, say, the 20th of the
-        # month would silently miss anything after day 7. Pass the real
-        # month-end explicitly now that get_events_for_week() accepts
-        # end_date.
         events = sched.get_events_for_week(first, 'english', dept, end_date=last)
         events = [e for e in events if first <= e['start_date'] <= last]
         label = first.strftime('%B %Y')
@@ -911,8 +823,8 @@ def build_canonical_single_day_sentence(
         return sentence
 
     groups: Dict[str, List[str]] = {}
-    for d, (status, _note) in resolved.items():
-        groups.setdefault(status, []).append(sched.DEPT_LABELS.get(d, d))
+    for d, (status, _) in resolved.items():
+        groups.setdefault(status, []).append(sched.DEPT_LABELS.get(d) or d)
     parts = []
     for status, dept_names in groups.items():
         words = _STATUS_WORD.get((scope, status), f"status: {status}")
@@ -951,7 +863,7 @@ def answer_date_question(
     question: str,
     detected_lang: str = 'english',
     ctx=None,
-    forced_dept: str = None,
+    forced_dept: Optional[str] = None,
 ) -> Optional[str]:
     """
     Main entry point for any date / schedule / holiday / class question.
@@ -960,13 +872,10 @@ def answer_date_question(
     if not question:
         return None
 
-    # 1. Parse the date
-    query_date, date_type, display = parse_date_from_question(question)
+    query_date, date_type, _ = parse_date_from_question(question)
 
-    # 2. Detect department / scope
     dept = forced_dept or sched.detect_dept_from_question(question) or 'all'
 
-    # Simple scope detection
     q_lower = question.lower()
     if any(w in q_lower for w in ('class', 'classes', 'pasok', 'klase', 'school day')):
         scope = 'class'
@@ -975,7 +884,6 @@ def answer_date_question(
     else:
         scope = 'general'
 
-    # 3. Gather facts + build canonical sentence
     if date_type in ('this_week', 'next_week', 'last_week', 'this_month', 'next_month', 'last_month'):
         facts = gather_range_facts(query_date, date_type, dept)
         canonical = build_canonical_range_sentence(facts)
@@ -986,7 +894,6 @@ def answer_date_question(
     if not canonical:
         return None
 
-    # 4. Natural language rephrasing
     natural = nlg.speak_naturally(
         canonical,
         question,
@@ -994,13 +901,11 @@ def answer_date_question(
         extra_note=_RELATIVE_DATE_NOTE,
     )
 
-    # 5. Grounding check
     if natural and not answer_is_grounded(natural, canonical, min_overlap=0.25):
         natural = canonical
 
     final_answer = natural or canonical
 
-    # 6. CRITICAL — save context so short follow-ups work
     if ctx is not None:
         ctx.last_schedule_query = {
             'query_date': query_date,

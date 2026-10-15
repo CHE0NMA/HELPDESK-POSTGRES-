@@ -19,6 +19,6 @@ pdfplumber
 requests
 numpy
 groq
-google-generativeai
+google-genai
 python-dotenv
 APScheduler

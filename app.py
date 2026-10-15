@@ -3,10 +3,9 @@ On Vercel: no APScheduler, no background threads, no file logging.
 """
 import logging
 import os
-import time
 from datetime import timedelta
 
-from flask import Flask
+from flask import Flask, jsonify, render_template, request
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -42,7 +41,6 @@ def create_app():
         )
 
     app = Flask(__name__)
-    app.start_time = time.time()
     app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 
     class FixVercelPath:
@@ -181,6 +179,35 @@ def create_app():
     app.register_blueprint(pages_bp)
     app.register_blueprint(cron_bp)
 
+    def wants_json_error():
+        return (
+            request.path.startswith("/api/")
+            or request.is_json
+            or request.accept_mimetypes.best == "application/json"
+        )
+
+    @app.errorhandler(404)
+    def page_not_found(_error):
+        if wants_json_error():
+            return jsonify({"error": "not_found", "message": "The requested resource was not found."}), 404
+        return render_template(
+            "errors/error.html",
+            status_code=404,
+            title="This page is missing.",
+            message="The address may be outdated, or the page may have moved.",
+        ), 404
+
+    @app.errorhandler(500)
+    def internal_server_error(_error):
+        if wants_json_error():
+            return jsonify({"error": "internal_server_error", "message": "The request could not be completed."}), 500
+        return render_template(
+            "errors/error.html",
+            status_code=500,
+            title="We hit a snag.",
+            message="The help desk could not complete that request. Please try again in a moment.",
+        ), 500
+
     @app.route("/__debug_path")
     def __debug_path():
         from flask import request
@@ -192,9 +219,6 @@ def create_app():
             "rules": [str(r) for r in app.url_map.iter_rules()][:40],
         }
 
-    # On Vercel every cold start re-imports this module. Schema ensures must
-    # NEVER raise — a transient DB blip would otherwise 500 the whole site
-    # (new chat, tab return, landing) until the next successful warm start.
     try:
         init_pool()
     except Exception as e:
@@ -244,15 +268,8 @@ def create_app():
                 func=cleanup_old_sessions, trigger="interval", days=7
             )
             scheduler.start()
-            app.scheduler = scheduler
+            app.extensions["pac_helpdesk_scheduler"] = scheduler
 
-            # Wires the self-heal draft loop + alias-suggestion log job
-            # (services/self_heal.py, services/topic_aliases.py) into the
-            # scheduler that was just started above. ensure_learning_layer()
-            # earlier in this function only creates schema/seeds -- this is
-            # the actual job registration, which previously existed in
-            # database/learning_schema.py's wire_into_app() but was never
-            # called from anywhere, so it silently never ran.
             try:
                 from database.learning_schema import wire_into_app
                 from database import get_db

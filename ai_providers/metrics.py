@@ -1,9 +1,8 @@
 """Response-time / success-rate tracking for AI calls, separated from
 AICache so the two concerns (metrics vs. memoized answers) don't get
 tangled the way they were in the original AICache class."""
-import time
 from threading import Lock
-from typing import List
+from typing import Any, Dict, List, Optional
 import numpy as np
 
 
@@ -12,6 +11,7 @@ class ModelMetrics:
         self.response_times: List[float] = []
         self.successful_calls: int = 0
         self.failed_calls: int = 0
+        self.provider_calls: Dict[str, Dict[str, int]] = {}
         self.cache_hits: int = 0
         self.cache_misses: int = 0
         self._lock = Lock()
@@ -29,7 +29,7 @@ class ModelMetrics:
         # generous on purpose so a fast local DB lookup still counts.
         self.ANSWER_CACHE_THRESHOLD_MS = 300.0
 
-    def record_answer_timing(self, duration_ms: float):
+    def record_answer_timing(self, duration_ms: float) -> None:
         with self._lock:
             if duration_ms <= self.ANSWER_CACHE_THRESHOLD_MS:
                 self.cache_path_times.append(duration_ms)
@@ -40,7 +40,7 @@ class ModelMetrics:
             if len(self.computed_path_times) > 1000:
                 self.computed_path_times = self.computed_path_times[-1000:]
 
-    def get_answer_timing_stats(self) -> dict:
+    def get_answer_timing_stats(self) -> Dict[str, float | int]:
         with self._lock:
             cache_times = list(self.cache_path_times)
             db_times = list(self.computed_path_times)
@@ -51,25 +51,38 @@ class ModelMetrics:
             'computed_count': len(db_times),
         }
 
-    def record_response_time(self, duration_ms: float, success: bool):
+    def record_response_time(
+        self, duration_ms: float, success: bool, provider: Optional[str] = None
+    ) -> None:
         with self._lock:
             self.response_times.append(duration_ms)
             if success:
                 self.successful_calls += 1
             else:
                 self.failed_calls += 1
+            if provider:
+                calls = self.provider_calls.setdefault(
+                    provider, {"successful_calls": 0, "failed_calls": 0}
+                )
+                calls["successful_calls" if success else "failed_calls"] += 1
             if len(self.response_times) > 1000:
                 self.response_times = self.response_times[-1000:]
 
-    def record_cache_hit(self):
+    def record_cache_hit(self) -> None:
         with self._lock:
             self.cache_hits += 1
 
-    def record_cache_miss(self):
+    def record_cache_miss(self) -> None:
         with self._lock:
             self.cache_misses += 1
 
-    def get_stats(self) -> dict:
+    def get_provider_stats(self) -> Dict[str, Dict[str, int]]:
+        with self._lock:
+            return {
+                name: dict(calls) for name, calls in self.provider_calls.items()
+            }
+
+    def get_stats(self) -> Dict[str, Any]:
         with self._lock:
             total = self.successful_calls + self.failed_calls
             avg = np.mean(self.response_times) if self.response_times else 0

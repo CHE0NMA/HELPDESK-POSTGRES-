@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#07131f">
+  <title>{{ status_code }} | PAC Helpdesk</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root { color-scheme: dark; --ink: #07131f; --line: #284156; --paper: #f1f5f7; --muted: #9bb0bf; --cyan: #62d9e8; --lime: #d5e86b; }
+    * { box-sizing: border-box; }
+    body { min-height: 100vh; margin: 0; color: var(--paper); background-color: var(--ink); background-image: linear-gradient(90deg, transparent 49.9%, rgba(98,217,232,.045) 50%, transparent 50.1%); font-family: "DM Sans", sans-serif; }
+    a { color: inherit; }
+    .page { min-height: 100vh; display: grid; grid-template-rows: auto 1fr auto; padding: 0 6vw; }
+    .topbar, .footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 76px; }
+    .brand { color: var(--paper); font: 700 14px "Sora", sans-serif; text-decoration: none; }
+    .top-note, .footer { color: var(--muted); font-size: 13px; }
+    main { width: min(100%, 1100px); margin: auto; padding: 72px 0 84px; }
+    .eyebrow { color: var(--cyan); font: 700 12px "Sora", sans-serif; letter-spacing: .12em; text-transform: uppercase; }
+    .layout { display: grid; grid-template-columns: minmax(220px, .8fr) minmax(0, 1.2fr); align-items: center; gap: clamp(2rem, 8vw, 8rem); margin-top: 28px; }
+    .code { color: var(--lime); font: 800 clamp(88px, 18vw, 208px)/.9 "Sora", sans-serif; }
+    .rule { width: 64px; height: 4px; margin: 0 0 22px; background: var(--cyan); }
+    h1 { max-width: 660px; margin: 0; font: 700 clamp(30px, 5vw, 58px)/1.08 "Sora", sans-serif; }
+    .message { max-width: 520px; margin: 20px 0 0; color: var(--muted); font-size: 17px; line-height: 1.7; }
+    .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
+    .actions a { min-height: 46px; display: inline-flex; align-items: center; justify-content: center; padding: 0 18px; border: 1px solid var(--cyan); color: var(--ink); background: var(--cyan); font-weight: 700; text-decoration: none; }
+    .actions a.secondary { color: var(--paper); background: transparent; border-color: var(--line); }
+    .actions a:hover { filter: brightness(1.08); }
+    .footer { border-top: 1px solid var(--line); }
+    .footer span:last-child { text-align: right; }
+    @media (max-width: 640px) { .page { padding: 0 22px; } .topbar { min-height: 64px; } .top-note { text-align: right; } main { padding: 58px 0; } .layout { grid-template-columns: 1fr; gap: 28px; margin-top: 22px; } .code { font-size: clamp(88px, 30vw, 142px); } .message { font-size: 16px; } .footer { align-items: flex-start; padding: 18px 0; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <a class="brand" href="{{ url_for('pages.landing') }}">PAC HELPDESK</a>
+      <span class="top-note">Philippine Advent College</span>
+    </header>
+    <main>
+      <div class="eyebrow">Request status - {{ status_code }}</div>
+      <div class="layout">
+        <div class="code" aria-hidden="true">{{ status_code }}</div>
+        <section>
+          <div class="rule"></div>
+          <h1>{{ title }}</h1>
+          <p class="message">{{ message }}</p>
+          <nav class="actions" aria-label="Error page actions">
+            <a href="{{ url_for('pages.landing') }}">Helpdesk home</a>
+            <a class="secondary" href="{{ url_for('pages.new_chat') }}">Start a new chat</a>
+          </nav>
+        </section>
+      </div>
+    </main>
+    <footer class="footer">
+      <span>Student support, made clearer.</span>
+      <span>HTTP {{ status_code }}</span>
+    </footer>
+  </div>
+</body>
+</html>

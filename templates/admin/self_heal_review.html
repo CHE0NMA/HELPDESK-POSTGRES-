@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Self-heal review | PAC Helpdesk</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Sora:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root { color-scheme: dark; --bg: #081522; --surface: #102438; --line: #294256; --text: #edf4f7; --muted: #a3b5c1; --cyan: #62d9e8; --lime: #d5e86b; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); font: 15px "DM Sans", sans-serif; }
+    header { display: flex; justify-content: space-between; gap: 16px; padding: 18px clamp(18px, 4vw, 52px); border-bottom: 1px solid var(--line); }
+    header a { color: var(--cyan); font: 700 13px "Sora", sans-serif; text-decoration: none; }
+    main { max-width: 1280px; margin: 0 auto; padding: 40px clamp(18px, 4vw, 52px); }
+    h1 { margin: 0; font: 700 clamp(27px, 4vw, 40px)/1.15 "Sora", sans-serif; }
+    .lede { max-width: 760px; margin: 12px 0 24px; color: var(--muted); line-height: 1.65; }
+    button { min-height: 38px; padding: 0 13px; border: 1px solid var(--line); color: var(--text); background: var(--surface); font: 600 13px "DM Sans", sans-serif; cursor: pointer; }
+    button.primary { border-color: var(--lime); color: #14200a; background: var(--lime); }
+    button:hover { filter: brightness(1.1); }
+    .table-wrap { margin-top: 20px; overflow-x: auto; border-top: 1px solid var(--line); }
+    table { width: 100%; min-width: 760px; border-collapse: collapse; }
+    th, td { padding: 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--cyan); font: 600 11px "Sora", sans-serif; text-transform: uppercase; }
+    td { color: var(--muted); }
+    td:first-child { min-width: 190px; color: var(--text); }
+    .draft-editor { width: 100%; min-width: 280px; min-height: 100px; padding: 10px; resize: vertical; border: 1px solid var(--line); color: var(--text); background: var(--surface); font: 14px/1.5 "DM Sans", sans-serif; }
+    .suggestions { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
+    .suggestions li { margin-top: 7px; }
+    .suggestions button { margin-right: 7px; color: var(--lime); }
+    .row-actions { display: flex; gap: 8px; }
+    @media (max-width: 600px) { main { padding-top: 28px; } }
+  </style>
+</head>
+<body>
+<header>
+  <a href="/dashboard">PAC HELPDESK · ADMIN</a>
+  <a href="/dashboard">Back to dashboard</a>
+</header>
+<main>
+<h1>Self-Healing Drafts</h1>
+<p class="lede">Questions that were frequently asked and unanswered, which the live answer
+pipeline can now answer, plus student-suggested corrections. Drafts and suggestions
+are unverified until reviewed. Edit the answer below before approving it into
+<a href="/corrections">Corrections</a>.</p>
+
+<button class="primary" onclick="runNow()">Run self-heal now</button>
+
+<div class="table-wrap"><table>
+  <thead>
+    <tr>
+      <th>Question</th>
+      <th>Draft answer</th>
+      <th>Source</th>
+      <th>Times asked</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for d in drafts %}
+    <tr id="draft-{{ d.id }}">
+      <td>{{ d.question }}</td>
+      <td>
+        <textarea class="draft-editor" id="draft-answer-{{ d.id }}">{{ d.draft_answer }}</textarea>
+        {% if d.student_suggestions %}
+        <ul class="suggestions" aria-label="Unverified student suggestions">
+          {% for suggestion in d.student_suggestions %}
+          <li><button type="button" onclick="useSuggestion({{ d.id }}, this)" data-suggestion="{{ suggestion }}">Use suggestion</button>{{ suggestion }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </td>
+      <td>{{ d.source_type }}{% if d.source_ref %} — {{ d.source_ref }}{% endif %}</td>
+      <td>{{ d.times_asked }}</td>
+      <td class="row-actions">
+        <button onclick="approve({{ d.id }})">Approve</button>
+        <button onclick="dismiss({{ d.id }})">Dismiss</button>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5">No pending drafts right now.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<script>
+function csrfToken() {
+  const m = document.cookie.match(/csrf_token=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : (document.querySelector('meta[name="csrf-token"]')?.content || '');
+}
+async function post(url, payload = {}) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken() },
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+function useSuggestion(id, button) {
+  const editor = document.getElementById(`draft-answer-${id}`);
+  if (editor) editor.value = button.dataset.suggestion || '';
+}
+async function approve(id) {
+  const answer = document.getElementById(`draft-answer-${id}`)?.value.trim();
+  if (!answer || answer.length < 20) {
+    alert('The approved answer must contain at least 20 characters.');
+    return;
+  }
+  const r = await post(`/api/admin/self_heal/${id}/approve`, { answer });
+  if (r.success) document.getElementById(`draft-${id}`).remove();
+  else alert(r.error || 'Could not approve');
+}
+async function dismiss(id) {
+  const r = await post(`/api/admin/self_heal/${id}/dismiss`);
+  if (r.success) document.getElementById(`draft-${id}`).remove();
+  else alert(r.error || 'Could not dismiss');
+}
+async function runNow() {
+  const r = await post('/api/admin/self_heal/run');
+  if (r.success) location.reload();
+  else alert(r.error || 'Could not run');
+}
+</script>
+</main>
+</body>
+</html>

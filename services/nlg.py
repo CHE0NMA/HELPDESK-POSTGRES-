@@ -20,10 +20,7 @@ from datetime import datetime
 from typing import Optional
 
 from ai_providers import ai_cache, circuit_breaker
-# PERF: every AI call in this module is either a one-word verdict or a
-# bounded paraphrase-with-grounding-check -- routed through the small/
-# fast model (see ai_providers/providers.py's llm_chat_fast) rather than
-# the main answer-generation model.
+
 from ai_providers.providers import llm_chat_fast
 from services.grounding import answer_is_grounded
 from services.language import verify_output_language
@@ -161,22 +158,9 @@ def speak_naturally(canonical_text: str, question: str, detected_lang: str = 'en
     if cached:
         return cached
 
-    # BUG FIX (major): this whole prompt-build + AI-call block used to sit
-    # INSIDE the `if cached:` branch, after an unconditional `return cached`
-    # -- i.e. it was unreachable dead code. On every cache miss, the
-    # function fell straight through to `try: response = llm_chat(prompt,
-    # ...)` with `prompt` never defined, hit a NameError, and the broad
-    # `except Exception` below silently swallowed it and returned
-    # canonical_text unchanged. In practice this meant speak_naturally()
-    # NEVER actually rephrased anything -- every dates.py answer (and its
-    # Tagalog/Bisaya few-shot handling) was silently skipped, all the time,
-    # for every language. Dedented so this actually runs on a cache miss.
+
     from services.config import bot_identity_line
-    # A stronger, up-front language directive (rather than relying only on
-    # the retry-after-drift path below) so a correct-language reply is more
-    # likely on the FIRST attempt -- see the retry block further down,
-    # which used to be the only real defense against language drift and
-    # cost a full second AI call every time it fired.
+
     lang_directive = (
         f"You must reply ENTIRELY in {lang_name(detected_lang)} — not English, "
         f"not a mix — unless a proper noun has no natural translation.\n"
@@ -203,14 +187,7 @@ def speak_naturally(canonical_text: str, question: str, detected_lang: str = 'en
     Rephrased answer:"""
 
     try:
-        # PERF: this is a bounded paraphrase task (rephrase an already-
-        # correct canonical sentence) guarded by the grounding check and
-        # language-verification retry right below -- it doesn't need the
-        # main/slow model's extra quality, and this call fires on nearly
-        # every date/schedule answer. Fixing the dead-code bug above (see
-        # comment) means this now actually executes every time instead of
-        # silently no-op'ing, so routing it through the fast model claws
-        # back most of that newly-real latency.
+
         response = llm_chat_fast(prompt, max_tokens=200)
         if not response:
             return canonical_text

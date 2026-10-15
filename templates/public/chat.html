@@ -1514,6 +1514,9 @@ window.sendSuggestion = sendSuggestion;
 async function sendSatisfactionFeedback(btn, rating, question, answer) {
   const row = btn.closest('.feedback-row');
   if (!row) return;
+  const correction = rating === 'thumbs_down'
+    ? (window.prompt('Optional: What should the correct answer say?') || '').trim().slice(0, 2000)
+    : '';
   const allBtns = row.querySelectorAll('.fb-btn');
   allBtns.forEach(b => {
     b.style.pointerEvents = 'none';
@@ -1524,11 +1527,17 @@ async function sendSatisfactionFeedback(btn, rating, question, answer) {
     const r = await fetch('/api/satisfaction', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rating, question, answer, session_id: persistentSessionId }),
+      body: JSON.stringify({ rating, question, answer, correction, session_id: persistentSessionId }),
     });
     if (r.ok) {
+      const result = await r.json().catch(() => ({}));
       btn.classList.add('active');
-      showToast(rating === 'thumbs_up' ? 'Thanks!' : 'Feedback sent',
+      const message = rating === 'thumbs_up'
+        ? 'Thanks!'
+        : result.correction_queued
+          ? 'Suggestion sent to staff for review'
+          : 'Feedback sent';
+      showToast(message,
                 rating === 'thumbs_up' ? 'success' : 'warning');
     } else {
       showToast('Error saving feedback', 'danger');

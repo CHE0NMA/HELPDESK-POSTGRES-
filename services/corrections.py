@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import List, Optional
+from typing import Any, Callable, List, Optional
 
 from services.language import expand_query, normalize_vernacular_spelling
 from utils.text import fuzzy_score
@@ -49,12 +49,6 @@ logger = logging.getLogger("pac_helpdesk.corrections")
 
 _TABLE_READY = False
 
-# Deliberately high -- unlike FAQ/handbook matching (which has grounding
-# checks, relevance checks, and disambiguation as backstops), a
-# correction hit skips ALL of those and is trusted outright. A false
-# positive here means a student gets an admin-authored answer to a
-# DIFFERENT question than the one they asked. Only fire on a paraphrase
-# match this confident.
 FUZZY_MATCH_THRESHOLD = 0.90
 SEMANTIC_MATCH_THRESHOLD = 0.90
 
@@ -66,7 +60,7 @@ def normalize_question(q: str) -> str:
     return q[:300]
 
 
-def _ensure_table(get_db_fn) -> bool:
+def _ensure_table(get_db_fn: Callable[[], Any]) -> bool:
     global _TABLE_READY
     if _TABLE_READY:
         return True
@@ -102,7 +96,7 @@ def _ensure_table(get_db_fn) -> bool:
     return _TABLE_READY
 
 
-def _bump_hit(get_db_fn, correction_id: int) -> None:
+def _bump_hit(get_db_fn: Callable[[], Any], correction_id: int) -> None:
     try:
         conn = get_db_fn()
         cur = conn.cursor()
@@ -119,7 +113,7 @@ def _bump_hit(get_db_fn, correction_id: int) -> None:
         logger.debug(f"_bump_hit failed: {e}")
 
 
-def find_similar_correction(get_db_fn, question: str) -> Optional[dict]:
+def find_similar_correction(get_db_fn: Callable[[], Any], question: str) -> Optional[dict]:
     """Fuzzy + semantic fallback used when no EXACT normalized match
     exists (see get_correction below). Scans every stored correction --
     fine at the scale this table actually runs at (admin-authored fixes,
@@ -167,7 +161,7 @@ def find_similar_correction(get_db_fn, question: str) -> Optional[dict]:
             fuzzy_score(q_expanded, stored_norm),
         )
         sscore = 0.0
-        if q_embedding and stored_embedding:
+        if q_embedding and stored_embedding and cosine_similarity is not None:
             try:
                 sscore = max(0.0, cosine_similarity(q_embedding, stored_embedding))
             except Exception:
@@ -188,7 +182,7 @@ def find_similar_correction(get_db_fn, question: str) -> Optional[dict]:
     return {"id": best_row[0], "question": best_row[1], "answer": best_row[2], "faq_id": best_row[3]}
 
 
-def get_correction(get_db_fn: object, question: str) -> Optional[dict]:
+def get_correction(get_db_fn: Callable[[], Any], question: str) -> Optional[dict]:
     """Return {'id', 'question', 'answer', 'faq_id'} for an admin-verified
     correction matching this question, or None. Tries an exact
     (normalized) match first -- fast, unambiguous -- then falls back to
@@ -222,8 +216,9 @@ def get_correction(get_db_fn: object, question: str) -> Optional[dict]:
     return find_similar_correction(get_db_fn, question)
 
 
-def save_correction(get_db_fn, question: str, answer: str, created_by: str = None,
-                     faq_id: int = None, source_report_id: str = None) -> bool:
+def save_correction(get_db_fn: Callable[[], Any], question: str, answer: str,
+                    created_by: Optional[str] = None, faq_id: Optional[int] = None,
+                    source_report_id: Optional[str] = None) -> bool:
     """Create or overwrite the correction for a question. Overwriting is
     intentional — if an admin corrects the same question twice, the
     newer correction wins."""
@@ -235,9 +230,6 @@ def save_correction(get_db_fn, question: str, answer: str, created_by: str = Non
     if not qn:
         return False
 
-    # Best-effort, never blocks the save -- see services.embeddings'
-    # "nice to have" contract. This is what lets find_similar_correction()
-    # catch a paraphrase of this exact question later.
     embedding = None
     try:
         from services.embeddings import get_embedding
@@ -274,7 +266,7 @@ def save_correction(get_db_fn, question: str, answer: str, created_by: str = Non
         return False
 
 
-def list_corrections(get_db_fn) -> List[dict]:
+def list_corrections(get_db_fn: Callable[[], Any]) -> List[dict]:
     if not _ensure_table(get_db_fn):
         return []
     try:
@@ -300,7 +292,7 @@ def list_corrections(get_db_fn) -> List[dict]:
         return []
 
 
-def delete_correction(get_db_fn, correction_id: int) -> bool:
+def delete_correction(get_db_fn: Callable[[], Any], correction_id: int) -> bool:
     if not _ensure_table(get_db_fn):
         return False
     try:

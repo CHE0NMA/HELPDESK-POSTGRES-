@@ -28,47 +28,26 @@ This module fixes both by requiring ALL of:
      doesn't get listed either.
 """
 from dataclasses import dataclass, replace
-from typing import List, Optional, Sequence, TypeVar
+from typing import List, Sequence, TypeVar
 
 T = TypeVar("T")
 
 
 @dataclass(frozen=True)
 class DisambiguationPolicy:
-    decisive_score: float = 0.75      # >= this on #1 -> never disambiguate
-    min_contender_score: float = 0.45  # #2 must clear this to count
-    max_gap: float = 0.07              # #1 - #2 must be <= this
-    max_options: int = 4               # cap on picker size
+    decisive_score: float = 0.75      
+    min_contender_score: float = 0.45  
+    max_gap: float = 0.07              
+    max_options: int = 4               
 
 
 DEFAULT_POLICY = DisambiguationPolicy()
-# Stricter: once the top handbook chunk is clearly ahead, trust it instead
-# of forcing a picker. Over-triggering on vision/mission/history was a
-# major source of remaining failures.
+
 HANDBOOK_POLICY = DisambiguationPolicy(decisive_score=0.58, min_contender_score=0.50, max_gap=0.12)
 FAQ_POLICY = DisambiguationPolicy(decisive_score=0.85, min_contender_score=0.58, max_gap=0.06)
 DATE_POLICY = DisambiguationPolicy(decisive_score=0.65, min_contender_score=0.50, max_gap=0.10)
 
-# "Soft" clarification tier -- used ONLY at the point the bot is about to
-# give up entirely and say "I don't have a confirmed answer for that."
-# Normal disambiguation (above) only fires when there's a genuinely close
-# race between good candidates; it deliberately does NOT fire on two
-# mediocre, spread-out candidates, because asking "which did you mean?"
-# between two bad guesses is worse than just answering the better one.
-# But when NEITHER guess is good enough to answer confidently, that
-# same logic means both get silently dropped and the student gets a flat
-# non-answer -- even though a person skimming the same 2-3 candidates
-# would often recognize the topic and just ask "did you mean X or Y?"
-# instead of shrugging. decisive_score is set above 1.0 (unreachable) so
-# select_contenders() never short-circuits into "just trust the leader" --
-# by the time this policy is consulted, nothing WAS trusted, so there is
-# no leader to fall back on. min_contender_score is deliberately much
-# lower than the normal policies' (a candidate only needs to be
-# vaguely-plausible, not close-to-confident, to be worth offering as an
-# option) and max_gap is wide (candidates don't need to be near-tied,
-# just all be in the "maybe" zone). Only ever consulted with >=2
-# contenders required by the caller -- a single weak guess still isn't
-# worth interrupting the conversation for.
+
 FAQ_SOFT_POLICY = DisambiguationPolicy(
     decisive_score=1.01, min_contender_score=0.32, max_gap=0.28, max_options=3,
 )

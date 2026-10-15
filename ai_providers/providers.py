@@ -11,6 +11,9 @@ import threading
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta, date
+from typing import Optional
+
+from groq.types.chat import ChatCompletionUserMessageParam
 
 from config import (
     AI_PROVIDER, GROQ_API_KEY, GROQ_MODEL,
@@ -114,13 +117,17 @@ def _mark_key_success(key: str):
         _key_usage_today[key] += 1
 
 
-def _mark_key_rate_limited(key: str, minutes: int = COOLDOWN_MINUTES):
+def _mark_key_cooldown(key: str, reason: str, minutes: int = COOLDOWN_MINUTES):
     with _key_lock:
         _key_cooldown[key] = datetime.now() + timedelta(minutes=minutes)
         logger.warning(
-            f"Groq key ...{key[-6:]} rate-limited → cooldown {minutes} min. "
+            f"Groq key ...{key[-6:]} {reason} → cooldown {minutes} min. "
             f"Today's usage: {_key_usage_today[key]}"
         )
+
+
+def _mark_key_rate_limited(key: str, minutes: int = COOLDOWN_MINUTES):
+    _mark_key_cooldown(key, "rate-limited", minutes)
 
 
 def get_groq_usage_report() -> dict:
@@ -160,7 +167,7 @@ def _reset_gemini_daily_if_needed():
         logger.info("Gemini daily usage counters reset.")
 
 
-def _get_next_gemini_key():
+def get_next_gemini_key():
     """Return the least-used Gemini key that is not on cooldown."""
     if not GEMINI_API_KEYS:
         return None
@@ -184,18 +191,26 @@ def _get_next_gemini_key():
         return usable[0]
 
 
-def _mark_gemini_success(key: str):
+def mark_gemini_success(key: str):
     with _gemini_key_lock:
         _gemini_usage_today[key] += 1
 
 
-def _mark_gemini_rate_limited(key: str, minutes: int = 30):
+def _mark_gemini_cooldown(key: str, reason: str, minutes: int = 30):
     with _gemini_key_lock:
         _gemini_cooldown[key] = datetime.now() + timedelta(minutes=minutes)
         logger.warning(
-            f"Gemini key ...{key[-6:]} rate-limited → cooldown {minutes} min. "
+            f"Gemini key ...{key[-6:]} {reason} → cooldown {minutes} min. "
             f"Today's usage: {_gemini_usage_today[key]}"
         )
+
+
+def mark_gemini_rate_limited(key: str, minutes: int = 30):
+    _mark_gemini_cooldown(key, "rate-limited", minutes)
+
+
+def mark_gemini_auth_failed(key: str, minutes: int = 30):
+    _mark_gemini_cooldown(key, "authentication failed", minutes)
 
 
 def get_gemini_usage_report() -> dict:
@@ -224,7 +239,8 @@ FALLBACK_ORDER = ['groq', 'gemini']
 # ---------------------------------------------------------------------
 # Actual provider calls
 # ---------------------------------------------------------------------
-def _call_groq(prompt: str, max_tokens: int = 400, model: str = None) -> str:
+def _call_groq(prompt: str, max_tokens: int = 400,
+               model: Optional[str] = None) -> str:
     if not GROQ_API_KEYS:
         logger.error("No Groq API keys configured")
         return ""
@@ -240,18 +256,35 @@ def _call_groq(prompt: str, max_tokens: int = 400, model: str = None) -> str:
         try:
             from groq import Groq
             client = Groq(api_key=api_key, timeout=GROQ_TIMEOUT_SECONDS)
-            resp = client.chat.completions.create(
-                model=use_model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=max_tokens,
-                temperature=0.1,
-            )
+            messages: list[ChatCompletionUserMessageParam] = [
+                {"role": "user", "content": prompt}
+            ]
+            if use_model.startswith("openai/gpt-oss-"):
+                resp = client.chat.completions.create(
+                    model=use_model,
+                    messages=messages,
+                    max_completion_tokens=max(max_tokens, 64),
+                    temperature=0.1,
+                    reasoning_effort="low",
+                    include_reasoning=False,
+                )
+            else:
+                resp = client.chat.completions.create(
+                    model=use_model,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    temperature=0.1,
+                )
             _mark_key_success(api_key)
-            return resp.choices[0].message.content.strip()
+            content = resp.choices[0].message.content
+            return content.strip() if content else ""
 
         except Exception as e:
             last_error = e
             err_str = str(e).lower()
+            if "401" in err_str or "403" in err_str or "invalid_api_key" in err_str:
+                _mark_key_cooldown(api_key, "authentication failed")
+                continue
             if "429" in err_str or "rate_limit" in err_str or "rate limit" in err_str:
                 _mark_key_rate_limited(api_key)
                 continue
@@ -275,30 +308,47 @@ def _call_gemini(prompt: str, max_tokens: int = 400) -> str:
     last_error = None
 
     for _ in range(len(GEMINI_API_KEYS)):
-        api_key = _get_next_gemini_key()
+        api_key = get_next_gemini_key()
         if not api_key:
             break
 
         try:
-            import google.generativeai as genai
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel(GEMINI_MODEL)
-            resp = model.generate_content(
-                prompt,
-                generation_config=genai.types.GenerationConfig(
-                    max_output_tokens=max_tokens,
-                    temperature=0.1,
+            from google import genai
+            from google.genai import types
+
+            with genai.Client(
+                api_key=api_key,
+                http_options=types.HttpOptions(
+                    timeout=int(GEMINI_TIMEOUT_SECONDS * 1000)
                 ),
-                request_options={"timeout": GEMINI_TIMEOUT_SECONDS},
-            )
-            _mark_gemini_success(api_key)
-            return resp.text.strip()
+            ) as client:
+                resp = client.models.generate_content(
+                    model=GEMINI_MODEL,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        max_output_tokens=max_tokens,
+                        temperature=0.1,
+                        automatic_function_calling=(
+                            types.AutomaticFunctionCallingConfig(disable=True)
+                        ),
+                    ),
+                )
+            text = (resp.text or "").strip()
+            if not text:
+                logger.warning("Gemini returned an empty response")
+                return ""
+            mark_gemini_success(api_key)
+            return text
 
         except Exception as e:
             last_error = e
             err_str = str(e).lower()
+            if ("401" in err_str or "403" in err_str or "invalid_api_key" in err_str
+                    or "invalid api key" in err_str or "api key not valid" in err_str):
+                mark_gemini_auth_failed(api_key)
+                continue
             if "429" in err_str or "rate" in err_str or "quota" in err_str or "resource_exhausted" in err_str:
-                _mark_gemini_rate_limited(api_key)
+                mark_gemini_rate_limited(api_key)
                 continue
             if "timeout" in err_str or "timed out" in err_str:
                 logger.warning(f"Gemini timeout (>{GEMINI_TIMEOUT_SECONDS}s) on ...{api_key[-6:]}: {e}")
@@ -351,10 +401,10 @@ def _run_provider_chain(prompt: str, max_tokens: int, order, provider_funcs, lab
         elapsed_ms = (time.perf_counter() - t0) * 1000
 
         if result:
-            model_metrics.record_response_time(elapsed_ms, True)
+            model_metrics.record_response_time(elapsed_ms, True, provider=provider)
             circuit_breaker.record_success()
             return result
-        model_metrics.record_response_time(elapsed_ms, False)
+        model_metrics.record_response_time(elapsed_ms, False, provider=provider)
         circuit_breaker.record_failure()
         logger.warning(f"Provider '{provider}' failed during {label} (tried: {tried})")
 
@@ -374,10 +424,10 @@ def call_for_ingest(prompt: str, max_tokens: int = 2200) -> str:
         result = _call_groq(prompt, max_tokens=max_tokens, model=INGEST_GROQ_MODEL)
         elapsed_ms = (time.perf_counter() - t0) * 1000
         if result:
-            model_metrics.record_response_time(elapsed_ms, True)
+            model_metrics.record_response_time(elapsed_ms, True, provider="groq")
             circuit_breaker.record_success()
             return result
-        model_metrics.record_response_time(elapsed_ms, False)
+        model_metrics.record_response_time(elapsed_ms, False, provider="groq")
         circuit_breaker.record_failure()
         logger.warning("Ingest: Groq 8B failed, trying Gemini")
 
@@ -387,10 +437,10 @@ def call_for_ingest(prompt: str, max_tokens: int = 2200) -> str:
         result = _call_gemini(prompt, max_tokens=max_tokens)
         elapsed_ms = (time.perf_counter() - t0) * 1000
         if result:
-            model_metrics.record_response_time(elapsed_ms, True)
+            model_metrics.record_response_time(elapsed_ms, True, provider="gemini")
             circuit_breaker.record_success()
             return result
-        model_metrics.record_response_time(elapsed_ms, False)
+        model_metrics.record_response_time(elapsed_ms, False, provider="gemini")
         circuit_breaker.record_failure()
         logger.warning("Ingest: Gemini also failed")
 

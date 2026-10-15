@@ -20,9 +20,6 @@ except ImportError:
     pass
 
 
-# ---------------------------------------------------------------------
-# Environment detection
-# ---------------------------------------------------------------------
 def _is_online() -> bool:
     """True when running on Render, Vercel, or explicitly in production."""
     return bool(
@@ -50,7 +47,6 @@ def _build_database_config() -> dict:
     target = (os.environ.get("DB_TARGET") or "local").lower().strip()
     database_url = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL")
 
-    # Force Neon when explicitly requested or when deployed online
     use_neon = target in ("neon", "online") or (IS_ONLINE and database_url)
 
     if use_neon and database_url:
@@ -64,7 +60,6 @@ def _build_database_config() -> dict:
             "sslmode": "require",
         }
 
-    # Local (individual vars)
     host = os.environ.get("DB_HOST") or "localhost"
     user = os.environ.get("DB_USER") or "postgres"
     password = os.environ.get("DB_PASSWORD") or ""
@@ -84,22 +79,13 @@ def _build_database_config() -> dict:
 DATABASE_CONFIG = _build_database_config()
 
 
-# ---------------------------------------------------------------------
-# File uploads
-# ---------------------------------------------------------------------
 UPLOAD_FOLDER = os.environ.get(
     "UPLOAD_FOLDER",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads"),
 )
 
-
-# ---------------------------------------------------------------------
-# AI provider selection
-# ---------------------------------------------------------------------
-# One of: 'groq' | 'gemini'
 AI_PROVIDER = os.environ.get("AI_PROVIDER", "groq").lower()
 
-# Groq (supports multiple keys)
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 GROQ_API_KEY_2 = os.environ.get("GROQ_API_KEY_2", "")
 GROQ_API_KEY_3 = os.environ.get("GROQ_API_KEY_3", "")
@@ -111,7 +97,6 @@ GROQ_API_KEY_8 = os.environ.get("GROQ_API_KEY_8", "")
 
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 
-# Gemini (supports multiple keys)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_API_KEY_2 = os.environ.get("GEMINI_API_KEY_2", "")
 GEMINI_API_KEY_3 = os.environ.get("GEMINI_API_KEY_3", "")
@@ -124,9 +109,6 @@ GEMINI_API_KEY_8 = os.environ.get("GEMINI_API_KEY_8", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
 
 
-# ---------------------------------------------------------------------
-# Startup validation
-# ---------------------------------------------------------------------
 REQUIRED_ENV_VARS = {
     "groq": ["GROQ_API_KEY"],
     "gemini": ["GEMINI_API_KEY"],

@@ -1,6 +1,6 @@
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from flask import Blueprint, jsonify, request
 
@@ -48,6 +48,32 @@ def api_model_status():
         'circuit_breaker': circuit_breaker.get_state(),
         'metrics': model_metrics.get_stats(),
         'cache_size': len(ai_cache.cache),
+    })
+
+
+@bp.route('/api/admin/retrieval_status')
+def api_retrieval_status():
+    if not admin_required():
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    from services.embeddings import (
+        EMBEDDING_MODEL,
+        get_embedding_coverage,
+        get_embedding_status,
+    )
+    try:
+        embedding_status = get_embedding_status()
+        corpora = get_embedding_coverage(get_db)
+    except Exception:
+        logger.exception("Failed to load retrieval readiness status")
+        return jsonify({'error': 'Retrieval status unavailable'}), 503
+
+    return jsonify({
+        'embedding_model': EMBEDDING_MODEL,
+        'embedding_provider': embedding_status,
+        'corpora': corpora,
+        'provider_calls': model_metrics.get_provider_stats(),
+        'metrics_scope': 'process-local; resets when the worker restarts',
     })
 
 
@@ -156,12 +182,7 @@ def analytics_chart_data():
         cur.execute("SELECT COUNT(*) FROM faq")
         total_faqs = cur.fetchone()[0]
 
-        # BUG FIX: this only ever looked at faq.category, but (per the
-        # COALESCE(category, topic, 'General') pattern already used
-        # elsewhere in this file, e.g. the FAQ search endpoint) FAQs added
-        # through bulk import get classified into 'topic' instead --
-        # "category IS NOT NULL AND category != ''" was excluding almost
-        # every real FAQ, not just genuinely uncategorized ones.
+
         cur.execute("""
             SELECT COALESCE(NULLIF(TRIM(category), ''), NULLIF(TRIM(topic), ''), 'General') AS cat,
                    COUNT(*) as count
@@ -858,14 +879,9 @@ def api_public_reviews():
         conn.close()
 
 
-# ---- Public typeahead search (FAQ + handbook) ----------------------------
-# Lightweight IP rate limit so the chat input can call this on every keystroke
-# without opening us up to scraping / DoS. Window is generous enough for a
-# normal typer (debounce ~220ms on the client) but tight enough to stop a
-# script hammering the endpoint.
-_SUGGEST_LIMIT = 40          # max requests
-_SUGGEST_WINDOW = 60.0       # per seconds
-_suggest_hits = {}           # ip -> [timestamps]
+_SUGGEST_LIMIT = 40         
+_SUGGEST_WINDOW = 60.0       
+_suggest_hits = {}          
 
 
 def _suggest_rate_ok(ip: str) -> bool:
@@ -878,7 +894,6 @@ def _suggest_rate_ok(ip: str) -> bool:
         return False
     bucket.append(now)
     _suggest_hits[ip] = bucket
-    # opportunistic cleanup so the dict doesn't grow forever
     if len(_suggest_hits) > 5000:
         cutoff = now - _SUGGEST_WINDOW
         dead = [k for k, v in _suggest_hits.items() if not v or v[-1] < cutoff]
@@ -916,7 +931,6 @@ def api_suggest():
     except (TypeError, ValueError):
         limit = 6
 
-    # Cap query length to keep ILIKE plans sane
     q = q[:80]
     like = f'%{q}%'
     prefix = f'{q}%'

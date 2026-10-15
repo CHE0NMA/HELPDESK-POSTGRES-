@@ -2,7 +2,7 @@ import logging
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from ai_providers import ai_cache, circuit_breaker, faq_cache, llm_chat
 from database import get_db
@@ -12,7 +12,6 @@ from services import handbook as handbook_service
 from services import language as lang_service
 from services import nlg
 from services.conversation import (
-    ConversationContext,
     get_conversation_context,
     resolve_disambiguation_choice,
 )
@@ -22,12 +21,7 @@ from utils.text import normalize_input
 
 logger = logging.getLogger("pac_helpdesk.faq")
 
-# PERF: handbook scoring and FAQ scoring are independent I/O (separate DB
-# queries + in-process fuzzy scoring) -- they don't depend on each other's
-# result, only optionally on the same query_embedding. Running them on a
-# small shared thread pool instead of back-to-back turns two sequential
-# round-trips into one wall-clock round-trip. Small pool: this is
-# per-request fan-out of 2 tasks, not a general-purpose worker pool.
+
 _SCORING_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="faq_scoring")
 
 _FAQ_ROWS_CACHE = None
@@ -135,10 +129,10 @@ def _answer_followup_via_search(question: str, ctx, detected_lang: str):
 
 
 def answer_followup_with_ai(user_question: str, context_summary: str = "",
-                             conversation_history: List[dict] = None,
+                             conversation_history: Optional[List[Dict[str, str]]] = None,
                              detected_lang: str = 'english',
-                             last_faq_answer: str = None,
-                             last_faq_question: str = None) -> Optional[str]:
+                             last_faq_answer: Optional[str] = None,
+                             last_faq_question: Optional[str] = None) -> Optional[str]:
     if circuit_breaker.is_open():
         return None
 
@@ -197,13 +191,6 @@ Answer:"""
 
 def _lookup_faq_answer(question: str, detected_lang: str) -> Optional[Tuple[str, str, str]]:
     all_faqs = _get_all_faqs()
-    # normalize_vernacular_spelling fixes common misspellings/variants
-    # (bulan/bulana/buwan, semana/simana, suoton -> isuot, sinina/bisti ->
-    # uniform, haxing -> hazing, ...) BEFORE fuzzy-scoring against FAQ
-    # question text, so e.g. "unsa dapat suoton" scores against an FAQ
-    # phrased "unsay uniform sa skwelahan" the same way "unsay uniform..."
-    # would. expand_query additionally unwraps hypothetical ("what would
-    # happen if I ___") framing for the expanded/keyword-boosted copy.
     search_q = lang_service.normalize_vernacular_spelling(question.lower())
     expanded_q = lang_service.expand_query(search_q)
     candidates = engine.get_top_faq_candidates(
@@ -301,7 +288,7 @@ nothing else."""
     return question
 
 
-def log_unanswered_standalone(question: str, session_id: str = None):
+def log_unanswered_standalone(question: str, session_id: Optional[str] = None):
     ctx = get_conversation_context(session_id) if session_id else None
     _log_unanswered(question, ctx)
 
@@ -343,6 +330,8 @@ def _try_resolve_pending_disambiguation(question: str, detected_lang: str, ctx):
 
     if disamb['type'] == 'date':
         dept = choice.get('dept')
+        if not isinstance(dept, str):
+            return None
         answer = date_service.answer_for_selected_department(original_q, dept, lang, ctx=ctx)
         if not answer:
             return None
@@ -416,14 +405,6 @@ def _score_sources_parallel(question: str, detected_lang: str, query_embedding=N
     }
 
 
-def _cross_check_sources(question: str, detected_lang: str, ctx=None) -> dict:
-    q_embedding = _get_query_embedding(question)
-    scored = _score_sources_parallel(question, detected_lang, query_embedding=q_embedding)
-    is_date_q = date_service.is_date_question(question, ctx=ctx)
-    scored['is_date_q'] = is_date_q
-    return scored
-
-
 _NOTE_HEADERS = {
     'handbook': {
         'english': "From the handbook, for the general policy:",
@@ -441,12 +422,7 @@ _NOTE_HEADERS = {
         'bisaya': "Bahin pud sa iskedyul:",
     },
 }
-# Mixed Tagalog/English, Bisaya/English, and Tagalog/Bisaya speakers used to
-# fall through to the English connector phrase here (see _note_header's
-# .get(lang, ...english) fallback) even though their actual answer text on
-# both sides of it was already correctly in Bisaya/Tagalog -- an English
-# sentence sandwiched between two vernacular ones. Route each mixed variant
-# to its closest full-vernacular header instead of straight to English.
+
 _NOTE_HEADER_LANG_FALLBACK = {
     'mixed_te': 'tagalog', 'mixed_be': 'bisaya', 'mixed_tb': 'tagalog',
 }
@@ -615,17 +591,6 @@ def _merge_with_handbook(base_answer: str, question: str, hb_chunks: list,
     hb_ans = handbook_service.answer_from_selected_chunk(question, hb_chunks[0], detected_lang)
     if not hb_ans:
         return base_answer
-    # BUG FIX: this used to append hb_ans unconditionally once the caller's
-    # cheap _chunk_is_schedule_related() regex pre-filter passed -- but
-    # that regex treats any topically-adjacent word (e.g. "attendance",
-    # "excused absence") as "schedule-related", so a holiday/no-class
-    # answer could get a completely unrelated attendance-policy paragraph
-    # glued onto it ("From the handbook, for the general policy: ...").
-    # The pre-filter is still worth keeping upstream (cheap, avoids most
-    # obviously-irrelevant merges before we even build hb_ans), but the
-    # actual merge now requires the same self-check used for primary
-    # answers -- "does this excerpt actually address the question" --
-    # before it's allowed to ride along as a bonus note.
     source_text = f"{hb_chunks[0].get('section_title','')} {hb_chunks[0].get('content','')}"
     if not llm_self_check(question, hb_ans, source_text):
         logger.info(f"_merge_with_handbook: self-check rejected supplementary note for q={question[:80]!r}")
@@ -644,7 +609,7 @@ def _merge_with_faq(base_answer: str, question: str, faq_candidates: list,
     )
     if not faq_ans:
         return base_answer
-    # Same rationale as _merge_with_handbook above.
+
     matched_row = (matched or faq_candidates[0]).get('faq') if faq_candidates else None
     source_text = (matched_row[0] if matched_row else '') or ''
     if not llm_self_check(question, faq_ans, source_text):
@@ -653,7 +618,7 @@ def _merge_with_faq(base_answer: str, question: str, faq_candidates: list,
     return f"{base_answer}\n\n{_note_header('faq', detected_lang)} {faq_ans}"
 
 
-def _merge_with_date(base_answer: str, date_ans: str, detected_lang: str) -> str:
+def _merge_with_date(base_answer: str, date_ans: Optional[str], detected_lang: str) -> str:
     if not date_ans:
         return base_answer
     return f"{base_answer}\n\n{_note_header('date', detected_lang)} {date_ans}"
@@ -661,7 +626,7 @@ def _merge_with_date(base_answer: str, date_ans: str, detected_lang: str) -> str
 
 def _combine_handbook_and_faq(question: str, candidates: list, hb_chunks: list,
                                detected_lang: str) -> Optional[str]:
-    faq_ans, _matched = engine.smart_extract_answer(
+    faq_ans, _ = engine.smart_extract_answer(
         user_question=question,
         candidates=candidates,
         detected_lang=detected_lang,
@@ -673,14 +638,7 @@ def _combine_handbook_and_faq(question: str, candidates: list, hb_chunks: list,
         hb_ans = handbook_service.answer_from_selected_chunk(
             question, hb_chunks[0], detected_lang
         )
-        # Both are being offered as PRIMARY content here (not a bonus
-        # aside), so both already went through their own extraction's
-        # grounding+relevance+self-check pipeline individually. The one
-        # additional risk specific to this function is gluing two
-        # answers together that individually look fine but jointly read
-        # as a non-sequitur -- guard the handbook half the same way the
-        # bonus-note merges above do, since it's the one most likely to
-        # have been a marginal/co-incidental keyword match against hb_score.
+
         if hb_ans:
             source_text = f"{hb_chunks[0].get('section_title','')} {hb_chunks[0].get('content','')}"
             if not llm_self_check(question, hb_ans, source_text):
@@ -753,21 +711,10 @@ Translated answer:"""
         return None
 
 
-def find_answer(question: str, return_topic: bool = False, session_id: str = None):
-    start = time.time()
+def find_answer(question: str, return_topic: bool = False,
+                session_id: Optional[str] = None):
     ctx = get_conversation_context(session_id or 'default')
-    # PERF: merged language-detect + gibberish/on-topic classification into
-    # one call (services.language.classify_and_detect_language) instead of
-    # two separate ones -- detect_language() here and classify_question_ai()
-    # further down used to each pay their own sequential AI round-trip on
-    # a genuinely ambiguous message. Each side still tries its own fast
-    # path/cache first, so this is a pure latency win in the common case;
-    # the only added cost is a narrow edge case where an admin correction
-    # or the answer-success cache short-circuits the request AND the
-    # topic's fast-path classification also happens to miss -- that combo
-    # now occasionally computes a classification result that goes unused,
-    # versus never computing it before. See classify_and_detect_language's
-    # docstring for the full trade-off.
+
     _lang_and_class = lang_service.classify_and_detect_language(
         question, prior_lang=ctx.last_detected_lang
     )
@@ -830,8 +777,6 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
     except Exception:
         pass
 
-    # Reuse the classification computed up front alongside language
-    # detection (see comment above) instead of a second, separate call.
     classification = _lang_and_class
 
     if classification['is_gibberish']:
@@ -855,10 +800,6 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
     _faq_cands_early = []
     _early_scoring_done = False
     if _looks_date or _looks_hb:
-        # PERF: handbook scoring and FAQ scoring are independent -- run
-        # them concurrently instead of sequentially (see
-        # _score_sources_parallel). Any failure inside falls back to
-        # sequential automatically, so this can't make things worse.
         try:
             scored = _score_sources_parallel(question, detected_lang)
             _hb_score_early, _hb_chunks_early = scored['hb_score'], scored['hb_chunks']
@@ -866,13 +807,6 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
         except Exception:
             pass
 
-        # Lazy: only spend an embeddings call when the cheap fuzzy/keyword
-        # pass came back weak on BOTH sources -- exactly the situation a
-        # hypothetical ("what if I ___") or paraphrased question with no
-        # matching alias/keywords produces. A normal, clearly-matched
-        # question costs zero embedding calls, same as before this
-        # feature existed. See _get_query_embedding docstring for why one
-        # call here covers both scorers.
         if _hb_score_early < 0.45 and _faq_score_early < 0.78:
             _q_embedding = _get_query_embedding(question)
             if _q_embedding:
@@ -884,10 +818,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                     _faq_cands_early, _faq_score_early = scored['faq_candidates'], scored['faq_score']
                 except Exception:
                     pass
-        # PERF: remember that this work already happened so the later
-        # block (below, ~line 996 in the original) can reuse it instead of
-        # silently recomputing hb_score/hb_chunks/candidates from scratch
-        # -- see that block's comment for why this used to be wasted work.
+      
         _early_scoring_done = True
 
     _hb_clearly_better = (
@@ -965,8 +896,8 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 result = (search_ans, search_topic or 'Handbook', None, search_intent, detected_lang)
                 return result if return_topic else result[0]
 
-            if (ctx.last_faq_answer or ctx.last_answer) and word_count <= 12:
-                prev_src = ctx.last_faq_answer or ctx.last_answer
+            prev_src = ctx.last_faq_answer or ctx.last_answer
+            if isinstance(prev_src, str) and prev_src and word_count <= 12:
                 from services.answer_engine import _extract_from_answer
                 try:
                     re_ans = _extract_from_answer(
@@ -1053,12 +984,6 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 else (cached[0] if cached else lang_service.get_fallback_response(detected_lang))
             )
 
-    # PERF: if _looks_date/_looks_hb routing above already scored both
-    # sources (same 0.45/0.78 thresholds, same lazy-embedding fallback),
-    # reuse that result instead of silently redoing the same DB queries +
-    # fuzzy scoring + possible embedding call a second time. This used to
-    # always recompute here even when the exact same work had just been
-    # done a few dozen lines earlier.
     if _early_scoring_done:
         hb_score, hb_chunks = _hb_score_early, _hb_chunks_early
         candidates, faq_best_score = _faq_cands_early, _faq_score_early
@@ -1070,14 +995,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
             search_q, expanded_q, _get_all_faqs(), detected_lang, query_embedding=None
         )
         faq_best_score = candidates[0]['combined'] if candidates else 0.0
-        # Lazy: only pay for an embeddings call when the fuzzy/keyword
-        # score wasn't already decisive -- an easy, clearly-matched
-        # question costs zero embedding calls, same as before this
-        # feature. When we DO compute it, reuse it for handbook chunk
-        # scoring too (free semantic boost, not a second API call) so a
-        # hypothetical/paraphrased question that fuzzy-matched neither
-        # source well gets a real shot at both via meaning instead of
-        # just re-trying FAQ alone.
+       
         if faq_best_score < 0.78 or hb_score < 0.45:
             query_embedding = get_embedding(search_q, cache=ai_cache)
             if query_embedding:
@@ -1088,11 +1006,6 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 faq_best_score = candidates[0]['combined'] if candidates else 0.0
                 hb_score, hb_chunks = _handbook_best_score(question, query_embedding=query_embedding)
 
-    # PERF: no longer opening a DB connection here (see _log_unanswered's
-    # docstring) -- this block now goes straight into the try/except that
-    # wraps the scoring/routing/AI-extraction pipeline below, without
-    # holding a pooled connection idle through all of it "just in case"
-    # the request ends in _give_up().
     try:
         word_count = len(question.split())
 
@@ -1308,12 +1221,10 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
                 detected_lang=detected_lang,
                 llm_chat_fn=llm_chat,
                 ai_cache=ai_cache,
-                context_faq_answer=ctx.last_faq_answer,
-                context_faq_question=ctx.last_faq_question,
             )
             if ai_ans:
                 best_row = (matched_cand or best)['faq']
-                answer, question_text, fid, topic, intent, kw, related, score_val = best_row[:8]
+                answer, question_text, fid, topic, intent, _, _, _ = best_row[:8]
                 img = best_row[8] if len(best_row) > 8 else None
                 if (hb_score >= CROSS_CHECK_HANDBOOK_BAR + 0.05
                         and hb_score >= best['combined']
@@ -1338,7 +1249,7 @@ def find_answer(question: str, return_topic: bool = False, session_id: str = Non
 
         if best['combined'] >= engine.FUZZY_MIN_SCORE or best['fuzzy'] >= 0.60:
             row = best['faq']
-            answer, question_text, fid, topic, intent, kw, related, score_val = row[:8]
+            answer, question_text, fid, topic, intent, _, _, _ = row[:8]
             img = row[8] if len(row) > 8 else None
             answer_text = (answer or '') + (f"\n\n[Image: {img}]" if img else "")
             ctx.update(

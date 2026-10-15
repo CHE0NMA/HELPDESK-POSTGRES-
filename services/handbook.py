@@ -52,12 +52,9 @@ _GENERIC = {
 }
 
 _QUERY_EXPANSIONS = [
-    # Topic-shaped synonyms only — NO edition-specific facts (years, names,
-    # demerit counts). Those live in handbook_chunks and must come from
-    # re-ingest when the manual changes.
+
     (r'\b(light|minor)\s+offenses?\b', 'first degree offense demerit'),
     (r'\b(medium|moderate)\s+offenses?\b', 'second degree offense demerit'),
-    # Catch "how bad is a second-degree", "what's a second degree offense"
     (r'\b(how bad|how serious|what.?s a|what is a|tell me about).{0,25}second[ -]?degree\b',
      'second degree offense 15 demerits'),
     (r'\bsecond[ -]?degree\s+(offense|offence|demerit)\b',
@@ -125,7 +122,6 @@ _QUERY_EXPANSIONS = [
      r'info(rmation)? about|general info|anything about|what.?s (up )?with)\b'
      r'.{0,25}\b(school|college|pac|institution|campus)\b',
      'vision mission history founded core values campuses philosophy logo hymn'),
-    # Extra coverage for remaining test failures
     (r'\b(macias|founders?|tell me more about the founders)\b',
      'brief history mariano margie macias founded 1975'),
     (r'\b(something about 1975|year 1975)\b',
@@ -175,12 +171,7 @@ def _content_words(text: str) -> set:
 
 
 def expand_query_for_retrieval(question: str) -> str:
-    # Fix vernacular spelling (bulan/bulana -> buwan, suoton -> isuot,
-    # sinina/bisti -> uniform, haxing -> hazing, ...) and unwrap
-    # hypothetical "what would happen if I ___" / "kung ako ___" framing
-    # into direct-question keywords BEFORE running the topic expansions
-    # below, so both benefit without needing to hand-write vernacular/
-    # hypothetical variants into every single pattern in this file.
+
     q = expand_query(question)
     extra = []
     for pattern, terms in _QUERY_EXPANSIONS:
@@ -190,15 +181,7 @@ def expand_query_for_retrieval(question: str) -> str:
         return q + ' ' + ' '.join(extra)
     return q
 
-
-# Deterministic topic → required section-title substrings.
-# When a question clearly matches one of these, the matching chunk(s)
-# are forced to the top of the candidate list so ranking noise cannot
-# bury the correct answer (the main cause of the handbook-only test
-# failures for vision / core values / degree offenses / dorm rules /
-# Safe Spaces / appeal / max fine).
 _FORCED_TOPIC_MATCHES = [
-    # (query_regex, list of title substrings that MUST be preferred, optional content keywords)
     (r'\b(want to become|aspire|future of|what does .{0,20} want|envision|envisions)\b',
      ['vision'], ['envisions', 'center of excellence']),
     (r'\b(core values|pac values|the pac ones|values of (the )?(school|college|pac))\b',
@@ -226,12 +209,6 @@ _FORCED_TOPIC_MATCHES = [
     (r'\b(safe spaces|ra.?11313|safe spaces act|11313)\b',
      ['gender-based sexual harassment', 'gender-based', 'safe spaces'],
      ['11313', 'safe spaces act']),
-    # BUG FIX: this used to only match "anti-bullying"/"bullying law"/the
-    # RA number, so a bare mention of the act ("if I bully someone",
-    # "what happens if I bully him") never matched at all -- it needed
-    # the literal word "bullying" plus a law-reference word next to it.
-    # Added bare bully/bullies/bullied/bullying (+ common Filipino
-    # phrasing) so any form of the word routes here on its own.
     (r'\b(anti.?bullying|ra.?10627|bullying law|10627|'
      r'bully|bullies|bullied|bullying|'
      r'nambu-?bully|nanbu-?bully|pambu-?bully|bina-?bully|'
@@ -298,13 +275,6 @@ def _forced_topic_for(question: str):
             return titles, content_kws
     return None
 
-
-# Conjunctions that, when followed by another question word/auxiliary verb,
-# usually signal a genuinely separate second ask rather than a compound noun
-# phrase ("dorms and cafeteria rules" is one topic; "where are the dorms and
-# what are the cafeteria rules" is two). The lookahead is what keeps this
-# conservative — we only split where the second half reads like its own
-# question, not on every "and" in the sentence.
 _COMPOUND_SPLIT_RE = re.compile(
     r'\s*\b(?:and also|as well as|and)\b\s*'
     r'(?=(?:where|what|when|why|who|whom|which|how|is|are|was|were|do|does|'
@@ -355,11 +325,6 @@ def is_handbook_question(question: str) -> bool:
     q = normalize_vernacular_spelling(question.lower())
     if any(kw in q for kw in HANDBOOK_KEYWORDS):
         return True
-    # Hypothetical consequence framing ("what would happen if I ___",
-    # "paano kung ako ___", "unsay mahitabo kung ako ___") is inherently
-    # asking about a rule/violation/penalty even when it never uses any
-    # of those words itself. Deliberately topic-agnostic — covers
-    # bullying, hazing, curfew, or any other rule, not just one topic.
     if re.search(
         r'\b(what (?:would|will) happen(?:s)? if i|what happens if i|what if i|'
         r'ano (?:ang |po ang )?mangyayari (?:kung|kapag) ako|paano kung ako|'
@@ -384,7 +349,7 @@ def is_handbook_question(question: str) -> bool:
         q,
     ):
         return True
-    # Disciplinary / conduct topics (NOT class-weather suspension)
+
     if re.search(
         r'\b(grounds? for (suspension|expulsion|dismissal)|'
         r'(suspension|expulsion|dismissal).{0,25}(grounds?|offense|demerit|reason)|'
@@ -528,14 +493,6 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8,
             if hid not in rows_by_id:
                 rows_by_id[hid] = (r[0], r[1], r[2], r[3], r[4], r[5], best_ts * 0.18)
 
-        # Guarantee forced-topic chunks are always candidates, regardless of
-        # whether they cleared the title_hits pre-filter above. BUG: that
-        # pre-filter caps candidates at max_chunks*4 using a cheap floor
-        # score, and the forced-topic boost below only RE-SCORES chunks
-        # already inside that cutoff -- it can never pull in a chunk that
-        # got crowded out beforehand. Scanning all_rows directly for
-        # forced-topic matches and injecting them here, before any
-        # truncation, closes that gap.
         forced_early = _forced_topic_for(question)
         if forced_early:
             title_needles_e, content_needles_e = forced_early
@@ -551,21 +508,6 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8,
                 if title_hit3:
                     rows_by_id[hid] = (r[0], r[1], r[2], r[3], r[4], r[5], 0.05)
 
-        # AI section router -- see services/ai_retrieval.py. Reads the
-        # question against the LIVE list of section titles (whatever's
-        # actually in the DB right now, including anything added since
-        # the last deploy) and picks the section(s) that answer it, with
-        # no hand-written pattern required. This is what lets a newly
-        # ingested chapter/section work correctly on day one, and is what
-        # catches topics nobody thought to write a topic_aliases/regex
-        # rule for (see mixed_test report: jewelry, slippers, dorm
-        # worship policy, degree-program list, sibling scholarships,
-        # "any suspension announced", etc. -- all cases where the correct
-        # section existed but lost the keyword race to an unrelated one).
-        # Guaranteed into the candidate pool here (same as forced_early
-        # above) and given the top-priority boost further below, ahead of
-        # the regex-based `forced` boost, since it reasons over the
-        # question's actual meaning instead of matching literal words.
         ai_picked_titles: List[str] = []
         ai_router_attempted = False
         try:
@@ -591,8 +533,9 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8,
                 hid, chapter, title, ps, pe, content = r[0], r[1], r[2], r[3], r[4], r[5]
                 blob = f"{title} {content[:600]}"
                 score = float(fuzzy_score(q_norm, normalize_input(blob)))
-                if query_embedding and emb_by_id.get(hid):
-                    sem = max(0.0, cosine_similarity(query_embedding, emb_by_id[hid]))
+                chunk_embedding = emb_by_id.get(hid)
+                if query_embedding and chunk_embedding is not None:
+                    sem = max(0.0, cosine_similarity(query_embedding, chunk_embedding))
                     score = max(score, sem * 0.9)
                 scored.append({
                     'id': hid, 'chapter': chapter, 'section_title': title,
@@ -609,31 +552,14 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8,
             title_l = title.lower()
             content = r[5] or ""
             content_preview = content[:400].lower()
-            # NOTE: this used to be f"{title_l} {content[:500]}" — but several
-            # of the boost checks below look for a specific fact (an RA law
-            # number, a peso amount, "merit of 30", etc.) that can legitimately
-            # sit anywhere in a chunk, including well past the first 500
-            # characters for longer chunks (e.g. the Grievance Committee
-            # chunk lists "RA 11313"/"RA 10627" ~3000 characters in). Scoring
-            # against only the prefix silently missed those and mis-ranked
-            # the correct chunk below an unrelated one that happened to match
-            # on the prefix. Using the full content is cheap (chunks here run
-            # a few KB at most) and removes that blind spot entirely.
+
             blob = f"{title_l} {content}".lower()
 
             title_sim = max(
                 _title_similarity(question, title),
                 _title_similarity(search_q, title),
             )
-            # Generic institution words ("college", "school", "student"...)
-            # appear in nearly every chunk of this handbook, so they don't
-            # belong in a check meant to detect genuinely distinctive
-            # keyword overlap — counting them let an unrelated, long chunk
-            # that just happened to mention "college" plus the topic word
-            # once trigger the same title_sim floor as a real match (e.g. a
-            # long Sports Development chunk outranking Academic Program
-            # Offerings for "where are the campuses?" purely because it
-            # said "college" and "campus" somewhere in 10K characters).
+
             kw_hits = sum(1 for w in (q_words - _GENERIC) if len(w) >= 4 and w in blob)
             if kw_hits >= 2:
                 title_sim = max(title_sim, 0.42)
@@ -660,7 +586,6 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8,
                 noise = 0.08
 
             q_l = question.lower()
-            # Long internship/admin chapters match generic "college"/"PAC"
             identity_q = any(w in q_l for w in (
                 'logo', 'hymn', 'founded', 'founder', 'history', 'campus',
                 'campuses', 'original name', 'full name', 'vision', 'mission',
@@ -739,16 +664,10 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8,
                 elif 'first' in title_l or 'second' in title_l:
                     title_boost *= 0.2
 
-            # Exact topic titles that often lose to generic FAQs
             if re.search(r'\bdress\s*code|\buniform|\bjewelry|\bappearance\b', q_l):
                 if 'dress' in title_l or 'appearance' in title_l or 'uniform' in title_l:
                     title_boost = max(title_boost, 3.0)
-            # "slippers" on its own (no "dress"/"jewelry"/"appearance" word)
-            # matched none of the boost rules above, so it lost the keyword
-            # race to "Dress and Appearance" (which mentions jewelry/uniform/
-            # attire heavily but never actually says "slippers") instead of
-            # "First-Degree Offense", which is the section that actually
-            # lists "wearing slippers ... on campus" as a violation.
+
             if re.search(r'\bslippers?\b|\btsinelas\b', q_l):
                 if 'first' in title_l and ('degree' in title_l or 'demerit' in title_l):
                     title_boost = max(title_boost, 4.0)
@@ -770,9 +689,6 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8,
                     title_boost = max(title_boost, 3.0)
                 if 'scholarship' in title_l:
                     title_boost *= 0.15
-                # "senior high" only shares the word "senior" with the
-                # unrelated "Services for Senior Citizens" chapter — without
-                # this it was winning on title_sim alone.
                 if 'senior citizen' in title_l or 'special needs' in title_l:
                     title_boost *= 0.08
             if re.search(r'\b(full name|real name|name of (this )?school)\b', q_l):
@@ -787,20 +703,6 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8,
                 if 'third-degree' in title_l or 'third degree' in title_l:
                     title_boost *= 0.2
 
-            # "Is X allowed?" conduct/prohibition questions that share a
-            # surface keyword with an unrelated SERVICE chapter, but whose
-            # actual answer is a numbered rule buried inside one of the
-            # Offense lists. E.g. "what food is not allowed in the
-            # cafeteria" shares "food"/"cafeteria" with the FOOD SERVICES
-            # chapter (which describes how the canteen operates, not what's
-            # against the rules) — title_sim alone rewards that literal
-            # overlap and drags the wrong chapter above the Second-Degree
-            # Offense chunk that actually lists the cafeteria food rule.
-            # Same pattern for "cook in the dorm" vs DORMITORY CHARGES
-            # (fees, not rules) and "visit other dorms" vs unrelated
-            # chapters. This explicitly redirects that class of question
-            # toward the disciplinary/grievance chunks and away from the
-            # look-alike service chapter.
             conduct_intent = bool(re.search(
                 r'\b(allowed|not allowed|prohibited|bawal|pwede\s*ba|okay to|'
                 r'ok(?:ay)? to|can (we|i|students)|is it (ok|okay|allowed|fine)|'
@@ -825,48 +727,39 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8,
                 if ('disciplinary measures' in title_l or '1,500' in blob or '1500' in blob):
                     title_boost = max(title_boost, 3.5)
 
-            # --- remaining failure modes from handbook-only test suite ---
-            # "What does PAC want to become in the future?" must hit Vision
             if re.search(r'\b(want to become|aspire|future of|envision)\b', q_l):
                 if 'vision' in title_l:
                     title_boost = max(title_boost, 4.0)
                 elif 'mission' in title_l or 'philosophy' in title_l:
                     title_boost *= 0.4
-            # "core values again / the PAC ones"
             if re.search(r'\b(core values|pac values|the pac ones)\b', q_l):
                 if 'core value' in title_l:
                     title_boost = max(title_boost, 4.0)
-            # "heaviest demerit level" (no "offense" word)
             if re.search(r'\b(heaviest|worst|most serious).{0,20}(demerit|level)\b', q_l):
                 if 'third' in title_l:
                     title_boost = max(title_boost, 4.0)
                 elif 'first' in title_l or 'second' in title_l:
                     title_boost *= 0.15
-            # "how bad is a second-degree"
             if re.search(r'\b(how bad|how serious).{0,20}second\b', q_l):
                 if 'second' in title_l:
                     title_boost = max(title_boost, 4.0)
                 elif 'first' in title_l or 'third' in title_l:
                     title_boost *= 0.15
-            # unchaperoned hike
             if re.search(r'\b(hike|outing).{0,25}(chaperone|without)\b', q_l):
                 if 'first' in title_l and 'degree' in title_l:
                     title_boost = max(title_boost, 4.0)
                 elif any(t in title_l for t in ('second', 'third', 'charges', 'food service')):
                     title_boost *= 0.2
-            # visit other dorms
             if re.search(r'\b(visit|visiting).{0,20}(other )?dorms?\b', q_l):
                 if 'first' in title_l and 'degree' in title_l:
                     title_boost = max(title_boost, 4.0)
                 elif 'dormitory charges' in title_l or 'pledge' in title_l:
                     title_boost *= 0.15
-            # cook inside dorm
             if re.search(r'\bcook(ing)?\b', q_l) and re.search(r'\b(dorm|dormitory)\b', q_l):
                 if 'second' in title_l and 'degree' in title_l:
                     title_boost = max(title_boost, 4.0)
                 elif 'dormitory charges' in title_l or 'first' in title_l:
                     title_boost *= 0.15
-            # food not allowed in cafeteria
             if re.search(r'\b(food|cafeteria).{0,30}(not allowed|prohibited|bawal|banned)\b', q_l):
                 if 'second' in title_l and 'degree' in title_l:
                     title_boost = max(title_boost, 4.0)
@@ -888,8 +781,6 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8,
                 'score': score, '_ai_router_attempted': ai_router_attempted,
             })
 
-        # Forced-topic override: prefer exact section titles over overview
-        # chapters that only mention the same keywords.
         forced = _forced_topic_for(question)
         if forced and scored:
             title_needles, content_needles = forced
@@ -905,11 +796,6 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8,
                     s['score'] = float(s['score']) * 3.0
                     s['_forced_content'] = True
 
-        # AI section router boost -- highest-priority signal, applied
-        # after the regex `forced` boost so it can win over it when they
-        # disagree (the AI router reasons about meaning; the regex boost
-        # only matches literal words). See the injection point above for
-        # why this needs no manual pattern per topic.
         if ai_picked_titles:
             ai_titles_l2 = {t.lower() for t in ai_picked_titles}
             for s in scored:
@@ -927,18 +813,13 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8,
         except Exception as e:
             logger.warning(f"rarity_rerank skipped: {e}")
 
-        # Semantic (embedding) blend -- see the docstring above for why
-        # this is the mechanism that lets hypothetical/paraphrased
-        # questions about ANY topic surface the right chunk without a
-        # hand-written alias. Applied as a floor-raise (max, not
-        # replace) so it can only ever pull an under-scored-by-keywords
-        # chunk UP toward what its meaning deserves, never punish a
-        # chunk that already won on keyword grounds. Skipped entirely
-        # (no cost, no behavior change) when no query_embedding was
-        # passed in or a chunk has no cached embedding yet.
+
         if query_embedding:
             for s in scored:
-                chunk_emb = emb_by_id.get(s.get('id'))
+                chunk_id = s.get('id')
+                if not isinstance(chunk_id, int):
+                    continue
+                chunk_emb = emb_by_id.get(chunk_id)
                 if not chunk_emb:
                     continue
                 sem = max(0.0, cosine_similarity(query_embedding, chunk_emb))
@@ -961,9 +842,7 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8,
                     s['score'] = float(s.get('score') or 0) * 2.0
                     s['_forced_content'] = True
 
-        # Re-apply AI router boost after rarity_rerank, same rationale as
-        # the forced-boost re-application above -- rarity_rerank blends in
-        # a rarity score that could otherwise dilute this back down.
+
         if ai_picked_titles:
             ai_titles_l3 = {t.lower() for t in ai_picked_titles}
             for s in scored:
@@ -1079,20 +958,11 @@ def llm_hard_relevance(question: str, chunk: Dict) -> bool:
 
 
 def chunk_is_relevant_hard(question: str, chunk: Dict) -> bool:
-    # AI-router picks are always relevant -- the LLM already reasoned
-    # about whether this section answers the question, using the actual
-    # question meaning rather than keyword overlap. See services/ai_retrieval.py.
     if chunk.get('_ai_picked'):
         return True
-
-    # Forced-topic chunks are always relevant once they won ranking.
     if chunk.get('_forced') or chunk.get('_forced_content'):
         return True
 
-    # High-confidence semantic (embedding) match -- meaning-based, so this
-    # covers hypothetical/paraphrased questions on topics with no keyword
-    # overlap and no hand-written alias, without needing the expensive
-    # llm_hard_relevance() LLM call below.
     if chunk.get('_semantic_score', 0.0) >= 0.80:
         return True
 
@@ -1183,12 +1053,6 @@ def get_relevant_chunks(question: str, candidates: List[Dict]) -> List[Dict]:
     ai_picked = [c for c in candidates if c.get('_ai_picked')]
     forced_title = [c for c in candidates if c.get('_forced')]
     if forced_title and ai_picked:
-        # Regex-forced matches are hand-curated for exact facts (RA
-        # numbers, demerit counts, specific offense lists) that the AI
-        # router can't see past a bare section title -- union them,
-        # forced-first, rather than letting a title-only guess silently
-        # discard a match we already know is right. See BUG FIX note
-        # above get_top_handbook_chunks's AI-router injection point.
         merged = forced_title + [c for c in ai_picked if c not in forced_title]
         return _trim_to_close_contenders(merged, max_n=3)
     if ai_picked:
@@ -1201,17 +1065,6 @@ def get_relevant_chunks(question: str, candidates: List[Dict]) -> List[Dict]:
     hard = [c for c in candidates if chunk_is_relevant_hard(question, c)]
     if hard:
         return _trim_to_close_contenders(hard, max_n=4)
-    # Moderate-confidence semantic match: still meaning-based (so it still
-    # generalizes past keyword/alias coverage), just not decisive enough
-    # for chunk_is_relevant_hard's >=0.80 bar. Worth trusting ahead of the
-    # expensive per-chunk llm_hard_relevance() loop below rather than
-    # paying for LLM calls when embeddings already have a good answer.
-    # Trimmed tighter (max_gap=0.06, max_n=2) than the keyword/hard path
-    # above: semantic similarity is fuzzier than keyword overlap, so a
-    # "moderate confidence" match is more likely to be a same-topic
-    # neighbor than the actual answer -- better to hand the LLM one
-    # precise excerpt (or two genuinely tied ones) than several plausible
-    # but different offenses it might blend together.
     semantic_ok = [c for c in candidates if c.get('_semantic_score', 0.0) >= 0.68]
     if semantic_ok:
         return _trim_to_close_contenders(semantic_ok, score_key='_semantic_score',
@@ -1223,17 +1076,6 @@ def get_relevant_chunks(question: str, candidates: List[Dict]) -> List[Dict]:
     if llm_kept:
         return llm_kept[:4]
 
-    # Last-resort fallback: hand over the single best-scoring chunk even
-    # though nothing cleared any real relevance bar. This is how a
-    # confident-sounding WRONG answer happens instead of "I don't know"
-    # -- so only take it when the AI router genuinely never got a chance
-    # to weigh in (`_ai_router_attempted` False -- LLM unavailable/no
-    # titles, a genuine degraded-service case worth a best-effort guess).
-    # If the router DID run and picked nothing (`_ai_router_attempted`
-    # True and no `_ai_picked` chunk ever made it into `candidates`),
-    # that's a much stronger "this genuinely isn't in the handbook"
-    # signal than a bare keyword score -- trust it and return nothing so
-    # the caller says CANNOT_ANSWER instead of guessing.
     router_had_a_say = any(c.get('_ai_router_attempted') for c in candidates)
     if router_had_a_say:
         return []
@@ -1253,9 +1095,9 @@ def _extract_relevant_sentences(content: str, question: str, max_sentences: int 
         hits = sum(1 for w in q_words if w in s.lower())
         ranked.append((hits, s))
     ranked.sort(key=lambda x: x[0], reverse=True)
-    chosen = [s for h, s in ranked[:max_sentences] if h > 0]
+    chosen = [s for hits, s in ranked[:max_sentences] if hits > 0]
     if not chosen:
-        chosen = [s for h, s in ranked[:2]]
+        chosen = [s for _, s in ranked[:2]]
     return ' '.join(chosen)
 
 
@@ -1295,19 +1137,6 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
                 )
             context = "\n\n".join(context_parts)
 
-            # BUG FIX: this prompt used to have NO language instruction at
-            # all -- detected_lang was accepted as a parameter but never
-            # once referenced inside the prompt, so every handbook-sourced
-            # answer (which is most of what covers offenses/policies,
-            # including all the hypothetical-question cases) relied
-            # entirely on the model guessing the reply language from the
-            # question text on its own, with no verification and no
-            # retry. Same bug class already fixed in answer_engine.py's
-            # _extract_from_answer and nlg.py's speak_naturally -- adding
-            # the same explicit instruction + few-shot + post-generation
-            # language check (with one retry) here too, so a student
-            # asking in Bisaya/Tagalog actually gets answered in
-            # Bisaya/Tagalog instead of English by default.
             lang_instruction = (
                 f"Reply in {nlg.lang_name(detected_lang)}." if detected_lang != 'english' else ""
             )
@@ -1327,6 +1156,7 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
 
             Instructions:
             - Sound natural and clear — like a real chatbot, not a formal document.
+            - Identify the exact fact requested and answer that directly first; do not substitute related facts from the same excerpt.
             - NEVER start with "According to the section…" or similar citations. Just answer.
             - If the question is yes/no (starts with Is/Are/Can/Do/Does/Will/May/Allowed/
               Pwede/Okay ba), your FIRST WORD must be "Yes" or "No", then a short reason.
@@ -1353,46 +1183,10 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
                     c.get('_forced') or c.get('_forced_content') for c in chunks
                 )
                 min_ov = 0.25 if is_forced else 0.35
-                # BUG FIX: this used to skip _answer_relevant_to_question
-                # entirely whenever a regex-forced topic match fired
-                # (`elif (not is_forced) and not ...`). That's backwards --
-                # a forced/AI-picked chunk being WRONG is exactly the
-                # failure mode that produces a confident-sounding answer
-                # about something completely different (e.g. a jewelry/
-                # dress-code question landing on an unrelated bylaws
-                # chunk about board meeting quorums, because a "campus"
-                # keyword collided with a needle). answer_is_grounded only
-                # checks the answer against its OWN (possibly wrong)
-                # source chunk, so it can't catch that -- it will happily
-                # confirm an answer is "grounded" in the wrong excerpt.
-                # _answer_relevant_to_question checks the answer against
-                # the QUESTION'S own words instead, which is the actual
-                # backstop for a wrong-chunk selection, and it's already
-                # lenient (min_overlap=1) so it doesn't false-reject a
-                # correct answer that's phrased differently -- there's no
-                # good reason to ever skip it.
                 if not answer_is_grounded(response, source_blob, min_overlap=min_ov):
-                    # CRITICAL BUG FIX: this branch used to only log --
-                    # `response` was never cleared, so control fell through
-                    # to the `if response and "CANNOT_ANSWER" not in
-                    # response.upper(): return response` check below and
-                    # returned the ungrounded answer anyway. Every
-                    # "grounding rejected" log line in production was a
-                    # silent no-op; the safety net never actually fired.
-                    # This is almost certainly the direct cause of the
-                    # mixed-test-report answers that quote completely
-                    # unrelated handbook text (corporate bylaws for a
-                    # jewelry question, dorm fees for a worship-policy
-                    # question, etc.) -- the wrong chunk got selected
-                    # upstream, the LLM dutifully summarized it, grounding
-                    # correctly detected it didn't answer the question,
-                    # logged that, and returned it to the student anyway.
                     logger.info(f"handbook grounding rejected for q={question[:80]!r}")
                     response = None
                 elif not _answer_relevant_to_question(question, response, min_overlap=1):
-                    # Same fix -- see above. This is the check that
-                    # catches a well-grounded-in-its-own-excerpt answer
-                    # that's simply the wrong excerpt (grounded != relevant).
                     logger.info(f"handbook answer-relevance REJECTED (is_forced={is_forced}) "
                                 f"for q={question[:80]!r}")
                     response = None
@@ -1416,7 +1210,7 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
                         and answer_is_grounded(retry_response.strip(), source_blob, min_overlap=min_ov)
                         and verify_output_language(retry_response.strip(), detected_lang)
                     )
-                    if retry_ok:
+                    if retry_ok and retry_response is not None:
                         response = retry_response.strip()
                     else:
                         logger.info(
@@ -1425,22 +1219,6 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
                         )
                         response = None
                 if response and "CANNOT_ANSWER" not in response.upper():
-                    # BUG FIX #2 (regression from the fix above): a
-                    # legitimate "the handbook doesn't mention X" answer
-                    # was getting caught by this same gate and silently
-                    # discarded -- e.g. "No, the excerpts don't contain
-                    # any reference to the Anti-Bullying Act or RA 10627"
-                    # regressed from a correct answer to a give-up after
-                    # the fix above shipped. That's because a negation
-                    # answer's distinctive words (the topic being denied)
-                    # come from the QUESTION, not from chunks[0]'s content
-                    # -- there's genuinely nothing to overlap with when the
-                    # honest answer is "this isn't covered here", so
-                    # top_only_ratio is naturally low for a CORRECT
-                    # negation answer too, not just a contaminated one.
-                    # The contamination risk this gate exists for is
-                    # specific to POSITIVE factual claims sourced from the
-                    # wrong excerpt, so negation answers are exempted.
                     _NEGATION_MARKERS = (
                         "doesn't mention", "does not mention", "don't mention",
                         "not mentioned", "no mention", "doesn't contain",
@@ -1452,29 +1230,7 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
                     )
                     _is_negation = any(m in response.lower() for m in _NEGATION_MARKERS)
                     if len(chunks) > 1 and not _is_negation:
-                        # BUG FIX: this was "diagnostic only" -- it logged
-                        # a warning but let the answer through regardless.
-                        # This is very likely what produced the mixed-test
-                        # cases where a correct answer's tail bleeds into a
-                        # completely unrelated second excerpt (e.g. a Safe
-                        # Spaces Act answer trailing off into an unrelated
-                        # RA 11180 Athletic Programs excerpt): both
-                        # answer_is_grounded() and _answer_relevant_to_
-                        # question() above check the response AS A WHOLE,
-                        # so a response that's mostly correct with a
-                        # contaminated tail still has enough overlap with
-                        # BOTH the question and the combined source_blob
-                        # (which includes every offered excerpt, not just
-                        # the right one) to pass both checks. Grounding
-                        # against the union of excerpts can't tell "this
-                        # answer legitimately covers excerpt 1" apart from
-                        # "this answer bled from excerpt 1 into excerpt 2"
-                        # -- only a per-excerpt check can. Now an actual
-                        # reject (falls through to the deterministic
-                        # single-chunk extraction path below, which only
-                        # ever reads chunks[0] and so can't blend excerpts
-                        # at all) instead of a log line nobody was
-                        # monitoring in real time.
+                        
                         top_only_ratio = grounding_ratio(response, chunks[0].get('content', ''))
                         if top_only_ratio < 0.15:
                             logger.info(
@@ -1485,14 +1241,6 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
                             )
                             response = None
                 if response and "CANNOT_ANSWER" not in response.upper():
-                    # Final independent self-check -- a second opinion that
-                    # actually reads question+answer+source and judges fit,
-                    # on top of the word-overlap heuristics above (grounding
-                    # + relevance). Fails open (treats an unavailable check
-                    # as a pass) so a flaky extra call never costs a good
-                    # answer -- it only ever removes an answer that already
-                    # got this far, never blocks the deterministic fallback
-                    # path below from running in its place.
                     if llm_self_check(question, response, source_blob):
                         return response
                     logger.info(f"handbook answer self-check REJECTED for q={question[:80]!r}")
@@ -1507,7 +1255,6 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
 
     clean = _extract_relevant_sentences(content, question, max_sentences=6)
     if not clean and forced:
-        # Pull lines that contain the forced content needles
         _, content_needles = forced
         lines = []
         for line in content.split('\n'):
@@ -1523,40 +1270,6 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
     if forced and content:
         if not clean:
             clean = content[:600].strip()
-        # BUG FIX: this branch used to return unconditionally, with NO
-        # relevance check at all -- unlike the non-forced branch just
-        # below it, which already calls _answer_relevant_to_question().
-        # "forced" means topic_aliases.py's regex matched the QUESTION to
-        # a TOPIC with high confidence, but that says nothing about
-        # whether chunks[0] (the top-scored chunk within that topic) is
-        # actually the right chunk -- if it isn't, this path returned a
-        # confident, unvalidated wrong answer, no safety net at all. This
-        # is almost certainly what produced answers like a "what is the
-        # school's full name" question landing on an unrelated
-        # organizational-goals excerpt: the question matched some forced
-        # identity/general topic, chunks[0] within that topic was wrong,
-        # and nothing downstream ever checked whether the extracted text
-        # had anything to do with what was actually asked. Same lenient
-        # min_overlap=1 as the non-forced path below -- forced matches
-        # are usually right, so this only rejects genuinely unrelated
-        # text, not a differently-phrased correct answer.
-        # BUG FIX #2 (regression from the fix above): checking `clean`
-        # (the narrowly keyword-extracted sentences) was too strict --
-        # _extract_relevant_sentences() picks sentences by literal
-        # keyword hits, and when the question's wording doesn't literally
-        # appear anywhere in the chunk (e.g. question says "strands", the
-        # chunk says "Senior High School" / "K-12 Program" / "track"),
-        # its fallback just grabs the first few sentences of the chunk --
-        # which may not happen to repeat the question's specific words
-        # even though the CHUNK ITSELF is genuinely the right one (that's
-        # exactly what "forced" already established). This regressed a
-        # correct "what SHS strands are available" answer into a give-up.
-        # Checking against the full `content` instead is more forgiving:
-        # the whole chunk is far more likely to contain some genuinely
-        # overlapping term than six cherry-picked sentences are, while
-        # still correctly rejecting a chunk that's simply about a
-        # different topic altogether (content wouldn't share any specific
-        # word with the question either way in that case).
         if not _answer_relevant_to_question(question, content):
             logger.info(
                 f"handbook forced-topic fallback REJECTED (chunk irrelevant to question) "
@@ -1565,19 +1278,6 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
             return None
         page_note = f"\n\n(More detail is on page {page}.)" if page else ""
         final = f"{clean}{page_note}".strip()
-        # BUG FIX: this only rephrased `clean` (raw excerpt text pulled
-        # straight from the handbook -- bullet lists, pledge wording,
-        # policy fragments) when detected_lang != 'english'. English
-        # questions landing on this fallback (AI-composed answer above
-        # failed grounding/relevance/self-check) got the raw excerpt
-        # verbatim, always -- no "sound like a chatbot" pass, no yes/no
-        # lead-in for yes/no-shaped questions, nothing. That's exactly
-        # what produced raw bullet-list/pledge-text answers to plain
-        # English questions like "What is the dress code policy?". Now
-        # unconditional -- speak_naturally() already fails safe (falls
-        # back to `final` unchanged if the AI is unavailable or its
-        # rephrase doesn't pass the grounding check), so this can only
-        # help, never make an English answer worse.
         final = nlg.speak_naturally(final, question, detected_lang=detected_lang)
         return final
 
@@ -1702,13 +1402,6 @@ def answer_handbook_question(question: str, detected_lang: str = 'english',
     if circuit_breaker.is_open():
         return None
 
-    # Anchor retrieval to what the conversation was already about, so a
-    # short follow-up with almost no content words of its own ("does that
-    # apply to all levels?", "whole school?") still routes to the right
-    # section instead of losing the keyword/embedding race to something
-    # unrelated. Cheap: reuses ctx fields already being tracked, no extra
-    # DB round-trip or LLM call by itself (the hint just rides along with
-    # the AI router call get_top_handbook_chunks already makes).
     context_hint = None
     if ctx is not None:
         hint_parts = []
@@ -1717,23 +1410,14 @@ def answer_handbook_question(question: str, detected_lang: str = 'english',
                 "Previously discussed section(s): "
                 + ", ".join(ctx.last_handbook_sections)
             )
-        last_ex = (getattr(ctx, 'conversation_history', None) or [None])[-1:]
-        if last_ex and last_ex[0]:
-            hint_parts.append(f"Previous student question: {last_ex[0].get('user', '')}")
-            hint_parts.append(f"Previous answer given: {(last_ex[0].get('bot', '') or '')[:300]}")
+        history = getattr(ctx, 'conversation_history', None) or []
+        if history and history[-1] is not None:
+            previous_exchange = history[-1]
+            hint_parts.append(f"Previous student question: {previous_exchange.get('user', '')}")
+            hint_parts.append(f"Previous answer given: {(previous_exchange.get('bot', '') or '')[:300]}")
         if hint_parts:
             context_hint = "\n".join(hint_parts)
 
-    # BUG FIX: this cache key used to be built from the question text ALONE
-    # (hash(question) only), with no context component at all. A short,
-    # generic follow-up like "For the whole school?" or "whole school?"
-    # then collided in the cache across completely unrelated conversations
-    # -- whichever conversation happened to ask that exact phrase FIRST
-    # silently "won" the cached answer for every other student's differently
-    # -themed follow-up that happened to be worded the same way, since the
-    # cache had no way to tell them apart. Folding context_hint into the key
-    # means a follow-up is only ever served a cached answer that was
-    # produced under the same preceding context.
     cache_key = f"handbook_{hash(question.lower().strip())}_{hash(context_hint or '')}"
     cached = ai_cache.get(cache_key)
     if cached:
@@ -1778,10 +1462,6 @@ def answer_handbook_question(question: str, detected_lang: str = 'english',
         if ctx is not None:
             ctx.clear_disambiguation()
             used_titles = [c.get('section_title') for c in chunks[:3] if c.get('section_title')]
-            # PERF/correctness fix: also clears ctx.last_schedule_query --
-            # see conversation.ConversationContext.update()'s docstring
-            # comment for why a topic change must end the schedule
-            # follow-up window, not just update the handbook one.
             ctx.update(handbook_sections=used_titles or None, clear_schedule_context=True)
     return response
 

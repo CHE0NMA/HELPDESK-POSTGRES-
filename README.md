@@ -1,128 +1,99 @@
-# PAC Helpdesk — modular edition
+# PAC Helpdesk
 
-Two things changed from the old single-file `app.py`:
+Flask-based student helpdesk for Philippine Advent College (PAC). It serves a public landing page and chat, answers handbook and FAQ questions, handles schedule queries, and provides authenticated admin tools for content, reports, corrections, ratings, and self-heal drafts.
 
-## 1. Code organization
+## Runtime
 
-The old `app.py` (2500+ lines) is now split like this:
+- `app.py` creates the Flask app, configures security and rate limiting, registers blueprints, initializes the Postgres pool, and runs startup schema checks.
+- `routes/` contains Flask blueprints for chat, admin pages, schedules, APIs, public pages, and cron jobs.
+- `services/` contains the FAQ, handbook, date/schedule, language, retrieval, grounding, and conversation logic.
+- `database/` contains the Postgres connection pool and schema setup. `database/full_schema.sql` is the reference schema; startup also runs idempotent setup/migrations.
+- `ai_providers/` contains Groq/Gemini adapters, key rotation, fallback routing, circuit breaking, caching, and model metrics.
+- `templates/public/`, `templates/admin/`, and `templates/errors/` group browser templates by purpose. Static assets are under `static/`.
 
+## Answering Flow
+
+The chat pipeline classifies the question, handles schedule/date requests and follow-ups, and searches handbook sections and FAQs. Search-time language normalization expands supported vernacular spellings and hypothetical wording. FAQ and handbook matching use lexical scores; semantic matching uses Gemini embeddings when the required Gemini key and stored content embeddings are available. An AI section router helps select handbook topics. Generated answers are checked against their sources and question relevance; when the AI check is unavailable, the generated answer is rejected in favor of a source-based fallback where available.
+
+Dates and closures are looked up from Postgres rather than inferred by the language model. The public API returns JSON; browser 404 and 500 errors use the shared PAC error page, while API errors remain JSON.
+
+## Learning Loop
+
+Learning updates the helpdesk's reviewed knowledge and retrieval data; it does not fine-tune a model or let student submissions become trusted answers automatically. Thumbs-up answers can enter the successful-answer cache. Thumbs-down reports are stored for review, and students may optionally suggest corrected wording. That suggestion is queued beside any existing self-heal draft and remains unverified. Admins can compare suggestions, edit the answer, and explicitly approve it into the corrections store. Repeated unanswered questions are also retried against current FAQ/handbook content to create drafts for review. Approved corrections are matched against high-confidence paraphrases; dismissals and low-confidence matches do not alter trusted knowledge.
+
+## AI Providers
+
+`AI_PROVIDER` selects the primary chat provider (`groq` by default, or `gemini`). The other provider is used as fallback. Defaults are:
+
+- Groq primary model: `openai/gpt-oss-120b` (`GROQ_MODEL`)
+- Groq fast model: `openai/gpt-oss-20b` (`FAST_GROQ_MODEL`)
+- Gemini fallback model: `gemini-3.5-flash-lite` (`GEMINI_MODEL`)
+- Gemini embedding model: `models/gemini-embedding-001`
+
+GPT-OSS requests use low reasoning effort and suppress reasoning output so short classification and verification calls still return visible answers. Gemini chat and embedding calls rotate through configured keys after quota or authentication failures. Keep provider keys private; never commit `.env`.
+
+## Setup
+
+Use Python 3.10 or newer. Install dependencies in a virtual environment:
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
 ```
-pac_helpdesk/
-├── app.py                    # app factory only — wires everything together
-├── config.py                 # ⚠️ PLACEHOLDER — drop your real config.py in here
-│
-├── ai_providers/              # everything about talking to Groq/Gemini/Cloudflare/Ollama
-│   ├── circuit_breaker.py
-│   ├── metrics.py
-│   ├── cache.py               # AICache + FAQCache (TTL-based)
-│   └── providers.py           # the actual API calls + NEW fallback chain
-│
-├── database/
-│   ├── pool.py                 # get_db(), db_cursor() context manager
-│   └── schema.py                # startup migrations
-│
-├── services/                  # business logic, no Flask/route code
-│   ├── conversation.py         # per-session chat memory
-│   ├── dates.py                 # ⭐ rewritten — see below
-│   ├── schedule.py              # pure DB fact-lookups for dates.py
-│   ├── handbook.py              # student handbook Q&A (AI-grounded)
-│   ├── answer_engine.py         # FAQ fuzzy matching + AI extraction
-│   ├── faq.py                   # find_answer() — ties it all together
-│   ├── language.py              # language detection, greetings, abbreviations
-│   ├── alerts.py                # admin email alerts + scheduled jobs
-│   └── handbook_ingest.py       # PDF → handbook_chunks ingestion
-│
-├── routes/                    # Flask blueprints — thin, call into services/
-│   ├── chat.py                  # /chat, /api/satisfaction, /api/chat_rating...
-│   ├── admin.py                  # /admin, /dashboard, FAQ CRUD
-│   ├── schedules.py               # /api/dynamic_schedules, /api/emergency_closures
-│   └── api.py                     # /health, /metrics, /api/model_status...
-│
-└── utils/
-    ├── text.py                    # normalize_input, is_valid_question, fuzzy helpers
-    └── security.py                  # login lockout, rate limiting, fingerprinting
+
+Create a local `.env` with the required settings. `FLASK_SECRET_KEY` and a key for the selected `AI_PROVIDER` are required. Gemini embeddings require `GEMINI_API_KEY`, even when Groq is the primary chat provider.
+
+```dotenv
+FLASK_SECRET_KEY=replace-with-a-long-random-value
+AI_PROVIDER=groq
+GROQ_API_KEY=your-groq-key
+GEMINI_API_KEY=your-gemini-key
+
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=school_chatbot
+DB_USER=postgres
+DB_PASSWORD=your-local-postgres-password
+DB_SSLMODE=disable
 ```
 
-**What's fully ported:** the entire chat pipeline (dates → follow-up →
-handbook → FAQ), all of `ai_providers`, `database`, `utils`, and the
-highest-traffic admin/schedule endpoints.
+Additional keys can be configured as `GROQ_API_KEY_2` through `GROQ_API_KEY_8` and `GEMINI_API_KEY_2` through `GEMINI_API_KEY_8`. Model IDs can be overridden with `GROQ_MODEL`, `FAST_GROQ_MODEL`, and `GEMINI_MODEL`.
 
-**What's a starting pattern, not a full port:** a handful of secondary
-admin routes (bulk import/export, reports/history pages, greetings &
-abbreviations editors, handbook chunk editor, alert log, digest sending).
-These are plain CRUD that don't interact with the AI/date changes — copy
-them from the old `app.py` into `routes/admin.py` / `routes/api.py`
-following the exact pattern already there (`if not admin_required(): ...`
-→ `get_db()`/cursor block). `templates/` and `static/` are unchanged and
-just need to be copied over as-is.
+For hosted Postgres, set `DATABASE_URL` (or `POSTGRES_URL`) and `DB_TARGET=neon`, or run in a supported online environment where the app automatically prefers the URL. Hosted connections use SSL.
 
-**Also addressed from the review, while restructuring:**
-- Model fallback chain (`ai_providers/providers.py: call_with_fallback`) —
-  if the configured provider fails, it now tries the others instead of
-  just returning `""`.
-- TTL-based cache cleanup (`ai_providers/cache.py`) instead of relying on
-  maxsize eviction alone.
-- `database/pool.py` adds a `db_cursor()` context manager for new code
-  (existing call sites' manual `try/finally` were left as-is — that's a
-  separate, larger refactor).
-- The `/test_email_design` public debug route from the old app was
-  **dropped**, not ported (it was flagged as a real exposure).
+Start the app after Postgres is reachable:
 
-## 2. Natural-sounding date answers ⭐
+```powershell
+python app.py
+```
 
-This was the actual ask, so here's the reasoning in more detail.
+The default local URL is `http://127.0.0.1:5001`.
 
-**The old code** (`_day_phrase`, `build_class_office_response`,
-`_build_formatted_response`, `build_date_response`,
-`build_detailed_date_range_response` — ~400 lines total) picked from a
-fixed list of pre-written sentences using a hash of the date as a
-"random" seed. That's why it read like a bot: it *was* one, reading off
-cue cards.
+## Tests
 
-**The new version** (`services/dates.py`) works the same way your
-handbook and FAQ answers already do:
+`test_chatbot.py` is a live integration/regression runner, not an offline unit suite. Start the app and database first, then run:
 
-1. **Gather facts — deterministically, no AI involved.**
-   `gather_single_day_facts()` / `gather_range_facts()` still do exactly
-   what the old code did: check emergency closures, named holidays, and
-   per-department/grade schedules straight from the DB. This part is
-   *not* allowed to be guessed — accuracy matters more than tone.
+```powershell
+python test_chatbot.py
+```
 
-2. **Phrase it — AI, grounded strictly in those facts.**
-   `phrase_naturally()` hands the facts as JSON to the model with
-   instructions to reply the way a person would text back — 1-3 short
-   sentences, answering what was actually asked (not reciting every
-   department's status when the student only asked about one), no
-   invented details.
+It sends the mixed question set to `/chat`, checks required/forbidden answer details for known regressions, and writes `test_results_mixed.json` and `test_results_mixed.md`. Calls use real provider keys and can take several minutes. Reports separate explicitly verified answers from answers that passed only basic checks, fallback replies, incorrect answers, and request errors. Add expected facts for every question where the source supports a stable check; unconfigured questions are marked unverified, not factual successes. The suite cannot guarantee accuracy for unseen questions.
 
-3. **Verify — a second AI pass checks the phrasing didn't drift.**
-   Same pattern as `answer_handbook_question()`'s verification step: ask
-   the model "does this reply state only what's in the facts?" and retry
-   once if it says no.
+### Retrieval Readiness
 
-4. **Fallback — if the AI is unreachable** (circuit breaker open),
-   `_fallback_sentence()` gives one honest, plain sentence built from the
-   facts. Not a variety pack of pre-written lines — just the truth,
-   plainly stated, so the bot never goes silent.
+Authenticated admins can request `GET /api/admin/retrieval_status` to see FAQ and active-handbook embedding coverage, whether each corpus currently has semantic matches available, Gemini embedding call/cache/failure counters, and separate Groq/Gemini chat-provider success/failure counts. Coverage is read from Postgres; provider and embedding call counters are process-local and reset when a worker restarts. The endpoint does not return API keys or raw provider responses.
 
-Example — old vs. new, same underlying facts:
+## CI/CD
 
-> **Old:** "🚫 High School — no class, everything's closed" (picked from a
-> template array)
->
-> **New:** "No classes at the High School tomorrow — it's the founding
-> anniversary, so the office is closed too. Enjoy the day off!"
+`.github/workflows/ci-cd.yml` runs on pull requests targeting `main`, pushes to `main`, and manual dispatches. Its checks install `requirements.txt`, compile the Python modules, and run the offline template tests. The live chatbot regression runner is intentionally not part of CI because it needs a running Postgres-backed app and makes real model calls.
 
-The same `facts → phrase → verify` approach is what `handbook.py` and
-`faq.py`/`answer_engine.py` already did — dates were the odd one out with
-hand-written templates, so this brings it in line with the rest of the
-bot's voice instead of introducing a fourth style.
+After checks pass, pushes to `main` are eligible for a Vercel production deploy. Add these GitHub repository or `production` environment secrets to enable the workflow deploy job:
 
-## Before running
+- `VERCEL_TOKEN`
+- `VERCEL_ORG_ID`
+- `VERCEL_PROJECT_ID`
 
-1. Drop your real `config.py` into the project root (see the placeholder
-   file for the exact names it needs to export).
-2. Copy `templates/` and `static/` from the old project unchanged.
-3. Port the remaining secondary admin routes noted above if you use them.
-4. `pip install -r requirements.txt` (same dependencies as before —
-   nothing new was added except what the fallback chain already needed).
+Without these secrets, the workflow reports that deployment was skipped. The app's database URL and AI provider keys belong in Vercel environment variables, not GitHub Actions.
+
+If the Vercel project is already connected to GitHub for automatic deployments, disable its automatic Git deployments before enabling the workflow secrets; otherwise the same commit can deploy twice. Vercel project metadata under `.vercel/` is ignored and should not be committed.

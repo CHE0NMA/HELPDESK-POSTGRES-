@@ -33,11 +33,19 @@ HOW IT'S WIRED IN
   `combined` score rather than replacing it — see SEMANTIC_BLEND below.
 """
 import logging
-from typing import List, Optional
+from datetime import datetime, timezone
+from threading import Lock
+from typing import Any, Callable, List, Optional
 
 import requests
 
-from config import GEMINI_API_KEY
+from ai_providers.providers import (
+    GEMINI_API_KEYS,
+    get_next_gemini_key,
+    mark_gemini_auth_failed,
+    mark_gemini_rate_limited,
+    mark_gemini_success,
+)
 
 logger = logging.getLogger("pac_helpdesk.embeddings")
 
@@ -46,10 +54,72 @@ EMBEDDING_URL = (
     f"https://generativelanguage.googleapis.com/v1beta/{EMBEDDING_MODEL}:embedContent"
 )
 EMBEDDING_TIMEOUT_SECONDS = 8
+_embedding_metrics_lock = Lock()
+_embedding_metrics = {
+    "api_calls": 0,
+    "successful_calls": 0,
+    "failed_calls": 0,
+    "cache_hits": 0,
+    "last_success_at": None,
+    "last_failure_reason": None,
+}
 
 
 def is_configured() -> bool:
-    return bool(GEMINI_API_KEY)
+    return bool(GEMINI_API_KEYS)
+
+
+def _record_embedding_api_call() -> None:
+    with _embedding_metrics_lock:
+        _embedding_metrics["api_calls"] += 1
+
+
+def _record_embedding_result(success: bool, failure_reason: Optional[str] = None) -> None:
+    with _embedding_metrics_lock:
+        if success:
+            _embedding_metrics["successful_calls"] += 1
+            _embedding_metrics["last_success_at"] = datetime.now(timezone.utc).isoformat()
+        else:
+            _embedding_metrics["failed_calls"] += 1
+            _embedding_metrics["last_failure_reason"] = failure_reason or "unknown"
+
+
+def get_embedding_status() -> dict:
+    with _embedding_metrics_lock:
+        metrics = dict(_embedding_metrics)
+    return {"configured": is_configured(), **metrics}
+
+
+def get_embedding_coverage(get_db_fn) -> dict:
+    """Report stored vector coverage for the corpora used by semantic search."""
+    conn = get_db_fn()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT 'faq' AS corpus, COUNT(*) AS total, COUNT(embedding) AS embedded
+            FROM faq
+            UNION ALL
+            SELECT 'handbook_chunks' AS corpus, COUNT(*) AS total,
+                   COUNT(embedding) AS embedded
+            FROM handbook_chunks
+            WHERE is_active = 1
+        """)
+        rows = cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
+
+    corpora = {}
+    for name, total, embedded in rows:
+        total = int(total or 0)
+        embedded = int(embedded or 0)
+        corpora[name] = {
+            "total": total,
+            "embedded": embedded,
+            "coverage_percent": round(embedded * 100 / total, 1) if total else 0.0,
+            "semantic_ready": is_configured() and embedded > 0,
+        }
+    return corpora
 
 
 def get_embedding(text: str, cache=None) -> Optional[List[float]]:
@@ -65,34 +135,63 @@ def get_embedding(text: str, cache=None) -> Optional[List[float]]:
     if not text or not text.strip():
         return None
     if not is_configured():
+        _record_embedding_result(False, "not_configured")
         return None
 
     cache_key = f"embed_{hash(text.strip().lower())}"
     if cache:
         cached = cache.get(cache_key)
         if cached:
+            with _embedding_metrics_lock:
+                _embedding_metrics["cache_hits"] += 1
             return cached
 
-    try:
-        resp = requests.post(
-            EMBEDDING_URL,
-            params={'key': GEMINI_API_KEY},
-            json={'content': {'parts': [{'text': text}]}},
-            timeout=EMBEDDING_TIMEOUT_SECONDS,
-        )
-        if resp.status_code != 200:
-            logger.warning(f"Embedding API returned {resp.status_code}: {resp.text[:200]}")
+    for _ in range(len(GEMINI_API_KEYS)):
+        api_key = get_next_gemini_key()
+        if not api_key:
+            break
+        try:
+            _record_embedding_api_call()
+            resp = requests.post(
+                EMBEDDING_URL,
+                params={'key': api_key},
+                json={'content': {'parts': [{'text': text}]}},
+                timeout=EMBEDDING_TIMEOUT_SECONDS,
+            )
+            error_text = (resp.text or "").lower()
+            auth_failure = (
+                resp.status_code in (401, 403)
+                or "invalid_api_key" in error_text
+                or "invalid api key" in error_text
+                or "api key not valid" in error_text
+            )
+            if auth_failure:
+                mark_gemini_auth_failed(api_key)
+                continue
+            if resp.status_code == 429:
+                mark_gemini_rate_limited(api_key)
+                continue
+            if resp.status_code != 200:
+                logger.warning(f"Embedding API returned {resp.status_code}: {resp.text[:200]}")
+                _record_embedding_result(False, f"http_{resp.status_code}")
+                return None
+            data = resp.json()
+            values = data.get('embedding', {}).get('values')
+            if not values:
+                _record_embedding_result(False, "empty_response")
+                return None
+            mark_gemini_success(api_key)
+            if cache:
+                cache.set(cache_key, values)
+            _record_embedding_result(True)
+            return values
+        except Exception as e:
+            logger.error(f"get_embedding error: {e}")
+            _record_embedding_result(False, type(e).__name__)
             return None
-        data = resp.json()
-        values = data.get('embedding', {}).get('values')
-        if not values:
-            return None
-        if cache:
-            cache.set(cache_key, values)
-        return values
-    except Exception as e:
-        logger.error(f"get_embedding error: {e}")
-        return None
+    logger.warning("Embedding API unavailable: all configured Gemini keys are rate-limited")
+    _record_embedding_result(False, "no_usable_keys")
+    return None
 
 
 def cosine_similarity(a: List[float], b: List[float]) -> float:
@@ -118,7 +217,8 @@ def embedding_text_for_faq(question: str, keywords: str = "") -> str:
 
 
 def store_embedding_for_faq(get_db_fn, question: str, keywords: str = "",
-                             faq_id: int = None, public_uuid: str = None) -> bool:
+                             faq_id: Optional[int] = None,
+                             public_uuid: Optional[str] = None) -> bool:
     """Best-effort: compute + store an embedding for one FAQ row. Returns
     False (never raises) on any failure — callers should treat this as
     "nice to have", not block saving the FAQ on it succeeding.
@@ -165,7 +265,8 @@ def embedding_text_for_chunk(section_title: str, content: str, keywords: str = "
 
 
 def store_embedding_for_chunk(get_db_fn, section_title: str, content: str,
-                               keywords: str = "", chunk_id: int = None) -> bool:
+                               keywords: str = "",
+                               chunk_id: Optional[int] = None) -> bool:
     """Best-effort: compute + store an embedding for one handbook_chunks
     row. Same "nice to have, never blocks the caller" contract as
     store_embedding_for_faq above."""
@@ -192,7 +293,8 @@ def store_embedding_for_chunk(get_db_fn, section_title: str, content: str,
         conn.close()
 
 
-def backfill_faq_embeddings(get_db_fn, batch_size: int = 200, limit: Optional[int] = None) -> int:
+def backfill_faq_embeddings(get_db_fn: Callable[[], Any], batch_size: int = 200,
+                           limit: Optional[int] = None) -> int:
     """One-shot (or periodic) pass over every FAQ row that doesn't have an
     embedding yet and computes+stores one. This is the "let the AI
     process it instead of hand-tuning per FAQ" path for bulk FAQ imports
@@ -226,7 +328,8 @@ def backfill_faq_embeddings(get_db_fn, batch_size: int = 200, limit: Optional[in
     return updated
 
 
-def backfill_chunk_embeddings(get_db_fn, batch_size: int = 200, limit: Optional[int] = None) -> int:
+def backfill_chunk_embeddings(get_db_fn: Callable[[], Any], batch_size: int = 200,
+                             limit: Optional[int] = None) -> int:
     """Same idea as backfill_faq_embeddings, for handbook_chunks. Run this
     once after any handbook re-ingest/import (or wire it into
     handbook_ingest.import_chunks_json / ingest_handbook directly) so
@@ -260,8 +363,8 @@ def backfill_chunk_embeddings(get_db_fn, batch_size: int = 200, limit: Optional[
     return updated
 
 
-def backfill_correction_embeddings(get_db_fn, batch_size: int = 200,
-                                    limit: Optional[int] = None) -> int:
+def backfill_correction_embeddings(get_db_fn: Callable[[], Any], batch_size: int = 200,
+                                  limit: Optional[int] = None) -> int:
     """Same idea again, for answer_corrections. Needed because corrections
     saved before services/corrections.py's paraphrase-matching feature
     existed have no embedding, and without one, find_similar_correction()

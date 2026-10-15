@@ -23,15 +23,13 @@ logger = logging.getLogger("pac_helpdesk.handbook_ingestion")
 
 HAS_AI = False
 call_for_ingest = None
-get_groq_usage_report = None
-GROQ_API_KEYS: List[str] = []
 
 try:
-    from ai_providers import call_for_ingest, get_groq_usage_report, GROQ_API_KEYS
+    from ai_providers import call_for_ingest
     HAS_AI = True
 except Exception:
     try:
-        from ai_providers.providers import call_for_ingest, get_groq_usage_report, GROQ_API_KEYS
+        from ai_providers.providers import call_for_ingest
         HAS_AI = True
     except Exception as e:
         logger.error("AI providers import failed: %s", e)

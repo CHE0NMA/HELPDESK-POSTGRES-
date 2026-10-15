@@ -24,7 +24,7 @@ def holiday_management():
     from flask import redirect, render_template
     if not session.get('admin'):
         return redirect('/admin')
-    return render_template('holiday_management.html')
+    return render_template('admin/holiday_management.html')
 
 
 @bp.route('/api/dynamic_schedules', methods=['GET'])

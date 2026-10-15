@@ -10,7 +10,6 @@ admin review and for suggest_aliases_from_unanswered-style jobs.
 """
 from __future__ import annotations
 
-import hashlib
 import logging
 import re
 from typing import List, Optional
@@ -23,10 +22,6 @@ def normalize_question(q: str) -> str:
     q = re.sub(r"\s+", " ", q)
     q = re.sub(r"[^\w\s]", "", q)
     return q[:300]
-
-
-def _norm_key(q: str, lang: str) -> str:
-    return hashlib.md5(f"{normalize_question(q)}|{lang}".encode()).hexdigest()
 
 
 def get_cached_answer(get_db_fn, question: str, detected_lang: str = "english") -> Optional[dict]:
@@ -129,10 +124,10 @@ def record_feedback(
     question: str,
     rating: str,
     correction: str = "",
-    source_type: str = None,
+    source_type: Optional[str] = None,
     chunk_ids: Optional[List[int]] = None,
     faq_id: Optional[int] = None,
-    session_id: str = None,
+    session_id: Optional[str] = None,
 ) -> bool:
     if not question or rating not in ("thumbs_up", "thumbs_down"):
         return False
@@ -159,8 +154,7 @@ def record_feedback(
                     session_id,
                 ),
             )
-            # On thumbs_up, promote into success cache if we have answer text in correction? skip.
-            # On thumbs_down, drop any success-cache entry for this question.
+
             if rating == "thumbs_down":
                 cur.execute(
                     "DELETE FROM answer_success_cache WHERE question_norm = %s",

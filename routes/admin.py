@@ -4,9 +4,9 @@ import time
 import uuid
 import json
 from datetime import datetime, timezone
-from services.tz import ph_now  # BUG FIX: was using server-UTC datetime.now()/today() for "days ago" -- see services/tz.py
+from services.tz import ph_now  
 from services.handbook_ingest import parse_pasted_faqs, mass_insert_faqs
-from flask import Blueprint, jsonify, redirect, render_template, request, session, make_response
+from flask import Blueprint, abort, jsonify, redirect, render_template, request, session, make_response
 from werkzeug.security import check_password_hash, generate_password_hash
 from threading import Thread
 from ai_providers import faq_cache
@@ -15,7 +15,7 @@ from extensions import csrf
 from services.language import invalidate_response_tables
 from utils.security import (admin_required, attempts_left, clear_attempts, client_ip,
                              is_locked_out, record_failed_attempt)
-from utils.text import fuzzy_score, normalize_input
+from utils.text import normalize_input
 
 from database import get_db
 
@@ -41,7 +41,7 @@ def admin():
     if request.method == 'POST':
         locked, remaining = is_locked_out(ip)
         if locked:
-            return render_template('admin_login.html',
+            return render_template('admin/admin_login.html',
                                     error=f'Too many attempts. Try again in {remaining // 60}m {remaining % 60}s.',
                                     lockout=True)
         u = request.form.get('username', '').strip()
@@ -57,12 +57,6 @@ def admin():
             session['admin'] = True
             session.permanent = True
             session['admin_ip'] = ip
-            # BUG FIX: this was never set, so every place that read
-            # session.get('admin_user', 'admin') (schedules.py's created_by
-            # columns, this file's manual-review created_by, and the
-            # profile page below) silently fell back to the literal
-            # string 'admin' instead of the username that actually
-            # logged in.
             session['admin_user'] = u
             session['login_time'] = datetime.now(timezone.utc).isoformat()
             logger.info(f"Admin login successful from {ip}")
@@ -70,11 +64,11 @@ def admin():
         record_failed_attempt(ip)
         locked, remaining = is_locked_out(ip)
         if locked:
-            return render_template('admin_login.html', error=f'Account locked for {remaining // 60} min.', lockout=True)
+            return render_template('admin/admin_login.html', error=f'Account locked for {remaining // 60} min.', lockout=True)
         logger.warning(f"Failed admin login from {ip}")
-        return render_template('admin_login.html',
+        return render_template('admin/admin_login.html',
                                 error=f'Invalid credentials. {attempts_left(ip)} attempt(s) left.')
-    return render_template('admin_login.html')
+    return render_template('admin/admin_login.html')
 
 
 @bp.route('/admin/logout')
@@ -87,14 +81,6 @@ def admin_logout():
     return redirect('/admin')
 
 
-# ---------------------------------------------------------------------
-# Admin profile (name / email / password)
-# ---------------------------------------------------------------------
-# admin_users only ever had username + password (see the SELECT in
-# admin() above). Rather than touching database/schema.py, this adds the
-# extra profile columns itself the first time they're needed, the same
-# "never raise, just log and move on" spirit as the ensure_* functions
-# app.py runs on every cold start.
 _profile_schema_ready = {'done': False}
 
 
@@ -126,9 +112,6 @@ def profile():
     if not admin_required():
         return redirect('/admin')
 
-    # Sessions created before the session['admin_user'] fix above won't
-    # have a username to look up -- send them through login again rather
-    # than guessing which admin_users row is theirs.
     username = session.get('admin_user')
     if not username:
         return redirect('/admin/logout')
@@ -159,7 +142,7 @@ def profile():
         'login_time': session.get('login_time'),
         'admin_ip': session.get('admin_ip'),
     }
-    return render_template('profile.html', admin_info=admin_info)
+    return render_template('admin/profile.html', admin_info=admin_info)
 
 
 @bp.route('/api/admin/profile', methods=['POST'])
@@ -288,7 +271,7 @@ def dashboard():
     if not admin_required():
         return redirect('/admin')
     stats = get_dashboard_stats()
-    return render_template('dashboard.html', faqs=stats['faqs'], topics=stats['topics'],
+    return render_template('admin/dashboard.html', faqs=stats['faqs'], topics=stats['topics'],
                             total_faqs=stats['total_faqs'], unanswered_count=stats['unanswered_count'],
                             reports_count=stats['reports_count'], total_chats=stats['total_chats'])
 
@@ -329,13 +312,6 @@ def add_faq():
         invalidate_response_tables()
         invalidate_dashboard_cache()
 
-        # BUG FIX: nothing was ever calling this for FAQs added/edited
-        # through the admin panel -- only a one-time backfill script
-        # populated `embedding`, so every FAQ added since then had
-        # embedding=NULL forever and silently fell back to fuzzy-only
-        # matching (services/answer_engine.py's SEMANTIC_BLEND never
-        # applied to it). Best-effort: never blocks the save if
-        # GEMINI_API_KEY is unset or the call fails.
         try:
             from services.embeddings import store_embedding_for_faq
             store_embedding_for_faq(get_db, question, d.get('keywords', ''), public_uuid=public_uuid)
@@ -444,7 +420,7 @@ def view_faq_by_uuid(public_uuid):
         """, (public_uuid,))
         row = cur.fetchone()
         if not row:
-            return render_template('404.html'), 404
+            abort(404)
         faq = {'id': row[0], 'topic': row[1], 'intent': row[2], 'question': row[3], 'answer': row[4],
                'keywords': row[5], 'related_questions': row[6], 'priority_score': row[7],
                'image_path': row[8], 'public_uuid': row[9]}
@@ -454,7 +430,7 @@ def view_faq_by_uuid(public_uuid):
             conn.commit()
         except Exception as e:
             logger.error(f"Failed to log FAQ view: {e}")
-        return render_template('faq_view.html', faq=faq)
+        return render_template('public/faq_view.html', faq=faq)
     finally:
         cur.close()
         conn.close()
@@ -480,7 +456,7 @@ def unanswered():
     unanswered_count = cur.fetchone()[0]
     cur.close()
     conn.close()
-    return render_template('unanswered.html', questions=questions, unanswered_count=unanswered_count)
+    return render_template('admin/unanswered.html', questions=questions, unanswered_count=unanswered_count)
 
 
 @bp.route('/unanswered_count')
@@ -533,7 +509,7 @@ def answer_question(qid):
         if dups:
             cur.close()
             conn.close()
-            return render_template('unanswered.html', error=f'Similar FAQ: {dups[0]["question"]}',
+            return render_template('admin/unanswered.html', error=f'Similar FAQ: {dups[0]["question"]}',
                                     question=default_question)
         cur.execute("""
             INSERT INTO faq (topic, intent, question, answer, keywords, related_questions,
@@ -553,7 +529,7 @@ def answer_question(qid):
 
     cur.close()
     conn.close()
-    return render_template('unanswered.html', question=default_question)
+    return render_template('admin/unanswered.html', question=default_question)
 
 
 @bp.route('/reports')
@@ -594,7 +570,7 @@ def reports():
     feedbacks.sort(key=lambda f: f['days_ago'])
     new_reports_count = sum(1 for f in feedbacks if f['days_ago'] == 0)
 
-    return render_template('reports.html', feedbacks=feedbacks, new_reports_count=new_reports_count,
+    return render_template('admin/reports.html', feedbacks=feedbacks, new_reports_count=new_reports_count,
                             unanswered_count=unanswered_count)
 
 
@@ -708,7 +684,7 @@ def corrections_management():
     if not admin_required():
         return redirect('/admin')
     from services.corrections import list_corrections
-    return render_template('corrections_management.html', corrections=list_corrections(get_db))
+    return render_template('admin/corrections_management.html', corrections=list_corrections(get_db))
 
 
 @bp.route('/api/admin/corrections/<int:correction_id>', methods=['DELETE'])
@@ -759,39 +735,43 @@ def history():
         return redirect('/admin')
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM chat_history ORDER BY created_at DESC LIMIT 500")
-    chats = cur.fetchall()
+    cur.execute("""
+        SELECT id, created_at, user_message, bot_response, category, detected_language
+        FROM chat_history ORDER BY created_at DESC LIMIT 500
+    """)
+    columns = ("id", "created_at", "user_message", "bot_response", "category", "detected_language")
+    chats = [dict(zip(columns, row)) for row in cur.fetchall()]
     cur.close()
     conn.close()
-    return render_template('history.html', chats=chats)
+    return render_template('admin/history.html', chats=chats)
 
 
 @bp.route('/analytics')
 def analytics_page():
     if not admin_required():
         return redirect('/admin')
-    return render_template('analytics.html')
+    return render_template('admin/analytics.html')
 
 
 @bp.route('/ratings')
 def ratings_page():
     if not admin_required():
         return redirect('/admin')
-    return render_template('ratings.html')
+    return render_template('admin/ratings.html')
 
 
 @bp.route('/handbook')
 def handbook_management():
     if not session.get('admin'):
         return redirect('/admin')
-    return render_template('handbook_management.html')
+    return render_template('admin/handbook_management.html')
 
 
 @bp.route('/alert_log')
 def alert_log():
     if not admin_required():
         return redirect('/admin')
-    return render_template('alert_log.html')
+    return render_template('admin/alert_log.html')
 
 
 @bp.route('/api/ai_feedback', methods=['POST'])
@@ -994,9 +974,12 @@ def bulk_import_faq():
     if 'file' not in request.files:
         return jsonify({'error': 'No file'}), 400
     f = request.files['file']
-    if not f.filename.endswith('.json'):
+    if not f.filename or not f.filename.lower().endswith('.json'):
         return jsonify({'error': 'JSON only'}), 400
-    data = json.load(f)
+    try:
+        data = json.load(f.stream)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return jsonify({'error': 'Invalid JSON file'}), 400
     conn = get_db()
     cur = conn.cursor()
     imported = 0
@@ -1220,7 +1203,7 @@ def api_import_handbook_chunks():
         return jsonify({'error': 'JSON only'}), 400
 
     try:
-        data = json.load(f)
+        data = json.load(f.stream)
     except Exception as e:
         return jsonify({'error': f'Invalid JSON: {e}'}), 400
 
@@ -1284,7 +1267,6 @@ def api_mass_insert_handbook_faqs():
 
 
 
-# ---- Topic aliases (learning layer) ----
 @bp.route("/api/admin/topic_aliases", methods=["GET"])
 def api_list_topic_aliases():
     if not admin_required():
@@ -1607,15 +1589,6 @@ def api_sidebar_counts():
         'alerts': counts.get('alerts_new', 0),
     })
 
-# ---------------------------------------------------------------------
-# Self-healing draft review (services/self_heal.py)
-# ---------------------------------------------------------------------
-# Mirrors the corrections_management / add_correction / delete_correction
-# pattern above exactly. A draft here is NEVER authoritative by itself --
-# approve_draft() is the one deliberate step that promotes it into
-# services.corrections (same table add_correction writes to above), so
-# reviewing a draft is just pre-filled convenience for what an admin
-# would otherwise have to find and type in by hand on /corrections.
 
 @bp.route('/self_heal')
 def self_heal_review():
@@ -1626,7 +1599,7 @@ def self_heal_review():
     if not admin_required():
         return redirect('/admin')
     from services.self_heal import list_pending_drafts
-    return render_template('self_heal_review.html', drafts=list_pending_drafts(get_db))
+    return render_template('admin/self_heal_review.html', drafts=list_pending_drafts(get_db))
 
 
 @bp.route('/api/admin/self_heal/run', methods=['POST'])
@@ -1652,8 +1625,17 @@ def run_self_heal_now():
 def approve_self_heal_draft(draft_id):
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
+    data = request.get_json(silent=True) or {}
+    approved_answer = data.get('answer')
+    if approved_answer is not None and (
+            not isinstance(approved_answer, str) or len(approved_answer.strip()) < 20):
+        return jsonify({'error': 'Approved answer must contain at least 20 characters'}), 400
     from services.self_heal import approve_draft
-    ok = approve_draft(get_db, draft_id, reviewed_by=session.get('admin_user', 'admin'))
+    ok = approve_draft(
+        get_db, draft_id,
+        reviewed_by=session.get('admin_user', 'admin'),
+        approved_answer=approved_answer,
+    )
     if not ok:
         return jsonify({'error': 'Could not approve draft'}), 500
     return jsonify({'success': True})

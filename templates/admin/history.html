@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Conversation history | PAC Helpdesk</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Sora:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root { color-scheme: dark; --bg: #081522; --surface: #102438; --line: #294256; --text: #edf4f7; --muted: #a3b5c1; --cyan: #62d9e8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); font: 15px "DM Sans", sans-serif; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px clamp(18px, 4vw, 52px); border-bottom: 1px solid var(--line); }
+    header a { color: var(--cyan); text-decoration: none; font: 700 13px "Sora", sans-serif; }
+    main { max-width: 1440px; margin: 0 auto; padding: 36px clamp(18px, 4vw, 52px); }
+    .heading { display: flex; align-items: end; justify-content: space-between; flex-wrap: wrap; gap: 20px; margin-bottom: 24px; }
+    h1 { margin: 0; font: 700 clamp(26px, 4vw, 38px)/1.15 "Sora", sans-serif; }
+    .count { margin: 8px 0 0; color: var(--muted); }
+    label { display: grid; gap: 6px; min-width: min(100%, 290px); color: var(--muted); font-size: 12px; }
+    input { min-height: 42px; padding: 0 12px; border: 1px solid var(--line); border-radius: 0; color: var(--text); background: var(--surface); font: inherit; }
+    .table-wrap { overflow-x: auto; border-top: 1px solid var(--line); }
+    table { width: 100%; border-collapse: collapse; min-width: 900px; }
+    th, td { padding: 13px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--cyan); font: 600 11px "Sora", sans-serif; text-transform: uppercase; }
+    td { color: var(--muted); }
+    td.question { min-width: 210px; max-width: 300px; color: var(--text); }
+    td.answer { min-width: 300px; max-width: 560px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .empty { padding: 28px 12px; color: var(--muted); }
+    @media (max-width: 640px) { .heading { align-items: stretch; } label { width: 100%; } }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="/dashboard">PAC HELPDESK | ADMIN</a>
+    <a href="/dashboard">Back to dashboard</a>
+  </header>
+  <main>
+    <div class="heading">
+      <div>
+        <h1>Conversation history</h1>
+        <p class="count">Showing up to 500 latest messages</p>
+      </div>
+      <label for="history-filter">Filter conversations
+        <input id="history-filter" type="search" placeholder="Search messages, category, or language">
+      </label>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>ID</th><th>Time</th><th>Question</th><th>Answer</th><th>Category</th><th>Language</th></tr>
+        </thead>
+        <tbody id="history-rows">
+          {% for chat in chats %}
+          <tr>
+            <td>{{ chat.id }}</td>
+            <td>{{ chat.created_at.strftime('%Y-%m-%d %H:%M') if chat.created_at else '-' }}</td>
+            <td class="question">{{ chat.user_message or '-' }}</td>
+            <td class="answer">{{ chat.bot_response or '-' }}</td>
+            <td>{{ chat.category or '-' }}</td>
+            <td>{{ chat.detected_language or '-' }}</td>
+          </tr>
+          {% else %}
+          <tr><td class="empty" colspan="6">No conversations have been recorded yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </main>
+  <script>
+    document.getElementById("history-filter").addEventListener("input", function () {
+      const query = this.value.trim().toLowerCase();
+      document.querySelectorAll("#history-rows tr").forEach((row) => {
+        row.hidden = query && !row.textContent.toLowerCase().includes(query);
+      });
+    });
+  </script>
+</body>
+</html>

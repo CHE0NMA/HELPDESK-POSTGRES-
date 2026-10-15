@@ -11,16 +11,15 @@ Usage:
 from __future__ import annotations
 
 import json
-import re
 import sys
 from pathlib import Path
 
 # Prefer the services module if on PYTHONPATH
 try:
-    from services.topic_aliases import _SEED_ALIASES, forced_topic_for
+    from services.topic_aliases import forced_topic_for
 except ImportError:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from topic_aliases import _SEED_ALIASES, forced_topic_for
+    from topic_aliases import forced_topic_for
 
 
 TESTS = [

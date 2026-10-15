@@ -7,7 +7,7 @@ import re
 from threading import Lock
 from typing import Dict, Optional, Tuple
 
-from ai_providers import ai_cache, circuit_breaker, llm_chat
+from ai_providers import ai_cache, circuit_breaker
 # PERF: cheap classification calls (language id, gibberish/on-topic check)
 # route through the small/fast model instead of the main answer-generation
 # model -- see ai_providers/providers.py's llm_chat_fast() docstring.
@@ -153,13 +153,7 @@ LANGUAGE_CONFIG = {
             "Hindi pa ako sure/Wala pa ko kabalo niana. "
             "Visit the Registrar's Office or ask your academic adviser."
         ),
-        # Was missing this top-level key before (only nested inside
-        # unused 'english'/'tagalog'/'bisaya' sub-dicts below, which
-        # nothing else in the codebase reads) — get_db_response() does
-        # `lang_config['non_school']` for every language including this
-        # one, so a message classified as mixed_tb would raise KeyError
-        # the moment it hit get_non_school_response(). Fixed by adding
-        # the key every other language entry has.
+
         'non_school': (
             "Ako ang PAC student helpdesk. Matutulungan/Makatabang ko nimo sa "
             "schedule, handbook, enrollment, tuition, clearance, ug uban pang "
@@ -267,13 +261,10 @@ def verify_output_language(text: str, expected_lang: str) -> bool:
     if expected_lang not in LANGUAGE_CONFIG:
         return True  # unknown label, don't block on it
 
-    guess, _confident = _heuristic_language(text)
+    guess, _ = _heuristic_language(text)
     if guess == expected_lang:
         return True
 
-    # A mixed_xx reply that comes back as one of its pure components is
-    # close enough -- not the "drifted into a totally different
-    # language" failure this check exists to catch.
     mixed_components = {
         'mixed_te': {'tagalog', 'english'},
         'mixed_be': {'bisaya', 'english'},
@@ -507,7 +498,6 @@ def get_unclear_input_response(language: str) -> str:
     )
 
 
-_GIBBERISH_RE = re.compile(r'^[a-z]{1,2}$|^(.)\1{3,}$', re.IGNORECASE)
 _VOWEL_RE = re.compile(r'[aeiou]', re.IGNORECASE)
 
 
@@ -525,7 +515,6 @@ def _obviously_not_gibberish_and_school_related(question: str) -> bool:
     words = re.findall(r"[a-zA-Z']+", q)
     if not words:
         return False
-    # Looks like real language: has vowels, not one long mashed string
     if not any(_VOWEL_RE.search(w) for w in words):
         return False
     topical = (
@@ -629,7 +618,6 @@ def classify_and_detect_language(question: str, prior_lang: Optional[str] = None
     if not q:
         return {'language': prior_lang or 'english', 'is_gibberish': False, 'is_school_related': True}
 
-    # ---- language side: mirror detect_language()'s fast paths ----
     lang_guess, lang_confident = _heuristic_language(q)
     word_count = len(q.split())
     lang_result, lang_needs_ai = None, False
@@ -647,8 +635,8 @@ def classify_and_detect_language(question: str, prior_lang: Optional[str] = None
         else:
             lang_needs_ai = True
 
-    # ---- classification side: mirror classify_question_ai()'s fast paths ----
-    class_result, class_needs_ai = None, False
+    class_result: Optional[Dict[str, bool]] = None
+    class_needs_ai = False
     if _obviously_not_gibberish_and_school_related(q):
         class_result = {'is_gibberish': False, 'is_school_related': True}
     else:
@@ -661,19 +649,19 @@ def classify_and_detect_language(question: str, prior_lang: Optional[str] = None
         else:
             class_needs_ai = True
 
-    # Neither needs AI -- both already resolved from a fast path/cache.
     if not lang_needs_ai and not class_needs_ai:
+        assert lang_result is not None and class_result is not None
         return {'language': lang_result, **class_result}
 
     # Only one side needs AI -- delegate to the existing single-purpose
     # function rather than duplicating its prompt/parsing here.
     if lang_needs_ai and not class_needs_ai:
+        assert class_result is not None
         return {'language': detect_language(q, prior_lang=prior_lang), **class_result}
     if class_needs_ai and not lang_needs_ai:
+        assert lang_result is not None
         return {'language': lang_result, **classify_question_ai(q)}
 
-    # Both need AI -- the case this function exists for. One merged prompt
-    # instead of two sequential round-trips.
     prompt = f"""A student typed this message to a school helpdesk chatbot.
 {bot_identity_line()} The student may write in English, Tagalog, Bisaya/Cebuano,
 or a mix of these.
@@ -716,8 +704,6 @@ SCHOOL: yes/no  (plausibly related to the school -- enrollment, tuition, grades,
         logger.warning(f"classify_and_detect_language merged call failed, "
                         f"falling back to heuristics: {e}")
 
-    # Merged call failed/partially parsed -- fail open exactly like the
-    # two original functions would on their own.
     _cache_lang(_lang_cache_key(q), lang_guess)
     return {'language': lang_guess, 'is_gibberish': False, 'is_school_related': True}
 
@@ -781,43 +767,21 @@ def expand_abbreviations(text: str) -> str:
     return result
 
 
-# ---------------------------------------------------------------------------
-# Vernacular spelling/vocabulary normalization + hypothetical framing
-# ---------------------------------------------------------------------------
-# Students type Bisaya/Tagalog phonetically and inconsistently -- "bulan"
-# vs "buwan" vs "bulana" for "month", "semana" vs "simana" for "week",
-# "haxing" for "hazing", clothing words (damit/sinina/bisti/suoton) that
-# never share a token with the handbook's own English "uniform"/"dress"
-# wording, etc. Every one of these silently tanks fuzzy-match/regex
-# scoring even though the FAQ or handbook chunk that answers the question
-# exists.
-#
-# This is SEARCH-TIME-ONLY normalization: the output is used to build the
-# text that gets matched against FAQ/handbook keywords, never the raw
-# text shown back to the student or used for language detection --
-# rewriting "bulan" as "buwan" is fine for matching purposes but would be
-# wrong to actually say back to someone who just spoke to you in Bisaya.
 _VERNACULAR_VARIANTS: Dict[str, str] = {
-    # month -- canonicalize every Bisaya/Tagalog spelling variant to
-    # "buwan" so the existing "this month"/"next month" patterns (which
-    # were only ever written expecting "buwan") also fire for "bulan".
+
     'bulana': 'buwan', 'bulanan': 'buwan', 'bulan': 'buwan',
     'buwana': 'buwan', 'buwanan': 'buwan',
-    # week
+
     'simana': 'semana', 'simanaha': 'semana', 'semanaha': 'semana',
     'simanahan': 'semana', 'semanahan': 'semana',
-    # today/this (common typo forms not already covered by fuzzy TODAY_WORDS)
+
     'karung': 'karon', 'karun': 'karon',
-    # hazing / bullying misspellings students actually type
+
     'haxing': 'hazing', 'hazeing': 'hazing', 'hasing': 'hazing',
     'buly': 'bully', 'bulli': 'bully', 'bullyng': 'bullying',
     'bulying': 'bullying', 'nambubully': 'bully', 'nanbubully': 'bully',
     'pambully': 'bully',
-    # uniform / what-to-wear vocabulary -- map to words that DO appear in
-    # the handbook's/FAQ's own "Dress and Appearance"/"School Uniform"
-    # phrasing, so "unsa dapat suoton sa school" scores against an FAQ
-    # literally titled "unsay uniform sa skwelahan" the way it should --
-    # they mean the exact same thing but shared almost no tokens before.
+
     'isul-ob': 'isuot uniform', 'isulob': 'isuot uniform',
     'isuutin': 'isuot uniform', 'suoton': 'isuot uniform',
     'sul-ob': 'isuot uniform', 'ipasul-ob': 'isuot uniform',
@@ -842,25 +806,23 @@ def normalize_vernacular_spelling(text: str) -> str:
     return _VERNACULAR_WORD_RE.sub(_sub, text)
 
 
-# "What would happen if I ___" style hypothetical framing. A student
-# asking this almost always wants the SAME answer as if they'd asked
-# directly ("is there a policy on ___", "what's the penalty for ___") --
-# but none of the direct-question phrasing patterns fire on "what if"
-# framing, so questions like "what would happen if I bully someone" were
-# falling through even though "is there a policy for bullying" worked.
-# Deliberately topic-agnostic: covers bullying, hazing, curfew, or any
-# other rule someone hypothetically asks about, not just one topic.
+_HYPOTHETICAL_SUBJECT = (
+    r'(?:i|we|you|he|she|they|(?:(?:a|the) )?students?|someone|somebody|'
+    r'anyone|anybody|a person|my friend|another student)'
+)
 _HYPOTHETICAL_PATTERNS = [
     # English
-    r'what (?:would|will) happen(?:s)? if i\s+',
-    r'what happens if i\s+',
-    r'what if i\s+',
-    r"what'?s the (?:penalty|punishment|consequence)s? (?:if|for) i\s*",
-    # Tagalog
+    rf'what (?:would|will|could|might) happen(?:s)? if {_HYPOTHETICAL_SUBJECT}\s+',
+    rf'what happens if {_HYPOTHETICAL_SUBJECT}\s+',
+    rf'what if {_HYPOTHETICAL_SUBJECT}\s*',
+    rf"what'?s the (?:penalty|punishment|consequence)s? (?:if|for) {_HYPOTHETICAL_SUBJECT}\s*",
+    rf'(?:suppose|assuming|imagine)(?: that)? {_HYPOTHETICAL_SUBJECT}\s+',
+    rf'if {_HYPOTHETICAL_SUBJECT}\s+',
+
     r'ano (?:ang |po ang )?mangyayari (?:kung|kapag) ako(?:y|\s+ay)?\s*',
     r'paano kung ako\s*',
     r'kung ako(?:y|\s+ay)?\s+',
-    # Bisaya/Cebuano
+
     r'unsa(?:y)? (?:ang )?mahitabo kung ako\s*',
     r'unsaon (?:kung|kon) ako\s*',
     r'kon ako\s+',

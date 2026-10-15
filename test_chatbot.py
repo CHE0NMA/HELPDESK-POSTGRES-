@@ -12,7 +12,8 @@ import requests
 import time
 import json
 from datetime import datetime
-from collections import defaultdict
+from collections import Counter, defaultdict
+from typing import Any
 
 # ====================== CONFIG ======================
 CHATBOT_URL = "http://127.0.0.1:5001/chat"
@@ -22,38 +23,60 @@ REQUEST_TIMEOUT = 90                   # was 55
 DEBUG_FIRST_N = 3                      # print full status/body for first N calls
 # ====================================================
 
-TEST_CASES = [
+TEST_CASES: list[dict[str, Any]] = [
     # ========== 1. Identity / History ==========
     {"cat": "Handbook-Identity", "q": "What is the full official name of the school and its campuses?"},
-    {"cat": "Handbook-Identity", "q": "What was PAC originally called before it became a college?"},
-    {"cat": "Handbook-Identity", "q": "When was Philippine Advent College founded and who were the founders?"},
-    {"cat": "Handbook-Identity", "q": "What does the official PAC logo symbolize?"},
-    {"cat": "Handbook-Identity", "q": "Who composed the music and wrote the lyrics of the PAC Hymn?"},
+    {"cat": "Handbook-Identity", "q": "What was PAC originally called before it became a college?", "must_contain": ["hillside view", "elementary school"]},
+    {"cat": "Handbook-Identity", "q": "When was Philippine Advent College founded and who were the founders?", "must_contain": ["1975", "mariano", "margie"]},
+    {"cat": "Handbook-Identity", "q": "Who is the school's founder?", "must_contain": ["mariano", "margie"]},
+    {"cat": "Handbook-Identity", "q": "Who founded the school?", "must_contain": ["mariano", "margie"]},
+    {"cat": "Handbook-Identity", "q": "What does the official PAC logo symbolize?", "must_contain": ["bible", "torch"]},
+    {"cat": "Handbook-Identity", "q": "Who composed the music and wrote the lyrics of the PAC Hymn?", "must_contain": ["l.v. pilon", "sl la sage"]},
     {"cat": "Handbook-Identity", "q": "What is the significance of the year 1975 in PAC history?"},
     {"cat": "Handbook-Identity", "q": "What role did the Macias family play in founding PAC?"},
 
     # ========== 2. Vision / Mission / Values ==========
     {"cat": "Handbook-Vision", "q": "What is the philosophy of education at Philippine Advent College?"},
     {"cat": "Handbook-Vision", "q": "What is PAC’s vision statement?"},
-    {"cat": "Handbook-Vision", "q": "What are the three core values of PAC and what do they mean?"},
+    {
+        "cat": "Handbook-Vision",
+        "q": "What are the three core values of PAC and what do they mean?",
+        "must_contain": ["purpose-driven", "academic excellence", "christ-centered"],
+        "must_not_contain": ["they produce goods"],
+    },
     {"cat": "Handbook-Vision", "q": "How does PAC describe being Christ-centered?"},
     {"cat": "Handbook-Vision", "q": "Is there a quotation from Ellen G. White’s book Education in the student manual?"},
-
-    # ========== 3. Demerit / Conduct ==========
-    {"cat": "Handbook-Conduct", "q": "How many merit points does every student start with each semester?"},
-    {"cat": "Handbook-Conduct", "q": "How many demerits is a first-degree offense?"},
-    {"cat": "Handbook-Conduct", "q": "How many demerits is a third-degree offense?"},
+    {"cat": "Handbook-Conduct", "q": "How many merit points does every student start with each semester?", "must_contain": ["30", "merit"]},
+    {"cat": "Handbook-Conduct", "q": "How many demerits is a first-degree offense?", "must_contain": ["5", "demerit"]},
+    {"cat": "Handbook-Conduct", "q": "How many demerits is a third-degree offense?", "must_contain": ["30", "demerit"]},
     {"cat": "Handbook-Conduct", "q": "What happens when a student reaches 20 or more demerits?"},
-    {"cat": "Handbook-Conduct", "q": "How many days does a student have to appeal a decision of the Student Disciplinary Committee?"},
+    {"cat": "Handbook-Conduct", "q": "How many days does a student have to appeal a decision of the Student Disciplinary Committee?", "must_contain": ["15", "days"]},
     {"cat": "Handbook-Conduct", "q": "Is jewelry such as rings, bracelets, or necklaces allowed on campus?"},
     {"cat": "Handbook-Conduct", "q": "What is the official dress and appearance policy for students?"},
     {"cat": "Handbook-Conduct", "q": "Are slippers allowed on campus?"},
-    {"cat": "Handbook-Conduct", "q": "Is public display of affection considered a violation?"},
+    {"cat": "Handbook-Conduct", "q": "Is public display of affection considered a violation?", "must_contain_any": ["first-degree", "first degree", "5 demerits"]},
     {"cat": "Handbook-Conduct", "q": "What is the policy on missing dormitory worships?"},
+    {
+        "cat": "Handbook-Conduct",
+        "q": "How many demerits for an unexcused dormitory worship absence?",
+        "must_contain": ["worship"],
+        "must_contain_any": ["two points", "2 points", "two demerit", "2 demerit"],
+    },
+    {
+        "cat": "Handbook-Conduct",
+        "q": "What if a student skips dormitory worship without an excuse?",
+        "must_contain": ["worship"],
+        "must_contain_any": ["two points", "2 points", "two demerit", "2 demerit"],
+    },
 
     # ========== 4. Legal ==========
     {"cat": "Handbook-Legal", "q": "Does the student manual mention the Anti-Bullying Act or RA 10627?"},
-    {"cat": "Handbook-Legal", "q": "What is the Safe Spaces Act and what is its Republic Act number?"},
+    {
+        "cat": "Handbook-Legal",
+        "q": "What is the Safe Spaces Act and what is its Republic Act number?",
+        "must_contain": ["11313"],
+        "must_not_contain": ["11180", "athletic programs report act"],
+    },
     {"cat": "Handbook-Legal", "q": "What does RA 11313 cover according to the handbook?"},
     {"cat": "Handbook-Legal", "q": "Is hazing allowed or prohibited in PAC?"},
 
@@ -61,11 +84,11 @@ TEST_CASES = [
     {"cat": "Programs-FAQ", "q": "What degree programs does Philippine Advent College offer?"},
     {"cat": "Programs-FAQ", "q": "What senior high school strands are available at PAC?"},
     {"cat": "Programs-FAQ", "q": "Does PAC offer Bachelor of Science in Nursing and Midwifery?"},
-    {"cat": "Programs-FAQ", "q": "What TESDA NC II programs are offered?"},
+    {"cat": "Programs-FAQ", "q": "What TESDA NC II programs are offered?", "must_contain": ["housekeeping", "food and beverage"]},
     {"cat": "Programs-FAQ", "q": "What teacher education programs are available?"},
     {"cat": "Programs-FAQ", "q": "Is Bachelor of Science in Business Administration offered?"},
     {"cat": "Programs-FAQ", "q": "Is there a family scholarship or discount for siblings?"},
-    {"cat": "Programs-FAQ", "q": "What are the current dormitory charges?"},
+    {"cat": "Programs-FAQ", "q": "What are the current dormitory charges?", "must_contain": ["717.99", "938.91", "331.38", "165.69"]},
     {"cat": "Programs-FAQ", "q": "Is a drug test required for incoming first-year students?"},
 
     # ========== 6. Schedule + immediate follow-ups ==========
@@ -74,7 +97,12 @@ TEST_CASES = [
     {"cat": "Follow-up", "q": "College too?"},
     {"cat": "Follow-up", "q": "Elementary also?"},
 
-    {"cat": "Schedule", "q": "Is there class tomorrow?"},
+    {
+        "cat": "Schedule",
+        "q": "Is there class tomorrow?",
+        "must_contain_any": ["no class", "no classes"],
+        "must_not_contain": ["attendance guidelines", "twenty percent", "instructor or professor"],
+    },
     {"cat": "Follow-up", "q": "For the whole school?"},
     {"cat": "Follow-up", "q": "sa tanan?"},
 
@@ -89,7 +117,11 @@ TEST_CASES = [
     {"cat": "Schedule", "q": "Is the office open on Friday?"},
     {"cat": "Follow-up", "q": "All offices or just Student Affairs?"},
 
-    {"cat": "Schedule", "q": "Any suspension announced?"},
+    {
+        "cat": "Schedule",
+        "q": "Any suspension announced?",
+        "must_not_contain": ["unauthorized bulletin boards", "posters must be removed"],
+    },
     {"cat": "Follow-up", "q": "Is it for all campuses?"},
     {"cat": "Follow-up", "q": "whole school?"},
 
@@ -105,6 +137,8 @@ TEST_CASES = [
 FALLBACK_PHRASES = [
     "i don't have a confirmed answer",
     "i've saved it so our staff",
+    "i've saved your question so our staff",
+    "i couldn't find a solid answer",
     "feel free to ask me something else",
     "couldn't quite understand",
     "could you try rephrasing",
@@ -139,11 +173,20 @@ WRONG_CHUNK_MARKERS = [
 ]
 
 
-def is_bad_answer(answer: str, question: str = "") -> bool:
+def is_bad_answer(answer: str, question: str = "",
+                  must_contain: list[str] | None = None,
+                  must_contain_any: list[str] | None = None,
+                  must_not_contain: list[str] | None = None) -> bool:
     if not answer or len(answer.strip()) < 30:
         return True
     lower = answer.lower()
     if any(p in lower for p in FALLBACK_PHRASES):
+        return True
+    if must_contain and not all(term.lower() in lower for term in must_contain):
+        return True
+    if must_contain_any and not any(term.lower() in lower for term in must_contain_any):
+        return True
+    if must_not_contain and any(term.lower() in lower for term in must_not_contain):
         return True
     if any(m in lower for m in WRONG_CHUNK_MARKERS):
         return True
@@ -168,6 +211,24 @@ def is_bad_answer(answer: str, question: str = "") -> bool:
         if "5 year" not in lower and "five year" not in lower and "maximum of 5" not in lower:
             return True
     return False
+
+
+def classify_answer_outcome(answer: str, question: str = "",
+                           must_contain: list[str] | None = None,
+                           must_contain_any: list[str] | None = None,
+                           must_not_contain: list[str] | None = None) -> str:
+    if (answer or "").startswith("[ERROR]"):
+        return "request_error"
+    lower = (answer or "").lower()
+    if any(phrase in lower for phrase in FALLBACK_PHRASES):
+        return "fallback"
+    if is_bad_answer(
+        answer, question, must_contain, must_contain_any, must_not_contain
+    ):
+        return "incorrect"
+    if must_contain or must_contain_any:
+        return "verified"
+    return "unverified"
 
 
 def _extract_answer(data) -> str | None:
@@ -272,7 +333,7 @@ def ask_chatbot(question: str, call_index: int = 0) -> str:
 
 
 def main():
-    results = []
+    results: list[dict[str, Any]] = []
     print(f"\nStarting MIXED test — {len(TEST_CASES)} questions")
     print(f"Session: {SESSION_ID}")
     print(f"Endpoint: {CHATBOT_URL}")
@@ -288,9 +349,14 @@ def main():
 
         print(f"\n[{i:02d}/{len(TEST_CASES)}] {q}")
         answer = ask_chatbot(q, call_index=i - 1)
-        failed = is_bad_answer(answer, q) or answer.startswith("[ERROR]")
+        outcome = classify_answer_outcome(
+            answer, q, item.get("must_contain"), item.get("must_contain_any"),
+            item.get("must_not_contain"),
+        )
+        failed = outcome in {"fallback", "incorrect", "request_error"}
         status = "❌ FAILED" if failed else "✅ PASSED"
         print(f" → {status}")
+        print(f" → OUTCOME: {outcome}")
         print(f" → {answer[:240]}{'...' if len(answer) > 240 else ''}")
 
         results.append({
@@ -299,17 +365,30 @@ def main():
             "question": q,
             "answer": answer,
             "status": "failed" if failed else "passed",
+            "outcome": outcome,
+            "verification": (
+                "explicit" if item.get("must_contain") or item.get("must_contain_any")
+                else "guardrail_only" if item.get("must_not_contain") else "basic_only"
+            ),
             "timestamp": datetime.now().isoformat(),
         })
         time.sleep(DELAY_BETWEEN_QUESTIONS)
 
-    by_cat = defaultdict(lambda: {"passed": 0, "total": 0})
+    outcome_counts: Counter[str] = Counter(r["outcome"] for r in results)
+    by_cat: defaultdict[str, Counter[str]] = defaultdict(Counter)
     for r in results:
-        by_cat[r["category"]]["total"] += 1
+        category = by_cat[r["category"]]
+        category["total"] += 1
+        category[r["outcome"]] += 1
         if r["status"] == "passed":
-            by_cat[r["category"]]["passed"] += 1
+            category["passed"] += 1
 
     answered = sum(1 for r in results if r["status"] == "passed")
+    explicit_cases = sum(1 for r in results if r["verification"] == "explicit")
+    explicit_verified = sum(
+        1 for r in results
+        if r["verification"] == "explicit" and r["outcome"] == "verified"
+    )
 
     with open("test_results_mixed.json", "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2, ensure_ascii=False)
@@ -318,14 +397,31 @@ def main():
         f.write("# Chatbot Mixed Test Report\n")
         f.write(f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n")
         f.write(f"**Session:** {SESSION_ID}\n\n")
-        f.write(f"**Overall Score:** {answered}/{len(results)} passed\n\n")
-        f.write("## Score by Category\n\n")
+        f.write(f"**Basic checks passed:** {answered}/{len(results)}\n\n")
+        f.write(f"**Explicitly verified:** {explicit_verified}/{explicit_cases}\n\n")
+        f.write("## Outcome Breakdown\n\n")
+        for outcome in ("verified", "unverified", "fallback", "incorrect", "request_error"):
+            f.write(f"- **{outcome.replace('_', ' ').title()}**: {outcome_counts[outcome]}\n")
+        f.write("\nAnswers without explicit expectations are unverified, not counted as factual verification.\n\n")
+        f.write("## Outcomes by Category\n\n")
         for cat, stats in by_cat.items():
-            f.write(f"- **{cat}**: {stats['passed']}/{stats['total']}\n")
+            f.write(
+                f"- **{cat}**: {stats['passed']}/{stats['total']} passed; "
+                f"verified {stats['verified']}, unverified {stats['unverified']}, "
+                f"fallback {stats['fallback']}, incorrect {stats['incorrect']}, "
+                f"request errors {stats['request_error']}\n"
+            )
         f.write("\n---\n\n")
         for r in results:
-            icon = "✅" if r["status"] == "passed" else "❌"
-            f.write(f"### {icon} Q{r['number']} [{r['category']}]: {r['question']}\n\n")
+            icons = {
+                "verified": "✅", "unverified": "⚪", "fallback": "↩️",
+                "incorrect": "❌", "request_error": "⚠️",
+            }
+            icon = icons[r["outcome"]]
+            f.write(
+                f"### {icon} Q{r['number']} [{r['category']}] "
+                f"({r['outcome']}, {r['verification']}): {r['question']}\n\n"
+            )
             f.write(f"**Answer:**\n\n{r['answer']}\n\n---\n\n")
 
     print("\n" + "=" * 80)
@@ -333,6 +429,8 @@ def main():
     print("By category:")
     for cat, stats in by_cat.items():
         print(f"  {cat:20} {stats['passed']:2}/{stats['total']}")
+    print("Outcome counts:", dict(outcome_counts))
+    print(f"Explicitly verified: {explicit_verified}/{explicit_cases}")
     print("\nWrote test_results_mixed.json and test_results_mixed.md")
 
 

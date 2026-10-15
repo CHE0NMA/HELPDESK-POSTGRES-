@@ -37,16 +37,12 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import List, Sequence
+from typing import Any, List, Optional, Sequence, cast
 
 from ai_providers import ai_cache, circuit_breaker, llm_chat
 
 logger = logging.getLogger("pac_helpdesk.ai_retrieval")
 
-# A handbook's full section list or a FAQ table's full question list is a
-# few hundred short lines at most -- cheap as ONE prompt. Cap defensively
-# so a runaway corpus can't blow the context window; raise this if you
-# ever have a genuinely huge handbook.
 MAX_ITEMS_PER_CALL = 500
 
 
@@ -67,9 +63,6 @@ def _parse_index_array(raw: str, n: int, max_picks: int) -> List[int]:
     try:
         idxs = json.loads(raw)
     except Exception:
-        # Occasionally a small/fast model wraps the array in prose despite
-        # instructions -- try to salvage a bracketed array out of the text
-        # before giving up entirely.
         m = re.search(r'\[[^\]]*\]', raw)
         if not m:
             return []
@@ -79,10 +72,13 @@ def _parse_index_array(raw: str, n: int, max_picks: int) -> List[int]:
             return []
     if not isinstance(idxs, list):
         return []
-    out = []
-    for i in idxs:
+    parsed_idxs: Sequence[object] = cast(Sequence[object], idxs)
+    out: List[int] = []
+    for item in parsed_idxs:
+        if not isinstance(item, (int, float, str)):
+            continue
         try:
-            i = int(i)
+            i = int(item)
         except (TypeError, ValueError):
             continue
         if 0 <= i < n and i not in out:
@@ -93,7 +89,7 @@ def _parse_index_array(raw: str, n: int, max_picks: int) -> List[int]:
 
 
 def llm_pick_sections(question: str, titles: Sequence[str], max_picks: int = 3,
-                       context_hint: str = None) -> List[str]:
+                       context_hint: Optional[str] = None) -> List[str]:
     """Given the FULL current list of handbook section titles, ask the
     LLM which one(s) actually answer the question. Returns [] if
     unavailable, unsure, or nothing plausibly fits -- treat that as "no
@@ -112,7 +108,7 @@ def llm_pick_sections(question: str, titles: Sequence[str], max_picks: int = 3,
     almost no content words of its own to match against. Purely additive:
     omit it and this behaves exactly as a standalone-question router.
     """
-    titles = [t for t in dict.fromkeys(t for t in titles if t)]  # dedupe, keep order
+    titles = [t for t in dict.fromkeys(t for t in titles if t)]  
     if not question or not titles or circuit_breaker.is_open():
         return []
     titles_used = titles[:MAX_ITEMS_PER_CALL]
@@ -121,7 +117,8 @@ def llm_pick_sections(question: str, titles: Sequence[str], max_picks: int = 3,
         f"secpick_{hash(question)}_{_corpus_fingerprint(titles_used)}_"
         f"{max_picks}_{hash(context_hint or '')}"
     )
-    cached = ai_cache.get(cache_key)
+    cache: Any = ai_cache
+    cached = cast(Optional[List[str]], cache.get(cache_key))
     if cached is not None:
         return cached
 
@@ -155,7 +152,7 @@ JSON array:"""
             return []
         picks_idx = _parse_index_array(resp, len(titles_used), max_picks)
         picks = [titles_used[i] for i in picks_idx]
-        ai_cache.set(cache_key, picks)
+        cast(Any, ai_cache).set(cache_key, picks)
         return picks
     except Exception as e:
         logger.warning(f"llm_pick_sections error: {e}")
@@ -181,7 +178,7 @@ def llm_pick_faq(question: str, faq_questions: Sequence[str], max_picks: int = 1
     faq_questions_used = faq_questions[:MAX_ITEMS_PER_CALL]
 
     cache_key = f"faqpick_{hash(question)}_{_corpus_fingerprint(faq_questions_used)}_{max_picks}"
-    cached = ai_cache.get(cache_key)
+    cached = cast(Optional[List[int]], cast(Any, ai_cache).get(cache_key))
     if cached is not None:
         return cached
 
@@ -204,7 +201,7 @@ JSON array:"""
         if not resp:
             return []
         picks = _parse_index_array(resp, len(faq_questions_used), max_picks)
-        ai_cache.set(cache_key, picks)
+        cast(Any, ai_cache).set(cache_key, picks)
         return picks
     except Exception as e:
         logger.warning(f"llm_pick_faq error: {e}")
@@ -224,15 +221,14 @@ def llm_self_check(question: str, answer: str, source_excerpt: str) -> bool:
     shares plenty of words with the question but actually dodges it, or
     answers a narrower/broader version of what was asked.
 
-    Returns True (pass) by default on any failure/unavailability -- this
-    is a LAST additional filter on an answer that already passed grounding
-    and relevance, not a replacement for either, so it fails open rather
-    than risking a good answer over a flaky self-check call.
+    Returns True only when the model explicitly replies YES. An unavailable
+    or ambiguous check rejects the generated answer so callers can use their
+    deterministic excerpt fallback instead of trusting an unchecked answer.
     """
     if not question or not answer:
-        return True
+        return False
     if circuit_breaker.is_open():
-        return True
+        return False
     try:
         prompt = f"""Student question: "{question}"
 
@@ -240,17 +236,21 @@ Proposed answer: "{answer[:600]}"
 
 Source excerpt the answer must be based on: "{(source_excerpt or '')[:1200]}"
 
-Does the proposed answer actually address what the student asked, using only
-information present in the source excerpt? Reply with exactly one word:
-YES or NO."""
+    Does EVERY factual sentence in the proposed answer directly help answer the
+    student's question? The excerpt may contain multiple topics: do not approve an
+    answer merely because an extra fact appears somewhere in the excerpt. Reply NO
+    if the answer includes any unrelated topic, law, number, policy, or side fact,
+    even when that fact is accurate and present in the excerpt. Also reply NO if an
+    answer claim is not supported by the excerpt. Reply with exactly one word:
+    YES or NO."""
         resp = llm_chat(prompt, max_tokens=5)
         if not resp:
-            return True
+            return False
         verdict = resp.strip().upper()
-        if verdict.startswith('NO'):
+        if verdict != 'YES':
             logger.info(f"llm_self_check: REJECTED answer for q={question[:80]!r}")
             return False
         return True
     except Exception as e:
         logger.warning(f"llm_self_check error: {e}")
-        return True
+        return False

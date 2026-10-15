@@ -50,12 +50,15 @@ CREATE TABLE IF NOT EXISTS pending_correction_drafts (
     source_type     TEXT NOT NULL,        -- 'handbook' | 'faq'
     source_ref      TEXT,                 -- section title / faq id, for admin context
     times_asked     INT NOT NULL DEFAULT 1,
+    student_suggestions TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
     status          TEXT NOT NULL DEFAULT 'pending',  -- pending | approved | dismissed
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     reviewed_at     TIMESTAMPTZ,
     reviewed_by     TEXT,
     CONSTRAINT pending_correction_drafts_q_key UNIQUE (question_norm)
 );
+ALTER TABLE pending_correction_drafts
+    ADD COLUMN IF NOT EXISTS student_suggestions TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
 CREATE INDEX IF NOT EXISTS idx_pcd_status ON pending_correction_drafts (status, created_at DESC);
 """
 
@@ -119,6 +122,49 @@ def _save_draft(get_db_fn, question: str, draft_answer: str, source_type: str,
         return False
 
 
+def save_feedback_draft(get_db_fn, question: str, suggested_answer: str) -> bool:
+    """Queue a student's suggested correction for an admin to verify.
+
+    Feedback never overwrites an existing draft or publishes an answer.
+    """
+    qn = _normalize(question or "")
+    answer = (suggested_answer or "").strip()
+    if not qn or len(answer) < 20 or not ensure_self_heal_schema(get_db_fn):
+        return False
+
+    conn = get_db_fn()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """
+            INSERT INTO pending_correction_drafts
+                (question, question_norm, draft_answer, source_type, source_ref,
+                 times_asked, student_suggestions)
+            VALUES (%s, %s, %s, 'student_feedback',
+                    'Student suggestion - verify before approving', 1, ARRAY[]::TEXT[])
+            ON CONFLICT (question_norm) DO UPDATE SET
+                student_suggestions = CASE
+                    WHEN EXCLUDED.draft_answer = ANY(pending_correction_drafts.student_suggestions)
+                        THEN pending_correction_drafts.student_suggestions
+                    WHEN COALESCE(array_length(pending_correction_drafts.student_suggestions, 1), 0) < 5
+                        THEN array_append(pending_correction_drafts.student_suggestions, EXCLUDED.draft_answer)
+                    ELSE pending_correction_drafts.student_suggestions
+                END
+            WHERE pending_correction_drafts.status = 'pending'
+            """,
+            (question[:500], qn, answer[:4000]),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"save_feedback_draft failed: {e}")
+        return False
+    finally:
+        cur.close()
+        conn.close()
+
+
 def run_self_heal_pass(get_db_fn, min_count: int = 2, limit: int = 50) -> int:
     """Scan frequently-missed questions (unanswered_questions, grouped
     like alerts.batch_process_unanswered already does) and try the live
@@ -158,7 +204,7 @@ def run_self_heal_pass(get_db_fn, min_count: int = 2, limit: int = 50) -> int:
         conn.close()
 
     created = 0
-    for _q_norm, count, sample in rows:
+    for _, count, sample in rows:
         try:
             if get_correction(get_db_fn, sample):
                 continue  # already has an admin correction -- nothing to draft
@@ -177,7 +223,7 @@ def run_self_heal_pass(get_db_fn, min_count: int = 2, limit: int = 50) -> int:
             logger.warning(f"self_heal handbook attempt failed for {sample[:60]!r}: {e}")
 
         try:
-            faq_answer, faq_ref = _try_faq_answer(get_db_fn, sample)
+            faq_answer, faq_ref = _try_faq_answer(sample)
             if faq_answer and _save_draft(get_db_fn, sample, faq_answer, 'faq', faq_ref, count):
                 created += 1
         except Exception as e:
@@ -187,7 +233,7 @@ def run_self_heal_pass(get_db_fn, min_count: int = 2, limit: int = 50) -> int:
     return created
 
 
-def _try_faq_answer(get_db_fn, question: str):
+def _try_faq_answer(question: str):
     """Best-effort FAQ attempt using answer_engine directly (not
     services.faq's find_answer, which has session/chat-history side
     effects that don't belong in an offline batch job). Mirrors the same
@@ -239,7 +285,8 @@ def list_pending_drafts(get_db_fn) -> List[dict]:
     try:
         cur.execute(
             """
-            SELECT id, question, draft_answer, source_type, source_ref, times_asked, created_at
+                 SELECT id, question, draft_answer, source_type, source_ref, times_asked,
+                     created_at, student_suggestions
             FROM pending_correction_drafts
             WHERE status = 'pending'
             ORDER BY times_asked DESC, created_at DESC
@@ -249,6 +296,7 @@ def list_pending_drafts(get_db_fn) -> List[dict]:
             "id": r[0], "question": r[1], "draft_answer": r[2], "source_type": r[3],
             "source_ref": r[4], "times_asked": r[5],
             "created_at": r[6].isoformat() if r[6] else None,
+            "student_suggestions": list(r[7] or []),
         } for r in cur.fetchall()]
     except Exception as e:
         logger.error(f"list_pending_drafts failed: {e}")
@@ -258,7 +306,8 @@ def list_pending_drafts(get_db_fn) -> List[dict]:
         conn.close()
 
 
-def approve_draft(get_db_fn, draft_id: int, reviewed_by: str = None) -> bool:
+def approve_draft(get_db_fn, draft_id: int, reviewed_by: Optional[str] = None,
+                  approved_answer: Optional[str] = None) -> bool:
     """Promote a draft into services.corrections' authoritative table.
     This is the deliberate "trust this now" step -- it always stays a
     human action, never automatic."""
@@ -283,6 +332,11 @@ def approve_draft(get_db_fn, draft_id: int, reviewed_by: str = None) -> bool:
         cur.close()
         conn.close()
 
+    if approved_answer is not None:
+        draft_answer = approved_answer.strip()
+        if len(draft_answer) < 20:
+            return False
+
     ok = save_correction(get_db_fn, question, draft_answer, created_by=reviewed_by or 'self_heal')
     if not ok:
         return False
@@ -306,7 +360,7 @@ def approve_draft(get_db_fn, draft_id: int, reviewed_by: str = None) -> bool:
         conn.close()
 
 
-def dismiss_draft(get_db_fn, draft_id: int, reviewed_by: str = None) -> bool:
+def dismiss_draft(get_db_fn, draft_id: int, reviewed_by: Optional[str] = None) -> bool:
     conn = get_db_fn()
     cur = conn.cursor()
     try:

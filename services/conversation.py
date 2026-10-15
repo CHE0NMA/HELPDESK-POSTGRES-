@@ -49,11 +49,11 @@ logger = logging.getLogger("pac_helpdesk.conversation")
 _TABLE_READY = False
 
 
-_L1_TTL_SECONDS = 8  # See get_conversation_context() below for why this exists.
+_L1_TTL_SECONDS = 8  
 
 
 class ConversationContext:
-    def __init__(self, session_id: str = None):
+    def __init__(self, session_id: Optional[str] = None):
         self.session_id = session_id
         self.last_topic = None
         self.last_intent = None
@@ -63,17 +63,6 @@ class ConversationContext:
         self.last_answer = None
         self.last_schedule_query = None
         self.last_detected_lang = None
-        # Which handbook section(s) the last handbook-sourced answer
-        # actually came from -- used to anchor follow-up retrieval (see
-        # services/handbook.py's context_hint param and
-        # services/faq.py's _answer_followup_via_search). Without this,
-        # a short follow-up like "does that apply to all levels?" has to
-        # be rewritten into a standalone question by a free-text LLM
-        # rewrite and then re-run through retrieval from scratch, with
-        # no memory of which section the previous turn actually landed
-        # on -- if the rewrite drifts even slightly, retrieval has
-        # nothing to anchor to. Kept as a small list (not just one title)
-        # since a compound answer can draw from more than one section.
         self.last_handbook_sections: List[str] = []
 
         self.last_disambiguation: Optional[dict] = None
@@ -95,23 +84,6 @@ class ConversationContext:
         if handbook_sections:
             self.last_handbook_sections = list(handbook_sections)[:3]
 
-        # BUG FIX: last_schedule_query was set by dates.py whenever a
-        # schedule question was answered, but NOTHING ever cleared it
-        # again -- not on a topic change, not ever. faq.py's find_answer()
-        # checks `if ctx.last_schedule_query:` as its very FIRST routing
-        # gate, before corrections, before cache, before classification --
-        # so once a student asked even one schedule question, every
-        # later message for the rest of the session got tested against
-        # date_service.answer_schedule_department_followup() first, no
-        # matter how unrelated. That function's own heuristics
-        # (is_schedule_level_followup's short-question word list, in
-        # particular) are permissive enough to misfire on ordinary short
-        # questions in a completely different topic -- producing a stale
-        # "here's today's schedule" answer to something that was never a
-        # schedule question at all. Every non-date answer path now calls
-        # update(..., clear_schedule_context=True) so a topic change
-        # actually ends the schedule follow-up window, the way it
-        # obviously should.
         if clear_schedule_context:
             self.last_schedule_query = None
 
@@ -119,8 +91,6 @@ class ConversationContext:
             self.conversation_history.append({
                 'user': user_msg, 'bot': bot_response, 'ts': time.time(),
             })
-            # Keep a bit more than the 3 exchanges we promise to "remember"
-            # so trimming never eats into the guaranteed window.
             if len(self.conversation_history) > 10:
                 self.conversation_history.pop(0)
             self.last_answer = bot_response
@@ -189,10 +159,7 @@ class ConversationContext:
             'original_question': original_question,
             'detected_lang': detected_lang,
         }
-        # Not persisted (see module docstring) — but still save the rest
-        # of the context (history, topic, etc.) so a cross-worker miss
-        # right after this doesn't lose everything, just the pending
-        # picker itself.
+
         _save_ctx(self.session_id, self)
 
     def clear_disambiguation(self):
@@ -206,32 +173,12 @@ conversation_contexts: Dict[str, ConversationContext] = {}
 def get_conversation_context(session_id: str) -> ConversationContext:
     session_id = session_id or 'default'
     ctx = conversation_contexts.get(session_id)
-    # BUG FIX: the L1 cache used to be trusted forever once populated,
-    # which only fixed the *first* cross-worker hop for a session. If a
-    # session later bounced BACK to a worker that already had it cached
-    # (e.g. A -> B -> A across three messages), worker A would return its
-    # stale first-load snapshot -- missing whatever B saved in between --
-    # and then silently overwrite that newer state on its own next save.
-    # A short TTL makes a worker re-sync with Postgres periodically
-    # instead of trusting one snapshot for the rest of the process's
-    # lifetime, while still avoiding a DB round trip for the handful of
-    # internal calls made while answering a single message.
     if ctx is not None and (time.time() - ctx._loaded_at) < _L1_TTL_SECONDS:
         return ctx
 
-    # L1 cache miss (or stale) — recover durable state from Postgres
-    # before assuming this is genuinely a brand new conversation. This is
-    # the path that fixes "random new chat every time": a message that
-    # lands on a different worker process, or after a restart, now finds
-    # the real history instead of an empty context.
     ctx = _load_ctx(session_id)
     conversation_contexts[session_id] = ctx
     return ctx
-
-
-# ---------------------------------------------------------------------
-# DB-backed persistence (source of truth). See module docstring for why.
-# ---------------------------------------------------------------------
 
 def _ensure_table():
     global _TABLE_READY
@@ -255,8 +202,7 @@ def _ensure_table():
             cur.close()
             conn.close()
     except Exception as e:
-        # DB not reachable yet at import/first-use time, or the app is
-        # mid-migration — just try again next call. Never blocks chat.
+        
         logger.debug(f"conversation_state ensure_table skipped: {e}")
 
 
@@ -327,8 +273,6 @@ def _save_ctx(session_id: Optional[str], ctx: 'ConversationContext') -> None:
             cur.close()
             conn.close()
     except Exception as e:
-        # Never let a persistence hiccup break the chat turn itself —
-        # worst case we fall back to in-memory-only behavior again.
         logger.debug(f"_save_ctx failed for session={session_id}: {e}")
 
 
@@ -381,9 +325,7 @@ def _load_ctx(session_id: str) -> 'ConversationContext':
             conn.close()
         if row and row[0] is not None:
             raw = row[0]
-            # psycopg2 already deserializes JSONB into a dict; only
-            # json.loads() it ourselves if it came back as a string
-            # (e.g. a different driver/config).
+
             data = (
                 json.loads(raw, object_hook=_json_object_hook)
                 if isinstance(raw, str) else _rehydrate_dates(raw)

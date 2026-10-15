@@ -16,13 +16,11 @@ is what matters for the scheduler jobs below.
 """
 import logging
 import smtplib
-from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from database import get_db
-from services.tz import ph_now  # BUG FIX: was comparing against server-UTC datetime.now() -- see services/tz.py
-
+from services.tz import ph_now  
 logger = logging.getLogger("pac_helpdesk.alerts")
 
 import os
@@ -233,14 +231,14 @@ def check_frequent_missing_dates(min_count: int = 3):
     cur = conn.cursor()
     try:
         cur.execute("""
-            SELECT question, COUNT(*) as cnt, MAX(last_asked) as last_seen
+            SELECT MAX(question) AS question, COUNT(*) AS cnt
             FROM missing_date_queries
             WHERE question IS NOT NULL AND question != ''
             GROUP BY LOWER(TRIM(question))
             HAVING COUNT(*) >= %s
             ORDER BY cnt DESC
         """, (min_count,))
-        for question, count, _last_seen in cur.fetchall():
+        for question, count in cur.fetchall():
             send_frequent_missing_date_alert(question, count)
     except Exception as e:
         logger.error(f"check_frequent_missing_dates error: {e}")

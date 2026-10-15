@@ -137,7 +137,7 @@
 
   .hero h1 .hi {
     background: linear-gradient(90deg, var(--blue-light), var(--accent));
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   }
 
   .hero p {
@@ -181,7 +181,7 @@
   .stat-num {
     font-family: 'Sora', sans-serif; font-weight: 800; font-size: 1.55rem;
     background: linear-gradient(90deg, var(--blue-light), var(--accent));
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   }
 
   .stat-lbl { font-size: .75rem; color: var(--text-dim); margin-top: .15rem; }
@@ -259,7 +259,7 @@
 
   .feat-q {
     font-size: .84rem; color: var(--text); font-weight: 500;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    display: -webkit-box; line-clamp: 2; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
     overflow: hidden; overflow-wrap: anywhere; word-break: break-word;
   }
 
@@ -308,7 +308,7 @@
   .hb-stat-num {
     font-family: 'Sora', sans-serif; font-weight: 800; font-size: 1.4rem;
     background: linear-gradient(90deg, var(--blue-light), var(--accent));
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   }
   .hb-stat-lbl { font-size: .72rem; color: var(--text-dim); }
 
@@ -408,7 +408,7 @@
 
   .new-q {
     font-size: .83rem; color: var(--text); font-weight: 500; line-height: 1.45;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    display: -webkit-box; line-clamp: 2; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
     overflow-wrap: anywhere; word-break: break-word;
   }
 
@@ -506,7 +506,7 @@
   .q-prev-item:hover { background: rgba(21,101,192,.2); border-color: rgba(66,165,245,.25); color: var(--text); }
   .q-prev-item i     { color: var(--blue-light); font-size: .7rem; flex-shrink: 0; }
   .q-prev-item span  {
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    display: -webkit-box; line-clamp: 2; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
     overflow: hidden; overflow-wrap: anywhere; word-break: break-word;
   }
 
@@ -932,17 +932,6 @@ function observe() {
   document.querySelectorAll('.rv:not(.vis)').forEach(el => ob.observe(el));
 }
 
-// BUG FIX: every load* function below fires an independent fetch() in
-// parallel on DOMContentLoaded, each hitting the DB directly. On a
-// serverless host (Vercel), the first request after a cold start pays
-// the full connection-pool spin-up cost (see database/pool.py's own
-// cold-start notes) -- so under load some of these six calls time out
-// or 500 while others succeed, which is exactly "half the page shows,
-// half doesn't, refresh fixes it": whichever call drew the cold
-// instance failed, the rest didn't. A local dev server has no cold
-// starts, so this never showed up there. Retrying failed/5xx requests
-// a couple of times with a short backoff covers the overwhelming
-// majority of cold-start failures without a full page reload.
 async function fetchWithRetry(url, options = {}, retries = 2, baseDelayMs = 600) {
   let lastErr = null;
   for (let attempt = 0; attempt <= retries; attempt++) {

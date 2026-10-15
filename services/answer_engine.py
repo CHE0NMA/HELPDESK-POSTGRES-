@@ -18,7 +18,7 @@ Changes from v1:
 """
 import logging
 import re
-from typing import List, Dict, Optional, Tuple
+from typing import Any, List, Dict, Optional, Sequence, Tuple
 from fuzzywuzzy import fuzz
 
 from services import nlg
@@ -34,15 +34,6 @@ logger = logging.getLogger("pac_helpdesk.answer_engine")
 
 FUZZY_MIN_SCORE = 0.60
 
-# How much weight semantic (embedding) similarity gets vs. the existing
-# fuzzy/keyword score, when a query_embedding is available. 0 = semantic
-# scoring has no effect (old behavior); 1 = fuzzy score is ignored
-# entirely. Start conservative and tune upward once you can see it's
-# actually helping on real traffic — semantic similarity for short
-# questions can be noisier than it looks (e.g. "enrollment" and
-# "tuition" questions can land unexpectedly close in embedding space
-# just from both being finance/registrar-adjacent), so this is
-# deliberately NOT the majority weight by default.
 SEMANTIC_BLEND = 0.35
 
 
@@ -54,7 +45,8 @@ def normalize_text(text: str) -> str:
     return text
 
 
-def get_top_faq_candidates(user_question: str, expanded_question: str, all_faqs: List[tuple],
+def get_top_faq_candidates(user_question: str, expanded_question: str,
+                            all_faqs: Sequence[Sequence[Any]],
                             detected_lang: str = 'english', max_candidates: int = 5,
                             query_embedding: Optional[List[float]] = None) -> List[Dict]:
     """`query_embedding`: optional, from services.embeddings.get_embedding()
@@ -72,9 +64,9 @@ def get_top_faq_candidates(user_question: str, expanded_question: str, all_faqs:
 
     for faq in all_faqs:
         if len(faq) >= 9:
-            answer, question, fid, topic, intent, kw, related, score_val, img = faq[:9]
+            _, question, _, _, _, kw, _, score_val, _ = faq[:9]
         else:
-            answer, question, fid, topic, intent, kw, related, score_val, img = (
+            _, question, _, _, _, kw, _, score_val, _ = (
                 faq[0], faq[1], faq[2], faq[3], faq[4], faq[5], faq[6], faq[7],
                 faq[8] if len(faq) > 8 else None)
         faq_embedding = faq[9] if len(faq) >= 10 else None
@@ -120,7 +112,7 @@ def get_top_faq_candidates(user_question: str, expanded_question: str, all_faqs:
     return candidates[:max_candidates]
 
 
-def faq_should_disambiguate(candidates: List[Dict], user_question: str = None) -> bool:
+def faq_should_disambiguate(candidates: List[Dict], user_question: Optional[str] = None) -> bool:
     """Before falling back to the disambiguation picker, give the AI
     router (services.ai_retrieval.llm_pick_faq) a chance to break the tie
     on its own -- it reads the actual candidate question texts against
@@ -199,12 +191,7 @@ def _extract_from_answer(user_question: str, best_text: str, answer: str,
     (with one retry) that services/nlg.py's speak_naturally() already
     does for date answers, so FAQ answers get the same treatment.
     """
-    # PERF: a stronger, harder-to-ignore directive on the FIRST attempt
-    # (not just "Reply in X") -- the language-drift retry a few lines
-    # below costs a full second AI call every time it fires, and Bisaya/
-    # Tagalog replies were the ones drifting into English most often. A
-    # firmer up-front instruction reduces how often that retry is needed
-    # without changing the retry safety net itself.
+
     lang_instruction = (
         f"You must reply ENTIRELY in {nlg.lang_name(detected_lang)} — not English, not a "
         f"mix — unless a proper noun has no natural translation."
@@ -272,21 +259,11 @@ def _extract_from_answer(user_question: str, best_text: str, answer: str,
                             "(e.g. to the raw FAQ answer text).")
                 return None
 
-        # Comparing the answer's words against the QUESTION's words
-        # (rather than the source) punishes correct answers to
-        # vaguely/indirectly-phrased questions, so this stays lenient
-        # (min_overlap=1), but it IS a hard reject -- see handbook.py's
-        # _build_handbook_answer_from_chunks, which used to have the same
-        # check present but silently non-enforcing; that bug does not
-        # exist here, this genuinely returns None on a miss.
         if not _answer_relevant_to_question(user_question, response, min_overlap=1):
             logger.info(f"answer-relevance REJECTED for q={user_question[:80]!r}")
             return None
 
-        # Final independent self-check, same rationale as handbook.py's
-        # equivalent addition -- fails open (an unavailable check never
-        # costs a good answer), only ever removes an answer that already
-        # passed grounding + relevance.
+
         if not llm_self_check(user_question, response, answer):
             logger.info(f"answer self-check REJECTED for q={user_question[:80]!r}")
             return None
@@ -297,16 +274,11 @@ def _extract_from_answer(user_question: str, best_text: str, answer: str,
         return None
 
 def smart_extract_answer(user_question: str, candidates: List[Dict], detected_lang: str = 'english',
-                          llm_chat_fn=None, ai_cache=None,
-                          context_faq_answer: str = None, context_faq_question: str = None
+                          llm_chat_fn=None, ai_cache=None
                           ) -> Tuple[Optional[str], Optional[Dict]]:
     if not candidates or llm_chat_fn is None:
         return None, None
 
-    # detected_lang included in the cache key now — a cache hit on the
-    # same question text asked in two different languages (e.g. a
-    # student switches languages mid-conversation and re-asks) must not
-    # return the other language's cached answer.
     cache_key = f"extract_{hash(user_question)}_{detected_lang}"
     if ai_cache:
         cached = ai_cache.get(cache_key)
