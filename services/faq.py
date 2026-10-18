@@ -134,7 +134,10 @@ def answer_followup_with_ai(user_question: str, context_summary: str = "",
                              last_faq_answer: Optional[str] = None,
                              last_faq_question: Optional[str] = None) -> Optional[str]:
     if circuit_breaker.is_open():
-        return None
+        return (
+            None if detected_lang == 'english'
+            else lang_service.get_translation_unavailable_response(detected_lang)
+        )
 
     lang_config = lang_service.LANGUAGE_CONFIG.get(
         detected_lang, lang_service.LANGUAGE_CONFIG['english']
@@ -183,10 +186,15 @@ Answer:"""
             ).strip()
             if response and response[-1] not in '.!?':
                 response += '.'
+            if response and not lang_service.verify_output_language(response, detected_lang):
+                return lang_service.get_translation_unavailable_response(detected_lang)
             return response
     except Exception as e:
         logger.error(f"Follow-up AI error: {e}")
-    return None
+    return (
+        None if detected_lang == 'english'
+        else lang_service.get_translation_unavailable_response(detected_lang)
+    )
 
 
 def _lookup_faq_answer(question: str, detected_lang: str) -> Optional[Tuple[str, str, str]]:
@@ -209,6 +217,11 @@ def _lookup_faq_answer(question: str, detected_lang: str) -> Optional[Tuple[str,
     if best['combined'] < engine.FUZZY_MIN_SCORE:
         if best['fuzzy'] >= 0.60:
             row = best['faq']
+            if detected_lang != 'english':
+                return (
+                    lang_service.get_translation_unavailable_response(detected_lang),
+                    row[3], row[4],
+                )
             return (row[0] or '', row[3], row[4])
         return None
     if circuit_breaker.is_open():
@@ -671,8 +684,6 @@ def _translate_previous_answer(question: str, ctx, detected_lang: str) -> Option
     prev = (getattr(ctx, 'last_answer', None) or '').strip()
     if not prev or len(prev) < 20:
         return None
-    if circuit_breaker.is_open():
-        return None
 
     q = question.lower()
     if re.search(r'\b(bisaya|cebuano|i-bisaya|sa\s+bisaya)\b', q):
@@ -681,6 +692,9 @@ def _translate_previous_answer(question: str, ctx, detected_lang: str) -> Option
         target = 'tagalog'
     else:
         target = detected_lang if detected_lang != 'english' else 'bisaya'
+
+    if circuit_breaker.is_open():
+        return lang_service.get_translation_unavailable_response(target)
 
     from services.config import bot_identity_line
     from services.grounding import answer_is_grounded
@@ -700,15 +714,17 @@ Translated answer:"""
     try:
         response = llm_chat(prompt, max_tokens=500)
         if not response or not response.strip():
-            return None
+            return lang_service.get_translation_unavailable_response(target)
         response = response.strip()
         if not answer_is_grounded(response, prev, min_overlap=0.30):
-            logger.info("translate_previous: grounding failed, returning original")
-            return prev
+            logger.info("translate_previous: grounding failed")
+            return lang_service.get_translation_unavailable_response(target)
+        if not lang_service.verify_output_language(response, target):
+            return lang_service.get_translation_unavailable_response(target)
         return response
     except Exception as e:
         logger.error(f"_translate_previous_answer error: {e}")
-        return None
+        return lang_service.get_translation_unavailable_response(target)
 
 
 def find_answer(question: str, return_topic: bool = False,
@@ -755,11 +771,14 @@ def find_answer(question: str, return_topic: bool = False,
             if reworded:
                 final_answer = reworded
             else:
-                parts = re.split(r'(?<=[.!?])\s+', src)
-                short = ' '.join(p.strip() for p in parts[:2] if p.strip())
-                if len(short) > 400:
-                    short = short[:397].rsplit(' ', 1)[0] + '…'
-                final_answer = short or src[:400]
+                if detected_lang == 'english':
+                    parts = re.split(r'(?<=[.!?])\s+', src)
+                    short = ' '.join(p.strip() for p in parts[:2] if p.strip())
+                    if len(short) > 400:
+                        short = short[:397].rsplit(' ', 1)[0] + '…'
+                    final_answer = short or src[:400]
+                else:
+                    final_answer = lang_service.get_translation_unavailable_response(detected_lang)
             ctx.update(user_msg=question, bot_response=final_answer, clear_schedule_context=True)
             result = (final_answer, 'Corrected', correction.get('faq_id'), None, detected_lang)
             return result if return_topic else result[0]
@@ -771,9 +790,12 @@ def find_answer(question: str, return_topic: bool = False,
         from database import get_db as _gdb
         cached = get_cached_answer(_gdb, question, detected_lang)
         if cached:
-            ctx.update(user_msg=question, bot_response=cached['answer'], clear_schedule_context=True)
-            result = (cached['answer'], 'Cached', cached.get('faq_id'), None, detected_lang)
-            return result if return_topic else result[0]
+            cached_answer = cached['answer']
+            if (detected_lang == 'english'
+                    or lang_service.verify_output_language(cached_answer, detected_lang)):
+                ctx.update(user_msg=question, bot_response=cached_answer, clear_schedule_context=True)
+                result = (cached_answer, 'Cached', cached.get('faq_id'), None, detected_lang)
+                return result if return_topic else result[0]
     except Exception:
         pass
 
@@ -924,6 +946,8 @@ def find_answer(question: str, return_topic: bool = False,
             )
 
             if ai_followup and not _looks_like_non_answer(ai_followup):
+                if not lang_service.verify_output_language(ai_followup, detected_lang):
+                    ai_followup = lang_service.get_translation_unavailable_response(detected_lang)
                 ctx.update(user_msg=question, bot_response=ai_followup, clear_schedule_context=True)
                 result = (ai_followup, 'Follow-up', None, None, detected_lang)
                 return result if return_topic else result[0]
@@ -1252,6 +1276,8 @@ def find_answer(question: str, return_topic: bool = False,
             answer, question_text, fid, topic, intent, _, _, _ = row[:8]
             img = row[8] if len(row) > 8 else None
             answer_text = (answer or '') + (f"\n\n[Image: {img}]" if img else "")
+            if detected_lang != 'english':
+                answer_text = lang_service.get_translation_unavailable_response(detected_lang)
             ctx.update(
                 topic=topic,
                 intent=intent,
@@ -1285,8 +1311,9 @@ def find_answer(question: str, return_topic: bool = False,
 
     except Exception as e:
         logger.error(f"Error in find_answer: {e}", exc_info=True)
+        fallback_lang = locals().get('detected_lang', 'english')
         result = (
-            lang_service.get_fallback_response('english'),
-            'Unknown', None, None, 'english',
+            lang_service.get_fallback_response(fallback_lang),
+            'Unknown', None, None, fallback_lang,
         )
         return result if return_topic else result[0]

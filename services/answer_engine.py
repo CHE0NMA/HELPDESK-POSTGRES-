@@ -91,7 +91,7 @@ def get_top_faq_candidates(user_question: str, expanded_question: str,
             keyword_boost = sum(1 for k in kw_list if k.strip() in user_norm) / max(1, len(kw_list))
             combined = min(1.0, combined + keyword_boost * 0.1)
 
-        priority_boost = float(score_val or 0) / 200.0
+        priority_boost = min(0.05, max(0.0, float(score_val or 0)) / 2000.0)
         combined = min(1.0, combined + priority_boost)
 
         semantic_score = 0.0
@@ -283,7 +283,8 @@ def smart_extract_answer(user_question: str, candidates: List[Dict], detected_la
     if ai_cache:
         cached = ai_cache.get(cache_key)
         if cached:
-            return cached, None
+            if verify_output_language(cached, detected_lang):
+                return cached, None
 
     best = candidates[0]
     best_text = best['best_q_text']
@@ -327,6 +328,7 @@ def build_disambiguation(candidates: List[Dict], detected_lang: str = 'english')
         'bisaya': "Naa koy daghang posible nga tugma. Asa ang imong gipasabot?",
         'mixed_te': "I found a couple of possible matches. Alin po ang ibig niyong sabihin?",
         'mixed_be': "Naa koy daghang posible. Asa ang inyong gipasabot?",
+        'mixed_tb': "Naa koy pipila ka posibleng tugma. Asa niini ang imong gipasabot?",
     }
     header = headers.get(detected_lang, headers['english'])
     scores = [c['combined'] for c in candidates]

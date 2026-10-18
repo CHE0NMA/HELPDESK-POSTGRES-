@@ -23,7 +23,10 @@ from ai_providers import ai_cache, circuit_breaker
 
 from ai_providers.providers import llm_chat_fast
 from services.grounding import answer_is_grounded
-from services.language import verify_output_language
+from services.language import (
+    get_translation_unavailable_response,
+    verify_output_language,
+)
 
 logger = logging.getLogger("pac_helpdesk.nlg")
 
@@ -150,12 +153,16 @@ def speak_naturally(canonical_text: str, question: str, detected_lang: str = 'en
     if not canonical_text:
         return canonical_text
 
+    fallback_text = (
+        canonical_text if detected_lang == 'english'
+        else get_translation_unavailable_response(detected_lang)
+    )
     if circuit_breaker.is_open():
-        return canonical_text
+        return fallback_text
 
     cache_key = f"speak_{hash(question)}_{hash(canonical_text)}_{detected_lang}"
     cached = ai_cache.get(cache_key)
-    if cached:
+    if cached and verify_output_language(cached, detected_lang):
         return cached
 
 
@@ -190,13 +197,13 @@ def speak_naturally(canonical_text: str, question: str, detected_lang: str = 'en
 
         response = llm_chat_fast(prompt, max_tokens=200)
         if not response:
-            return canonical_text
+            return fallback_text
         response = response.strip()
 
         if not answer_is_grounded(response, canonical_text, min_overlap=0.4):
             logger.info(f"speak_naturally: rephrase failed local fact-check, using canonical text. "
                         f"canonical={canonical_text!r} rephrase={response!r}")
-            return canonical_text
+            return fallback_text
 
         if not verify_output_language(response, detected_lang):
             logger.info(f"speak_naturally: rephrase drifted language (wanted {detected_lang}), "
@@ -216,14 +223,14 @@ def speak_naturally(canonical_text: str, question: str, detected_lang: str = 'en
                 response = retry_response.strip()
             else:
                 logger.info("speak_naturally: retry still didn't land in the right language, "
-                            "using canonical text.")
-                return canonical_text
+                            "using localized translation-unavailable response.")
+                return fallback_text
 
         ai_cache.set(cache_key, response)
         return response
     except Exception as e:
         logger.error(f"speak_naturally error: {e}")
-        return canonical_text
+        return fallback_text
 
 
 def classify_followup(question: str, last_question: str, last_answer: str) -> bool:

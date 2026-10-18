@@ -53,6 +53,9 @@ _GENERIC = {
 
 _QUERY_EXPANSIONS = [
 
+    (r'\b(unsay (dapat )?(suoton|isuot uniform|suot uniform)|'
+     r'isuot uniform|suot uniform|suoton|sout)\b',
+     'dress attire clothing appearance'),
     (r'\b(light|minor)\s+offenses?\b', 'first degree offense demerit'),
     (r'\b(medium|moderate)\s+offenses?\b', 'second degree offense demerit'),
     (r'\b(how bad|how serious|what.?s a|what is a|tell me about).{0,25}second[ -]?degree\b',
@@ -1102,7 +1105,7 @@ def _extract_relevant_sentences(content: str, question: str, max_sentences: int 
 
 
 def _answer_relevant_to_question(question: str, answer: str, min_overlap: int = 1) -> bool:
-    q_words = _content_words(question) - _GENERIC
+    q_words = _content_words(expand_query_for_retrieval(question)) - _GENERIC
     a_words = _content_words(answer)
     if not q_words or not a_words:
         return True
@@ -1399,9 +1402,6 @@ def _answer_compound_handbook_question(original_question: str, parts: List[str],
 def answer_handbook_question(question: str, detected_lang: str = 'english',
                              min_score_to_answer: Optional[float] = None,
                              ctx=None) -> Optional[str]:
-    if circuit_breaker.is_open():
-        return None
-
     context_hint = None
     if ctx is not None:
         hint_parts = []

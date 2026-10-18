@@ -215,16 +215,35 @@ def _heuristic_language(text: str) -> Tuple[str, bool]:
         t,
     ))
     has_bisaya = bool(re.search(
-        r'\b(unsa|ngano|giunsa|jud|gyud|pud|usab|kaayo|mao|amo|kinsa|asa|kanus-a'
+        r'\b(unsa|unsay|ngano|giunsa|jud|gyud|pud|usab|kaayo|mao|amo|kinsa|asa|kanus-a'
         r'|naa|wala|nay|naay|dili|oo|sige|lagi|bitaw|diha|dinhi|adto|karon'
         r'|buhat|himoa|palihug|salamat|maayo|unta|gusto|ganahan|pwede'
-        r'|mag[a-z]{2,}|nag[a-z]{2,}|mo[a-z]{3,})\b',
+        r'|mo[a-z]{3,})\b',
         t,
     ))
     has_english = bool(re.search(
         r'\b(what|how|why|when|where|the|is|are|can|will|would|please|thank)\b',
         t,
     ))
+
+    has_strong_bisaya = bool(re.search(
+        r'\b(unsay|gikan|hangtod|hangtud|kutob|sulod|og|bai|bako|suoton)\b', t
+    )) or bool(
+        re.search(r'\bpila\b', t)
+        and re.search(r'\b(tuition|fee|bayad|gasto|cost|price)\b', t)
+    )
+    has_strong_tagalog = bool(re.search(
+        r'\b(ako|magsuot|mag[a-z]{2,}|nag[a-z]{2,}|magkano|paano|bakit|'
+        r'naman|talaga|hindi|yung|iyon|opo)\b', t
+    ))
+    if has_strong_bisaya:
+        if has_strong_tagalog:
+            return 'mixed_tb', False
+        if has_english:
+            return 'mixed_be', False
+        return 'bisaya', True
+    if has_strong_tagalog:
+        return 'tagalog', True
 
     if has_tagalog and has_bisaya:
         return 'mixed_tb', False
@@ -266,9 +285,9 @@ def verify_output_language(text: str, expected_lang: str) -> bool:
         return True
 
     mixed_components = {
-        'mixed_te': {'tagalog', 'english'},
-        'mixed_be': {'bisaya', 'english'},
-        'mixed_tb': {'tagalog', 'bisaya'},
+        'mixed_te': {'tagalog', 'mixed_te'},
+        'mixed_be': {'bisaya', 'mixed_be'},
+        'mixed_tb': {'tagalog', 'bisaya', 'mixed_tb'},
     }
     return guess in mixed_components.get(expected_lang, set())
 
@@ -397,12 +416,6 @@ def get_db_response(table_key: str, language: str) -> str:
                 (language,),
             )
             row = cur.fetchone()
-            if not row and language != 'english':
-                cur.execute(
-                    f"SELECT {column} FROM {table} "
-                    f"WHERE language='english' AND is_active=1"
-                )
-                row = cur.fetchone()
             if row and row[0]:
                 result = row[0]
         finally:
@@ -469,6 +482,40 @@ LOGGED_FALLBACK_MESSAGES = {
 def get_logged_fallback_response(language: str) -> str:
     return LOGGED_FALLBACK_MESSAGES.get(
         language, LOGGED_FALLBACK_MESSAGES['english']
+    )
+
+
+_TRANSLATION_UNAVAILABLE_MESSAGES = {
+    'english': (
+        "I found relevant information, but I can't reliably translate it right now. "
+        "Please try again later."
+    ),
+    'tagalog': (
+        "May nahanap akong kaugnay na impormasyon, pero hindi ko ito maisalin nang "
+        "maaasahan sa ngayon. Pakisubukan muli mamaya."
+    ),
+    'bisaya': (
+        "Nakakita ko og may kalabotang impormasyon, apan dili pa ko kasaligan nga "
+        "makahubad niini karon. Palihog sulayi pag-usab unya."
+    ),
+    'mixed_te': (
+        "May nakita akong related information, pero hindi ko ito ma-translate "
+        "nang maaasahan ngayon. Please try again later."
+    ),
+    'mixed_be': (
+        "Nakita nako ang related information, pero dili pa ko kasaligan nga "
+        "makatranslate niini karon. Please try again later."
+    ),
+    'mixed_tb': (
+        "Nakita nako ang impormasyon, pero dili pa ko kasaligan nga mahubad "
+        "kini karon. Pakisulay pag-usab unya."
+    ),
+}
+
+
+def get_translation_unavailable_response(language: str) -> str:
+    return _TRANSLATION_UNAVAILABLE_MESSAGES.get(
+        language, _TRANSLATION_UNAVAILABLE_MESSAGES['english']
     )
 
 
@@ -785,6 +832,7 @@ _VERNACULAR_VARIANTS: Dict[str, str] = {
     'isul-ob': 'isuot uniform', 'isulob': 'isuot uniform',
     'isuutin': 'isuot uniform', 'suoton': 'isuot uniform',
     'sul-ob': 'isuot uniform', 'ipasul-ob': 'isuot uniform',
+    'sout': 'suot',
     'sinina': 'uniform', 'bisti': 'uniform', 'panapton': 'uniform',
 }
 
@@ -858,7 +906,19 @@ def expand_query(text: str) -> str:
     language detection."""
     normalized = normalize_vernacular_spelling(text)
     normalized = expand_hypothetical(normalized)
-    return expand_abbreviations(normalized)
+    normalized = expand_abbreviations(normalized)
+
+    aliases = []
+    if re.search(r'\bpila\b', normalized, re.I) and re.search(
+        r'\b(tuition|fee|bayad|gasto|cost|price)\b', normalized, re.I
+    ):
+        aliases.append('how much tuition fee cost')
+    if re.search(r'\bgikan\b', normalized, re.I):
+        aliases.append('from')
+    if re.search(r'\b(hangtod|hangtud|kutob)\b', normalized, re.I):
+        aliases.append('until')
+
+    return f"{normalized} {' '.join(aliases)}".strip()
 
 
 def invalidate_response_tables():
