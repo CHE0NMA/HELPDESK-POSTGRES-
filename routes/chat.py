@@ -240,12 +240,11 @@ def satisfaction_feedback():
     rating = data.get('rating')
     question = data.get('question')
     answer = strip_html(data.get('answer') or '')
-    correction = strip_html(str(data.get('correction') or '')).strip()[:2000]
     sid = data.get('session_id') or session.get('chat_session') or 'anonymous'
     if rating not in ('thumbs_up', 'thumbs_down') or not question:
         return jsonify({'status': 'error', 'message': 'Missing data'}), 400
-    if correction and rating != 'thumbs_down':
-        return jsonify({'status': 'error', 'message': 'Corrections require a thumbs-down rating'}), 400
+    if str(data.get('correction') or '').strip():
+        return jsonify({'status': 'error', 'message': 'Only staff can submit answer corrections'}), 403
 
     conn = get_db()
     cur = conn.cursor()
@@ -284,12 +283,8 @@ def satisfaction_feedback():
         else:
             feedback_saved = record_feedback(
                 get_db, question, 'thumbs_down',
-                correction=correction,
                 session_id=sid, source_type='chat',
             )
-            if correction and feedback_saved:
-                from services.self_heal import save_feedback_draft
-                correction_queued = save_feedback_draft(get_db, question, correction)
     except Exception as mem_err:
         logger.debug(f"answer_memory hook: {mem_err}")
 

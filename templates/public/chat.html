@@ -407,7 +407,6 @@
   .fb-btn.bad.active    { background:rgba(255,82,82,.15);color:#ff5252;border-color:rgba(255,82,82,.3); }
   .fb-btn.copy.active   { background:rgba(0,229,255,.12);color:var(--accent); }
   .fb-btn.report.active { background:rgba(255,82,82,.15);color:#ff5252;border-color:rgba(255,82,82,.3); }
-  .fb-btn.tts.active    { background:rgba(0,229,255,.12);color:var(--accent); }
 
   .response-time-badge {
     display:inline-block;font-size:.62rem;color:var(--text-muted);
@@ -860,10 +859,6 @@
               <div class="fb-btn copy" title="Copy"
                    onclick='copyToClipboard(this,{{ c.bot|tojson|safe }})'>
                 <i class="bi bi-clipboard"></i>
-              </div>
-              <div class="fb-btn tts" title="Read aloud"
-                   onclick='speakText({{ c.bot|tojson|safe }}, this)'>
-                <i class="bi bi-volume-up"></i>
               </div>
             </div>
             <div class="msg-time"></div>
@@ -1340,13 +1335,12 @@ function addFeedbackRow(content, userMsg, botReply) {
     <div class="fb-btn good" title="Helpful"><i class="bi bi-hand-thumbs-up"></i></div>
     <div class="fb-btn bad" title="Not Helpful"><i class="bi bi-hand-thumbs-down"></i></div>
     <div class="fb-btn copy" title="Copy"><i class="bi bi-clipboard"></i></div>
-    <div class="fb-btn tts" title="Read aloud"><i class="bi bi-volume-up"></i></div>`;
+  `;
 
-  const [goodBtn, badBtn, copyBtn, ttsBtn] = row.querySelectorAll('.fb-btn');
+  const [goodBtn, badBtn, copyBtn] = row.querySelectorAll('.fb-btn');
   goodBtn.onclick = () => sendSatisfactionFeedback(goodBtn, 'thumbs_up', userMsg, botReply);
   badBtn.onclick  = () => sendSatisfactionFeedback(badBtn, 'thumbs_down', userMsg, botReply);
   copyBtn.onclick = () => copyToClipboard(copyBtn, botReply);
-  ttsBtn.onclick = () => speakText(botReply, ttsBtn);
 
   content.appendChild(row);
 }
@@ -1514,9 +1508,6 @@ window.sendSuggestion = sendSuggestion;
 async function sendSatisfactionFeedback(btn, rating, question, answer) {
   const row = btn.closest('.feedback-row');
   if (!row) return;
-  const correction = rating === 'thumbs_down'
-    ? (window.prompt('Optional: What should the correct answer say?') || '').trim().slice(0, 2000)
-    : '';
   const allBtns = row.querySelectorAll('.fb-btn');
   allBtns.forEach(b => {
     b.style.pointerEvents = 'none';
@@ -1527,16 +1518,13 @@ async function sendSatisfactionFeedback(btn, rating, question, answer) {
     const r = await fetch('/api/satisfaction', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rating, question, answer, correction, session_id: persistentSessionId }),
+      body: JSON.stringify({ rating, question, answer, correction: '', session_id: persistentSessionId }),
     });
     if (r.ok) {
-      const result = await r.json().catch(() => ({}));
       btn.classList.add('active');
       const message = rating === 'thumbs_up'
         ? 'Thanks!'
-        : result.correction_queued
-          ? 'Suggestion sent to staff for review'
-          : 'Feedback sent';
+        : 'Feedback sent';
       showToast(message,
                 rating === 'thumbs_up' ? 'success' : 'warning');
     } else {
@@ -1629,96 +1617,6 @@ async function submitReport() {
   } finally {
     btn.disabled = false;
   }
-}
-
-/* ---------- TTS (best free: Web Speech API) ---------- */
-let _ttsVoices = [];
-function _loadVoices() {
-  _ttsVoices = window.speechSynthesis ? (speechSynthesis.getVoices() || []) : [];
-}
-if (window.speechSynthesis) {
-  _loadVoices();
-  speechSynthesis.onvoiceschanged = _loadVoices;
-}
-
-function _pickBestVoice(preferFilipino) {
-  if (!_ttsVoices.length) _loadVoices();
-  const list = _ttsVoices;
-
-  // 1) Explicit Filipino / Tagalog voices
-  if (preferFilipino) {
-    const fil = list.find(v => {
-      const lang = (v.lang || '').toLowerCase();
-      const name = (v.name || '').toLowerCase();
-      return lang.startsWith('fil') || lang.startsWith('tl') ||
-             name.includes('filipino') || name.includes('tagalog') ||
-             name.includes('philippines');
-    });
-    if (fil) return fil;
-  }
-
-  // 2) Philippine English
-  const enPH = list.find(v => (v.lang || '').toLowerCase() === 'en-ph' ||
-                              (v.name || '').toLowerCase().includes('philippines'));
-  if (enPH) return enPH;
-
-  // 3) High-quality English neural voices
-  const preferNames = [
-    'Google US English', 'Google UK English Female', 'Microsoft Aria',
-    'Samantha', 'Karen', 'Moira', 'Tessa', 'Fiona', 'Daniel'
-  ];
-  for (const name of preferNames) {
-    const v = list.find(x => x.name && x.name.includes(name));
-    if (v) return v;
-  }
-
-  // 4) Any English
-  return list.find(v => (v.lang || '').toLowerCase().startsWith('en')) || list[0] || null;
-}
-
-function speakText(htmlOrText, btn) {
-  if (!window.speechSynthesis) {
-    showToast('Text-to-speech not supported in this browser', 'warning');
-    return;
-  }
-  const plain = String(htmlOrText)
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (!plain) return;
-
-  if (speechSynthesis.speaking) {
-    speechSynthesis.cancel();
-    if (btn) btn.classList.remove('active');
-    return;
-  }
-
-  // Detect if the text looks Filipino/Tagalog-heavy (simple heuristic)
-  const lower = plain.toLowerCase();
-  const filWords = ['ang','mga','naman','po','opo','salamat','kumusta','magandang','saan','paano','kailan','bakit','ito','iyan','iyon','ako','ikaw','siya','tayo','kayo','sila'];
-  const hitCount = filWords.filter(w => lower.includes(w)).length;
-  const preferFil = hitCount >= 2;
-
-  const utterance = new SpeechSynthesisUtterance(plain);
-  utterance.rate = 0.95;
-  utterance.pitch = 1.05;
-  utterance.volume = 1;
-  utterance.lang = preferFil ? 'fil-PH' : 'en-PH';
-
-  const voice = _pickBestVoice(preferFil);
-  if (voice) {
-    utterance.voice = voice;
-    utterance.lang = voice.lang || utterance.lang;
-  }
-
-  if (btn) btn.classList.add('active');
-  utterance.onend = () => { if (btn) btn.classList.remove('active'); };
-  utterance.onerror = () => { if (btn) btn.classList.remove('active'); };
-  speechSynthesis.speak(utterance);
 }
 
 /* ---------- STT (best free: Web Speech API) ---------- */
@@ -2290,7 +2188,6 @@ window.addEventListener('DOMContentLoaded', () => {
   loadTopSuggestions();
   loadSidebarHistory();
 
-  if (window.speechSynthesis) speechSynthesis.getVoices();
 
   // Seed current chat into history if page loaded with messages
   {% if chat_uuid is defined and chat_uuid and chats %}
