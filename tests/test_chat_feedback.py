@@ -78,7 +78,28 @@ class ChatFeedbackTests(unittest.TestCase):
         self.assertEqual(response.get_json()["status"], "success")
         self.assertTrue(connection.committed)
         self.assertTrue(connection.closed)
+        self.assertIn("detected_language", connection.cur.query)
+        self.assertIn("detected_topic", connection.cur.query)
+        self.assertEqual(connection.cur.params[-2:], ("english", "handbook"))
         self.assertNotIn("correction", record_feedback.call_args.kwargs)
+
+    def test_report_feedback_records_language_and_topic(self):
+        connection = FakeConnection()
+        with patch("routes.chat.get_db", return_value=connection), \
+             patch("routes.chat.lang_service.detect_language", return_value="bisaya"), \
+             patch("routes.chat.lang_service.classify_topic", return_value="tuition"):
+            response = self.client.post(
+                "/feedback",
+                json={
+                    "question": "pila bayran sa nursing",
+                    "answer": "I'm not sure.",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("detected_language", connection.cur.query)
+        self.assertEqual(connection.cur.params[-2:], ("bisaya", "tuition"))
+        self.assertTrue(connection.committed)
 
 
 if __name__ == "__main__":

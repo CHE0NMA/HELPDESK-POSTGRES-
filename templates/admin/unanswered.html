@@ -348,6 +348,17 @@ textarea.form-control { resize:vertical; min-height:80px; }
       </div>
     </div>
 
+    {% if unanswered_breakdown %}
+    <div class="drafts-section" style="padding:.85rem 1rem">
+      <div class="draft-meta" style="margin:0">
+        <strong style="color:var(--text)">Unanswered trends (90 days):</strong>
+        {% for item in unanswered_breakdown %}
+        <span class="pill pill-blue">{{ item.language }} · {{ item.topic }} · {{ item.count }}</span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
     <div class="selection-bar" id="selectionBar">
       <strong id="selectionLabel">0 selected</strong>
       <button type="button" class="btn-cancel" style="padding:.35rem .75rem;font-size:.78rem" onclick="clearSelection()">Clear</button>
@@ -365,6 +376,7 @@ textarea.form-control { resize:vertical; min-height:80px; }
             </th>
             <th>#</th>
             <th>Question</th>
+            <th>Language / Topic</th>
             <th>Status</th>
             <th>Context</th>
             <th>Actions</th>
@@ -385,6 +397,10 @@ textarea.form-control { resize:vertical; min-height:80px; }
               {% if q.context %}
               <span class="followup-chip"><i class="bi bi-arrow-return-right"></i> Follow-up</span>
               {% endif %}
+            </td>
+            <td>
+              <span class="pill pill-purple">{{ q.detected_language }}</span>
+              <span class="pill pill-blue">{{ q.detected_topic }}</span>
             </td>
             <td>
               {% if q.is_today %}
@@ -416,7 +432,7 @@ textarea.form-control { resize:vertical; min-height:80px; }
           </tr>
           {% if q.context %}
           <tr class="ctx-row" id="ctxRow{{ q.id }}" style="display:none">
-            <td colspan="6">
+            <td colspan="7">
               <div class="ctx-panel">
                 <span class="ctx-label"><i class="bi bi-clock-history"></i> Conversation leading up to this question</span>{{ q.context }}
               </div>
@@ -425,7 +441,7 @@ textarea.form-control { resize:vertical; min-height:80px; }
           {% endif %}
           {% endfor %}
           {% if not questions %}
-          <tr class="empty-row"><td colspan="6">
+          <tr class="empty-row"><td colspan="7">
             <div class="empty-state"><i class="bi bi-check-circle"></i>All questions have been answered!</div>
           </td></tr>
           {% endif %}
@@ -463,13 +479,13 @@ textarea.form-control { resize:vertical; min-height:80px; }
           <div class="row g-3 mb-3">
             <div class="col-md-3"><label class="form-label">Topic</label><input name="topic" id="ans_topic" class="form-control" placeholder="e.g. Enrollment" required></div>
             <div class="col-md-3"><label class="form-label">Intent</label><input name="intent" id="ans_intent" class="form-control" placeholder="e.g. payment_deadline" required></div>
-            <div class="col-md-3"><label class="form-label">Language</label><input name="language" class="form-control" value="en"></div>
+            <div class="col-md-3"><label class="form-label">Language</label><input name="language" class="form-control" value="{{ detected_language or 'en' }}"></div>
             <div class="col-md-3"><label class="form-label">Category</label><input name="category" class="form-control" placeholder="e.g. Finance"></div>
           </div>
           <div class="mb-2"><label class="form-label">Answer</label><textarea name="answer" class="form-control" placeholder="Type the answer…" required rows="4"></textarea></div>
           <div class="row g-2">
             <div class="col-md-6"><label class="form-label">Keywords</label><input name="keywords" class="form-control" placeholder="comma, separated"></div>
-            <div class="col-md-6"><label class="form-label">Related Questions</label><input name="related_questions" class="form-control" placeholder="comma, separated"></div>
+            <div class="col-md-6"><label class="form-label">Related Questions</label><input name="related_questions" class="form-control" value="{{ related_questions or '' }}" placeholder="comma, separated"></div>
             <div class="col-md-4"><label class="form-label">Priority Score</label><input type="number" name="priority_score" class="form-control" value="0"></div>
             <div class="col-md-8"><label class="form-label">Attachment URL</label><input name="attachment_url" class="form-control" placeholder="https://…"></div>
           </div>

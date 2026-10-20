@@ -7,7 +7,11 @@ from fuzzywuzzy import fuzz
 from ai_providers import ai_cache, circuit_breaker, llm_chat
 from database import get_db
 from services import nlg
-from services.ai_retrieval import llm_pick_sections, llm_self_check
+from services.ai_retrieval import (
+    llm_expand_retrieval_query,
+    llm_pick_sections,
+    llm_self_check,
+)
 from services.disambiguation import (
     HANDBOOK_POLICY,
     select_contenders,
@@ -418,9 +422,13 @@ def _title_similarity(question: str, title: str) -> float:
     ) / 100.0
 
 
-def get_top_handbook_chunks(question: str, max_chunks: int = 8,
-                             query_embedding: Optional[List[float]] = None,
-                             context_hint: Optional[str] = None) -> List[Dict]:
+def _get_top_handbook_chunks(
+    question: str,
+    max_chunks: int = 8,
+    query_embedding: Optional[List[float]] = None,
+    context_hint: Optional[str] = None,
+    alternate_questions: Optional[List[str]] = None,
+) -> List[Dict]:
     """`query_embedding`: optional, from services.embeddings.get_embedding()
     on the raw user question -- SAME embedding the caller already computed
     for FAQ matching can be reused here (see faq.py), so this costs zero
@@ -444,25 +452,38 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8,
     cur = conn.cursor()
     try:
         search_q = expand_query_for_retrieval(question)
+        retrieval_queries = list(dict.fromkeys(
+            query for query in (
+                search_q,
+                *(
+                    expand_query_for_retrieval(variant)
+                    for variant in (alternate_questions or [])
+                ),
+            )
+            if query
+        ))
         q_norm = normalize_input(question)
-        q_words = _content_words(search_q)
+        q_words = set().union(*(_content_words(query) for query in retrieval_queries))
 
         rows_by_id: Dict[int, tuple] = {}
-        try:
-            cur.execute("""
-                SELECT id, chapter, section_title, page_start, page_end, content,
-                       ts_rank_cd(search_vector, plainto_tsquery('english', %s)) AS relevance
-                FROM handbook_chunks
-                WHERE is_active = 1
-                  AND search_vector @@ plainto_tsquery('english', %s)
-                ORDER BY relevance DESC
-                LIMIT %s
-            """, (search_q, search_q, max_chunks * 8))
-            for r in cur.fetchall():
-                rows_by_id[int(r[0])] = r
-        except Exception as e:
-            logger.warning(f"handbook fulltext query failed, falling back to fuzzy: {e}")
-            conn.rollback()
+        for retrieval_query in retrieval_queries:
+            try:
+                cur.execute("""
+                    SELECT id, chapter, section_title, page_start, page_end, content,
+                           ts_rank_cd(search_vector, plainto_tsquery('english', %s)) AS relevance
+                    FROM handbook_chunks
+                    WHERE is_active = 1
+                      AND search_vector @@ plainto_tsquery('english', %s)
+                    ORDER BY relevance DESC
+                    LIMIT %s
+                """, (retrieval_query, retrieval_query, max_chunks * 8))
+                for r in cur.fetchall():
+                    hid = int(r[0])
+                    if hid not in rows_by_id or float(r[6] or 0) > float(rows_by_id[hid][6] or 0):
+                        rows_by_id[hid] = r
+            except Exception as e:
+                logger.warning(f"handbook fulltext query failed, falling back to fuzzy: {e}")
+                conn.rollback()
 
         emb_by_id: Dict[int, Optional[list]] = {}
         try:
@@ -480,8 +501,8 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8,
         title_hits = []
         for r in all_rows:
             best_ts = max(
-                _title_similarity(question, r[2] or ""),
-                _title_similarity(search_q, r[2] or ""),
+                (_title_similarity(query, r[2] or "") for query in (question, *retrieval_queries)),
+                default=0.0,
             )
             content_l = (r[5] or "")[:900].lower()
             for w in list(q_words)[:12]:
@@ -516,8 +537,17 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8,
         try:
             all_titles = [r[2] for r in all_rows if r[2]]
             ai_router_attempted = bool(all_titles) and not circuit_breaker.is_open()
+            router_context = context_hint
+            if alternate_questions:
+                alternate_hint = (
+                    "Search paraphrases preserving the student's intended topic: "
+                    + " | ".join(alternate_questions[:3])
+                )
+                router_context = "\n".join(
+                    part for part in (context_hint, alternate_hint) if part
+                )
             ai_picked_titles = llm_pick_sections(
-                question, all_titles, max_picks=3, context_hint=context_hint,
+                question, all_titles, max_picks=3, context_hint=router_context,
             )
         except Exception as e:
             logger.warning(f"AI section router skipped: {e}")
@@ -535,7 +565,13 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8,
             for r in all_rows:
                 hid, chapter, title, ps, pe, content = r[0], r[1], r[2], r[3], r[4], r[5]
                 blob = f"{title} {content[:600]}"
-                score = float(fuzzy_score(q_norm, normalize_input(blob)))
+                score = max(
+                    (
+                        float(fuzzy_score(normalize_input(query), normalize_input(blob)))
+                        for query in retrieval_queries
+                    ),
+                    default=float(fuzzy_score(q_norm, normalize_input(blob))),
+                )
                 chunk_embedding = emb_by_id.get(hid)
                 if query_embedding and chunk_embedding is not None:
                     sem = max(0.0, cosine_similarity(query_embedding, chunk_embedding))
@@ -544,6 +580,7 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8,
                     'id': hid, 'chapter': chapter, 'section_title': title,
                     'page_start': ps, 'page_end': pe, 'content': content,
                     'score': score, '_ai_router_attempted': ai_router_attempted,
+                    '_raw_score': score,
                 })
             scored.sort(key=lambda x: x['score'], reverse=True)
             return [s for s in scored[:max_chunks] if s['score'] >= 0.28]
@@ -559,8 +596,8 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8,
             blob = f"{title_l} {content}".lower()
 
             title_sim = max(
-                _title_similarity(question, title),
-                _title_similarity(search_q, title),
+                (_title_similarity(query, title) for query in (question, *retrieval_queries)),
+                default=0.0,
             )
 
             kw_hits = sum(1 for w in (q_words - _GENERIC) if len(w) >= 4 and w in blob)
@@ -856,6 +893,7 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8,
         scored.sort(key=lambda x: x['score'], reverse=True)
         top = float(scored[0]['score'] or 1.0)
         for s in scored:
+            s['_raw_score'] = float(s.get('score') or 0)
             s['score'] = float(s['score']) / top if top else 0.0
         return scored[:max_chunks]
 
@@ -865,6 +903,57 @@ def get_top_handbook_chunks(question: str, max_chunks: int = 8,
     finally:
         cur.close()
         conn.close()
+
+
+def get_top_handbook_chunks(
+    question: str,
+    max_chunks: int = 8,
+    query_embedding: Optional[List[float]] = None,
+    context_hint: Optional[str] = None,
+    detected_lang: str = "english",
+) -> List[Dict]:
+    """Retrieve normally first; interpret Filipino phrasing only on weak hits."""
+    chunks = _get_top_handbook_chunks(
+        question,
+        max_chunks=max_chunks,
+        query_embedding=query_embedding,
+        context_hint=context_hint,
+    )
+    supported_languages = {
+        "tagalog", "bisaya", "mixed_te", "mixed_be", "mixed_tb",
+    }
+    if (
+        detected_lang not in supported_languages
+        or (
+            chunks
+            and (
+                chunks[0].get("_raw_score", 0.0) >= 0.20
+                or chunks[0].get("_ai_picked")
+            )
+        )
+    ):
+        return chunks
+
+    variants = llm_expand_retrieval_query(question, detected_lang, "student handbook")
+    if not variants:
+        return chunks
+    expanded_chunks = _get_top_handbook_chunks(
+        question,
+        max_chunks=max_chunks,
+        query_embedding=query_embedding,
+        context_hint=context_hint,
+        alternate_questions=variants,
+    )
+    if (
+        expanded_chunks
+        and (
+            not chunks
+            or expanded_chunks[0].get("_raw_score", 0.0)
+            > chunks[0].get("_raw_score", 0.0)
+        )
+    ):
+        return expanded_chunks
+    return chunks
 
 
 def _page_ref(chunk: Dict) -> str:
@@ -1433,7 +1522,11 @@ def answer_handbook_question(question: str, detected_lang: str = 'english',
                 ctx.clear_disambiguation()
         return response
 
-    chunks = get_top_handbook_chunks(question, context_hint=context_hint)
+    chunks = get_top_handbook_chunks(
+        question,
+        context_hint=context_hint,
+        detected_lang=detected_lang,
+    )
     if not chunks:
         return None
 

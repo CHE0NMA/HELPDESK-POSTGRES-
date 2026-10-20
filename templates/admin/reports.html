@@ -396,7 +396,13 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
               <input type="checkbox" class="faq-check row-check" value="{{ f.id }}" onchange="onRowCheckChange()">
             </td>
             <td style="color:var(--muted);font-size:.8rem">{{ f.id }}</td>
-            <td><span class="cell-text" onclick='showFull("User Question", {{ f.question|tojson }})'>{{ f.question[:80] }}{% if f.question|length > 80 %}...{% endif %}</span></td>
+            <td>
+              <span class="cell-text" onclick='showFull("User Question", {{ f.question|tojson }})'>{{ f.question[:80] }}{% if f.question|length > 80 %}...{% endif %}</span>
+              <div class="draft-meta" style="margin:.25rem 0 0">
+                <span class="pill pill-purple">{{ f.detected_language }}</span>
+                <span class="pill pill-blue">{{ f.detected_topic }}</span>
+              </div>
+            </td>
             <td><span class="cell-text" onclick='showFull("Bot Answer", {{ f.answer|tojson }})'>{{ f.answer[:80] }}{% if f.answer|length > 80 %}...{% endif %}</span></td>
             <td>
               {% if f.days_ago == 0 %}

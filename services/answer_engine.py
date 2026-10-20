@@ -48,7 +48,8 @@ def normalize_text(text: str) -> str:
 def get_top_faq_candidates(user_question: str, expanded_question: str,
                             all_faqs: Sequence[Sequence[Any]],
                             detected_lang: str = 'english', max_candidates: int = 5,
-                            query_embedding: Optional[List[float]] = None) -> List[Dict]:
+                            query_embedding: Optional[List[float]] = None,
+                            alternate_questions: Optional[Sequence[str]] = None) -> List[Dict]:
     """`query_embedding`: optional, from services.embeddings.get_embedding()
     on the raw user question. When provided, each FAQ row's OWN cached
     embedding (expected as a 10th tuple element — see faq.py's SELECT,
@@ -61,6 +62,14 @@ def get_top_faq_candidates(user_question: str, expanded_question: str,
     candidates = []
     user_norm = normalize_text(user_question)
     expanded_norm = normalize_text(expanded_question)
+    alternate_norms = list(dict.fromkeys(
+        query for query in (
+            normalize_text(q) for q in (alternate_questions or ())
+        )
+        if query and query not in (user_norm, expanded_norm)
+    ))
+    search_norms = [q for q in (user_norm, expanded_norm) if q]
+    query_norms = list(dict.fromkeys((*search_norms, *alternate_norms)))
 
     for faq in all_faqs:
         if len(faq) >= 9:
@@ -75,20 +84,62 @@ def get_top_faq_candidates(user_question: str, expanded_question: str,
             continue
 
         q_norm = normalize_text(question)
-        token_ratio = fuzz.token_set_ratio(user_norm, q_norm) / 100.0
-        partial_ratio = fuzz.partial_ratio(user_norm, q_norm) / 100.0
-        full_ratio = fuzz.ratio(user_norm, q_norm) / 100.0
-        expanded_ratio = fuzz.token_set_ratio(expanded_norm, q_norm) / 100.0
 
-        combined = max(
-            token_ratio * 0.7 + full_ratio * 0.3,
-            partial_ratio * 0.8 + full_ratio * 0.2,
-            expanded_ratio * 0.9 + token_ratio * 0.1,
+        def _query_score(query_norm: str, target_norm: str) -> Tuple[float, float, float, float]:
+            token = fuzz.token_set_ratio(query_norm, target_norm) / 100.0
+            partial = fuzz.partial_ratio(query_norm, target_norm) / 100.0
+            full = fuzz.ratio(query_norm, target_norm) / 100.0
+            expanded = fuzz.token_set_ratio(expanded_norm, target_norm) / 100.0
+            combined_score = max(
+                token * 0.7 + full * 0.3,
+                partial * 0.8 + full * 0.2,
+                expanded * 0.9 + token * 0.1,
+            )
+            return token, partial, full, combined_score
+
+        token_ratio, partial_ratio, full_ratio, base_combined = _query_score(
+            user_norm, q_norm
         )
+        expanded_ratio = fuzz.token_set_ratio(expanded_norm, q_norm) / 100.0
+        aliases = [
+            normalize_text(alias.strip())
+            for alias in re.split(r"[,;\n|]+", str(faq[6] or ""))
+            if alias.strip()
+        ] if len(faq) > 6 and faq[6] else []
+        alias_scores = [
+            _query_score(user_norm, alias_norm)
+            for alias_norm in aliases if alias_norm
+        ]
+        alias_ratio = max((score[3] for score in alias_scores), default=0.0)
+
+        alternate_scores = [
+            (
+                fuzz.token_set_ratio(query_norm, q_norm) / 100.0,
+                fuzz.partial_ratio(query_norm, q_norm) / 100.0,
+                fuzz.ratio(query_norm, q_norm) / 100.0,
+            )
+            for query_norm in alternate_norms
+        ]
+        alternate_ratio = max(
+            (
+                max(token * 0.7 + full * 0.3, partial * 0.8 + full * 0.2)
+                for token, partial, full in alternate_scores
+            ),
+            default=0.0,
+        )
+        trusted_alias_match = alias_ratio >= FUZZY_MIN_SCORE and alias_ratio > base_combined
+        ai_alternate_match = (
+            alternate_ratio >= FUZZY_MIN_SCORE
+            and alternate_ratio > max(base_combined, alias_ratio)
+        )
+        combined = max(base_combined, alternate_ratio, alias_ratio)
 
         if kw and user_norm:
             kw_list = kw.lower().split(',')
-            keyword_boost = sum(1 for k in kw_list if k.strip() in user_norm) / max(1, len(kw_list))
+            keyword_boost = sum(
+                1 for k in kw_list
+                if any(k.strip() in query_norm for query_norm in query_norms)
+            ) / max(1, len(kw_list))
             combined = min(1.0, combined + keyword_boost * 0.1)
 
         priority_boost = min(0.05, max(0.0, float(score_val or 0)) / 2000.0)
@@ -98,11 +149,18 @@ def get_top_faq_candidates(user_question: str, expanded_question: str,
         if query_embedding and faq_embedding:
             semantic_score = max(0.0, cosine_similarity(query_embedding, faq_embedding))
             combined = min(1.0, combined * (1 - SEMANTIC_BLEND) + semantic_score * SEMANTIC_BLEND)
+            if trusted_alias_match or ai_alternate_match:
+                combined = max(
+                    combined,
+                    alias_ratio if trusted_alias_match else 0.0,
+                    alternate_ratio if ai_alternate_match else 0.0,
+                )
 
         candidates.append({
             'faq': faq, 'q_text': question, 'q_norm': q_norm,
             'token_ratio': token_ratio, 'partial_ratio': partial_ratio,
             'full_ratio': full_ratio, 'expanded_ratio': expanded_ratio,
+            'alternate_match': trusted_alias_match or ai_alternate_match,
             'semantic_score': semantic_score,
             'combined': combined, 'fuzzy': max(token_ratio, partial_ratio, full_ratio),
             'best_q_text': question,
@@ -212,7 +270,8 @@ def _extract_from_answer(user_question: str, best_text: str, answer: str,
         Instructions:
     - Answer using ONLY the information in the FAQ/source text above. Do not invent names, dates, amounts, or requirements that aren't stated.
     - Answer ONLY what the student asked. Do NOT paste or restate the entire source text.
-    - For when/what-year/started/founded questions: give the year/date in 1–2 short sentences. Skip long history unless they asked for the full story.
+        - Interpret conversational Tagalog/Bisaya by the student's intent, not word-for-word; reply naturally in the requested language and keep official school terms or names clear.
+        - For when/what-year/started/founded questions: give the year/date in 1–2 short sentences. Skip long history unless they asked for the full story.
     - For who/founder questions: name the people in 1–2 short sentences.
     - For yes/no (okay? allowed? can I?): your FIRST WORD must be Yes or No, then a short reason.
     - If the student named a SPECIFIC item and the source only covers a DIFFERENT, similar

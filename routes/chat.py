@@ -246,13 +246,20 @@ def satisfaction_feedback():
     if str(data.get('correction') or '').strip():
         return jsonify({'status': 'error', 'message': 'Only staff can submit answer corrections'}), 403
 
+    detected_lang = lang_service.detect_language(question)
+    detected_topic = lang_service.classify_topic(question)
     conn = get_db()
     cur = conn.cursor()
     try:
         cur.execute("""
-            INSERT INTO satisfaction_feedback (session_id, question, answer, rating, created_at)
-            VALUES (%s, %s, %s, %s, NOW())
-        """, (sid, (question or '')[:500], (answer or '')[:1000], rating))
+            INSERT INTO satisfaction_feedback
+                (session_id, question, answer, rating, detected_language,
+                 detected_topic, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, NOW())
+        """, (
+            sid, (question or '')[:500], (answer or '')[:1000], rating,
+            detected_lang, detected_topic,
+        ))
         conn.commit()
     except Exception as e:
         try:
@@ -332,9 +339,16 @@ def feedback():
     data = request.get_json(silent=True) or {}
     q, a = data.get('question'), strip_html(data.get('answer') or '')
     if q and a:
+        detected_lang = lang_service.detect_language(q)
+        detected_topic = lang_service.classify_topic(q)
         conn = get_db()
         cur = conn.cursor()
-        cur.execute("INSERT INTO bad_feedback (question, answer) VALUES (%s, %s)", (q, a))
+        cur.execute(
+            "INSERT INTO bad_feedback "
+            "(question, answer, detected_language, detected_topic) "
+            "VALUES (%s, %s, %s, %s)",
+            (q, a, detected_lang, detected_topic),
+        )
         conn.commit()
         cur.close()
         conn.close()

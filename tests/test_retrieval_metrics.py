@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from ai_providers.metrics import ModelMetrics
+from services import ai_retrieval
 from services.embeddings import get_embedding_coverage
 
 
@@ -63,6 +64,38 @@ class ProviderMetricsTests(unittest.TestCase):
         self.assertEqual(providers["groq"]["failed_calls"], 0)
         self.assertEqual(providers["gemini"]["successful_calls"], 0)
         self.assertEqual(providers["gemini"]["failed_calls"], 1)
+
+
+class QueryExpansionMetricsTests(unittest.TestCase):
+    def test_expansion_tracks_provider_latency_and_cache_hits(self):
+        before = ai_retrieval.get_query_expansion_metrics()
+        with patch.object(ai_retrieval.circuit_breaker, "is_open", return_value=False), \
+             patch.object(ai_retrieval.ai_cache, "get", return_value=None), \
+             patch.object(ai_retrieval.ai_cache, "set") as cache_set, \
+             patch.object(
+                 ai_retrieval, "llm_chat",
+                 return_value='["How much is the nursing tuition fee?"]',
+             ):
+            result = ai_retrieval.llm_expand_retrieval_query(
+                "pila bayran sa nursing", "bisaya", "student handbook"
+            )
+
+        after = ai_retrieval.get_query_expansion_metrics()
+        self.assertEqual(result, ["How much is the nursing tuition fee?"])
+        self.assertEqual(after["provider_calls"], before["provider_calls"] + 1)
+        self.assertEqual(after["successful_calls"], before["successful_calls"] + 1)
+        self.assertGreaterEqual(after["avg_response_time_ms"], 0)
+        cache_set.assert_called_once()
+
+    def test_uncertain_language_does_not_make_query_expansion_call(self):
+        with patch.object(ai_retrieval, "llm_chat") as llm_chat:
+            self.assertEqual(
+                ai_retrieval.llm_expand_retrieval_query(
+                    "How much is tuition?", "english", "FAQ"
+                ),
+                [],
+            )
+        llm_chat.assert_not_called()
 
 
 if __name__ == "__main__":

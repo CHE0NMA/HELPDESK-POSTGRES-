@@ -124,8 +124,12 @@ CREATE TABLE IF NOT EXISTS bad_feedback (
     id SERIAL PRIMARY KEY,
     question TEXT,
     answer TEXT,
+    detected_language VARCHAR(20),
+    detected_topic VARCHAR(100),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+ALTER TABLE bad_feedback ADD COLUMN IF NOT EXISTS detected_language VARCHAR(20);
+ALTER TABLE bad_feedback ADD COLUMN IF NOT EXISTS detected_topic VARCHAR(100);
 CREATE INDEX IF NOT EXISTS idx_bad_feedback_created_at ON bad_feedback(created_at);
 
 CREATE TABLE IF NOT EXISTS faq (
@@ -379,8 +383,12 @@ CREATE TABLE IF NOT EXISTS satisfaction_feedback (
     question TEXT,
     answer TEXT,
     rating VARCHAR(20),
+    detected_language VARCHAR(20),
+    detected_topic VARCHAR(100),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+ALTER TABLE satisfaction_feedback ADD COLUMN IF NOT EXISTS detected_language VARCHAR(20);
+ALTER TABLE satisfaction_feedback ADD COLUMN IF NOT EXISTS detected_topic VARCHAR(100);
 CREATE INDEX IF NOT EXISTS idx_satisfaction_feedback_created_at ON satisfaction_feedback(created_at);
 
 CREATE TABLE IF NOT EXISTS topic_classifications (
@@ -399,9 +407,15 @@ CREATE TABLE IF NOT EXISTS unanswered_questions (
     question TEXT NOT NULL,
     resolved_question TEXT,
     context TEXT,
+    detected_language VARCHAR(20),
+    detected_topic VARCHAR(100),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+ALTER TABLE unanswered_questions ADD COLUMN IF NOT EXISTS detected_language VARCHAR(20);
+ALTER TABLE unanswered_questions ADD COLUMN IF NOT EXISTS detected_topic VARCHAR(100);
 CREATE INDEX IF NOT EXISTS idx_unanswered_questions_created_at ON unanswered_questions(created_at);
+CREATE INDEX IF NOT EXISTS idx_unanswered_questions_language_topic
+    ON unanswered_questions(detected_language, detected_topic, created_at);
 
 CREATE TABLE IF NOT EXISTS visitor_stats (
     id SERIAL PRIMARY KEY,

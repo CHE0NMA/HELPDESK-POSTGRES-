@@ -443,20 +443,41 @@ def unanswered():
     conn = get_db()
     cur = conn.cursor()
     cur.execute("""
-        SELECT id, question, resolved_question, context, created_at
+        SELECT id, question, resolved_question, context, created_at,
+               detected_language, detected_topic
         FROM unanswered_questions ORDER BY created_at DESC
     """)
     today = ph_now()
     questions = [{'id': r[0], 'question': r[1],
                   'resolved_question': r[2] if (r[2] and r[2].strip() != (r[1] or '').strip()) else None,
                   'context': r[3], 'days_ago': (today.date() - r[4].date()).days if r[4] else 0,
-                  'is_today': (today.date() - r[4].date()).days == 0 if r[4] else False}
+                  'is_today': (today.date() - r[4].date()).days == 0 if r[4] else False,
+                  'detected_language': r[5] or 'unknown',
+                  'detected_topic': r[6] or 'general'}
                  for r in cur.fetchall()]
     cur.execute("SELECT COUNT(*) FROM unanswered_questions")
     unanswered_count = cur.fetchone()[0]
+    cur.execute("""
+        SELECT COALESCE(detected_language, 'unknown'),
+               COALESCE(detected_topic, 'general'), COUNT(*)
+        FROM unanswered_questions
+        WHERE created_at >= NOW() - INTERVAL '90 days'
+        GROUP BY detected_language, detected_topic
+        ORDER BY COUNT(*) DESC
+        LIMIT 12
+    """)
+    unanswered_breakdown = [
+        {'language': row[0], 'topic': row[1], 'count': row[2]}
+        for row in cur.fetchall()
+    ]
     cur.close()
     conn.close()
-    return render_template('admin/unanswered.html', questions=questions, unanswered_count=unanswered_count)
+    return render_template(
+        'admin/unanswered.html',
+        questions=questions,
+        unanswered_count=unanswered_count,
+        unanswered_breakdown=unanswered_breakdown,
+    )
 
 
 @bp.route('/unanswered_count')
@@ -492,15 +513,24 @@ def answer_question(qid):
         return redirect('/admin')
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT question, resolved_question FROM unanswered_questions WHERE id=%s", (qid,))
+    cur.execute(
+        "SELECT question, resolved_question, detected_language "
+        "FROM unanswered_questions WHERE id=%s",
+        (qid,),
+    )
     q = cur.fetchone()
     if not q:
         cur.close()
         conn.close()
         return redirect('/unanswered')
 
-    raw_question, resolved_question = q
+    raw_question, resolved_question, detected_language = q
     default_question = (resolved_question or raw_question or '').strip()
+    related_questions = (
+        raw_question.strip()
+        if raw_question and raw_question.strip() != default_question
+        else ''
+    )
 
     if request.method == 'POST':
         d = request.form
@@ -510,7 +540,9 @@ def answer_question(qid):
             cur.close()
             conn.close()
             return render_template('admin/unanswered.html', error=f'Similar FAQ: {dups[0]["question"]}',
-                                    question=default_question)
+                                        question=default_question,
+                                        related_questions=related_questions,
+                                        detected_language=detected_language)
         cur.execute("""
             INSERT INTO faq (topic, intent, question, answer, keywords, related_questions,
                               language, category, priority_score, attachment_url)
@@ -529,7 +561,12 @@ def answer_question(qid):
 
     cur.close()
     conn.close()
-    return render_template('admin/unanswered.html', question=default_question)
+    return render_template(
+        'admin/unanswered.html',
+        question=default_question,
+        related_questions=related_questions,
+        detected_language=detected_language,
+    )
 
 
 @bp.route('/reports')
@@ -550,10 +587,14 @@ def reports():
         return redirect('/admin')
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT id, question, answer, created_at FROM satisfaction_feedback "
+    cur.execute("SELECT id, question, answer, created_at, detected_language, detected_topic "
+                "FROM satisfaction_feedback "
                 "WHERE rating='thumbs_down' ORDER BY created_at DESC")
     sat_rows = cur.fetchall()
-    cur.execute("SELECT id, question, answer, created_at FROM bad_feedback ORDER BY created_at DESC")
+    cur.execute(
+        "SELECT id, question, answer, created_at, detected_language, detected_topic "
+        "FROM bad_feedback ORDER BY created_at DESC"
+    )
     bad_rows = cur.fetchall()
     cur.execute("SELECT COUNT(*) FROM unanswered_questions")
     unanswered_count = cur.fetchone()[0]
@@ -564,7 +605,9 @@ def reports():
 
     def _row(prefix, r):
         return {'id': f'{prefix}{r[0]}', 'question': r[1], 'answer': r[2],
-                'days_ago': (today.date() - r[3].date()).days if r[3] else 0}
+                'days_ago': (today.date() - r[3].date()).days if r[3] else 0,
+                'detected_language': r[4] or 'unknown',
+                'detected_topic': r[5] or 'general'}
 
     feedbacks = [_row('sf_', r) for r in sat_rows] + [_row('bf_', r) for r in bad_rows]
     feedbacks.sort(key=lambda f: f['days_ago'])

@@ -13,7 +13,7 @@ Flask-based student helpdesk for Philippine Advent College (PAC). It serves a pu
 
 ## Answering Flow
 
-The chat pipeline classifies the question, handles schedule/date requests and follow-ups, and searches handbook sections and FAQs. Search-time language normalization expands supported vernacular spellings and hypothetical wording. FAQ and handbook matching use lexical scores; semantic matching uses Gemini embeddings when the required Gemini key and stored content embeddings are available. An AI section router helps select handbook topics. Generated answers are checked against their sources and question relevance; when the AI check is unavailable, the generated answer is rejected in favor of a source-based fallback where available.
+The chat pipeline classifies the question, handles schedule/date requests and follow-ups, and searches handbook sections and FAQs. Search-time language normalization expands supported vernacular spellings and hypothetical wording; for Tagalog, Bisaya/Cebuano, and mixed-language FAQ questions, AI also interprets likely intent and creates cached paraphrase/search terms before lexical matching. FAQ and handbook matching use lexical scores; semantic matching uses Gemini embeddings when the required Gemini key and stored content embeddings are available. An AI section router helps select handbook topics. Generated answers are checked against their sources and question relevance; when the AI check is unavailable, the generated answer is rejected in favor of a source-based fallback where available.
 
 Dates and closures are looked up from Postgres rather than inferred by the language model. The public API returns JSON; browser 404 and 500 errors use the shared PAC error page, while API errors remain JSON.
 
@@ -82,7 +82,7 @@ It sends the mixed question set to `/chat`, checks required/forbidden answer det
 
 ### Retrieval Readiness
 
-Authenticated admins can request `GET /api/admin/retrieval_status` to see FAQ and active-handbook embedding coverage, whether each corpus currently has semantic matches available, Gemini embedding call/cache/failure counters, and separate Groq/Gemini chat-provider success/failure counts. Coverage is read from Postgres; provider and embedding call counters are process-local and reset when a worker restarts. The endpoint does not return API keys or raw provider responses.
+Authenticated admins can request `GET /api/admin/retrieval_status` to see FAQ and active-handbook embedding coverage, whether each corpus currently has semantic matches available, Gemini embedding call/cache/failure counters, cached Filipino FAQ/handbook query-expansion call, cache, failure, and average-latency counters, and separate Groq/Gemini chat-provider success/failure counts. Coverage is read from Postgres; provider, embedding, and query-expansion call counters are process-local and reset when a worker restarts. The endpoint does not return API keys or raw provider responses. Unanswered questions also record the detected language and broad topic to help admins prioritize recurring gaps; approving one as an FAQ keeps the original student phrasing as a related question for later retrieval.
 
 ## CI/CD
 

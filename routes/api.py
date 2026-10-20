@@ -61,6 +61,7 @@ def api_retrieval_status():
         get_embedding_coverage,
         get_embedding_status,
     )
+    from services.ai_retrieval import get_query_expansion_metrics
     try:
         embedding_status = get_embedding_status()
         corpora = get_embedding_coverage(get_db)
@@ -73,6 +74,7 @@ def api_retrieval_status():
         'embedding_provider': embedding_status,
         'corpora': corpora,
         'provider_calls': model_metrics.get_provider_stats(),
+        'query_expansion': get_query_expansion_metrics(),
         'metrics_scope': 'process-local; resets when the worker restarts',
     })
 
@@ -501,12 +503,20 @@ def api_report():
     session_id = (data.get('session_id') or '')[:100]
     if not question:
         return jsonify({'ok': False, 'error': 'question required'}), 400
+    from services.language import classify_topic, detect_language
+    detected_lang = detect_language(question)
+    detected_topic = classify_topic(question)
     conn = get_db()
     cur = conn.cursor()
     try:
         cur.execute(
-            "INSERT INTO bad_feedback (question, answer) VALUES (%s, %s)",
-            (question, f"[{reason}] {details}\n---\n{answer}"[:2000]),
+            "INSERT INTO bad_feedback "
+            "(question, answer, detected_language, detected_topic) "
+            "VALUES (%s, %s, %s, %s)",
+            (
+                question, f"[{reason}] {details}\n---\n{answer}"[:2000],
+                detected_lang, detected_topic,
+            ),
         )
         try:
             from services.answer_memory import record_feedback

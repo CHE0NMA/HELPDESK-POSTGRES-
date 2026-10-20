@@ -239,12 +239,26 @@ def ensure_core_tables():
                 question TEXT NOT NULL,
                 resolved_question TEXT,
                 context TEXT,
+                detected_language VARCHAR(20),
+                detected_topic VARCHAR(100),
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)
         cur.execute(
+            "ALTER TABLE unanswered_questions "
+            "ADD COLUMN IF NOT EXISTS detected_language VARCHAR(20)"
+        )
+        cur.execute(
+            "ALTER TABLE unanswered_questions "
+            "ADD COLUMN IF NOT EXISTS detected_topic VARCHAR(100)"
+        )
+        cur.execute(
             "CREATE INDEX IF NOT EXISTS idx_unanswered_questions_created_at "
             "ON unanswered_questions(created_at)"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_unanswered_questions_language_topic "
+            "ON unanswered_questions(detected_language, detected_topic, created_at)"
         )
 
         cur.execute("""
@@ -307,9 +321,19 @@ def ensure_core_tables():
                 question TEXT,
                 answer TEXT,
                 rating VARCHAR(20),
+                detected_language VARCHAR(20),
+                detected_topic VARCHAR(100),
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        cur.execute(
+            "ALTER TABLE satisfaction_feedback "
+            "ADD COLUMN IF NOT EXISTS detected_language VARCHAR(20)"
+        )
+        cur.execute(
+            "ALTER TABLE satisfaction_feedback "
+            "ADD COLUMN IF NOT EXISTS detected_topic VARCHAR(100)"
+        )
         cur.execute(
             "CREATE INDEX IF NOT EXISTS idx_satisfaction_feedback_created_at "
             "ON satisfaction_feedback(created_at)"
@@ -374,9 +398,19 @@ def ensure_core_tables():
                 id SERIAL PRIMARY KEY,
                 question TEXT,
                 answer TEXT,
+                detected_language VARCHAR(20),
+                detected_topic VARCHAR(100),
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        cur.execute(
+            "ALTER TABLE bad_feedback "
+            "ADD COLUMN IF NOT EXISTS detected_language VARCHAR(20)"
+        )
+        cur.execute(
+            "ALTER TABLE bad_feedback "
+            "ADD COLUMN IF NOT EXISTS detected_topic VARCHAR(100)"
+        )
 
         cur.execute("""
             CREATE TABLE IF NOT EXISTS faq_review_queue (

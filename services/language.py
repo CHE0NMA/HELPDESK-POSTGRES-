@@ -356,18 +356,28 @@ def classify_topic(question: str) -> str:
     topics = {
         'enrollment': [
             'enroll', 'registration', 'admission', 'enrolment', 'inscription',
+            'pag enroll', 'mag enroll', 'pagpapatala', 'pagpapalista',
         ],
-        'tuition': ['tuition', 'fee', 'payment', 'cost', 'price', 'bayad'],
+        'tuition': [
+            'tuition', 'fee', 'payment', 'cost', 'price', 'bayad', 'bayaran',
+            'bayran', 'magkano', 'pila ang tuition', 'matrikula', 'gasto',
+        ],
         'scholarship': [
             'scholarship', 'scholar', 'financial aid', 'assistance', 'iskolar',
+            'iskolarship', 'tulong pinansyal',
         ],
-        'grades': ['grades', 'grade', 'gpa', 'gwa', 'rating', 'mark'],
-        'clearance': ['clearance', 'clear'],
-        'schedule': ['schedule', 'class', 'time', 'calendar', 'iskedyul'],
+        'grades': ['grades', 'grade', 'gpa', 'gwa', 'rating', 'mark', 'grado', 'marka'],
+        'clearance': ['clearance', 'clear', 'pag-clearance'],
+        'schedule': [
+            'schedule', 'class', 'time', 'calendar', 'iskedyul', 'oras sa klase',
+            'kanus-a ang klase', 'klase',
+        ],
         'handbook': [
             'handbook', 'rule', 'rules', 'regulation', 'regulations', 'policy',
             'policies', 'code of conduct', 'discipline', 'violation',
-            'dress code', 'uniform', 'patakaran', 'bawal',
+            'dress code', 'uniform', 'jewelry', 'earring', 'patakaran', 'bawal',
+            'unsaon pagbisti', 'suoton', 'pananamit', 'sinina', 'demerit',
+            'offense',
         ],
     }
     q_lower = question.lower()

@@ -2,7 +2,7 @@ import logging
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from ai_providers import ai_cache, circuit_breaker, faq_cache, llm_chat
 from database import get_db
@@ -16,7 +16,7 @@ from services.conversation import (
     resolve_disambiguation_choice,
 )
 from services.embeddings import get_embedding
-from services.ai_retrieval import llm_self_check
+from services.ai_retrieval import llm_expand_faq_query, llm_self_check
 from utils.text import normalize_input
 
 logger = logging.getLogger("pac_helpdesk.faq")
@@ -87,6 +87,44 @@ _NON_ANSWER_RE = re.compile(
 
 def _looks_like_non_answer(text: str) -> bool:
     return bool(_NON_ANSWER_RE.search(text or ''))
+
+
+def _get_faq_candidates(
+    question: str,
+    detected_lang: str,
+    all_faqs: Sequence[Sequence[Any]],
+    query_embedding: Optional[List[float]] = None,
+) -> List[Dict]:
+    search_q = lang_service.normalize_vernacular_spelling(question.lower())
+    expanded_q = lang_service.expand_query(search_q)
+    candidates = engine.get_top_faq_candidates(
+        search_q,
+        expanded_q,
+        all_faqs,
+        detected_lang,
+        query_embedding=query_embedding,
+    )
+    if not all_faqs or (
+        candidates and candidates[0]["combined"] >= 0.78
+    ):
+        return candidates
+
+    alternate_questions = [
+        lang_service.expand_query(
+            lang_service.normalize_vernacular_spelling(variant.lower())
+        )
+        for variant in llm_expand_faq_query(question, detected_lang)
+    ]
+    if not alternate_questions:
+        return candidates
+    return engine.get_top_faq_candidates(
+        search_q,
+        expanded_q,
+        all_faqs,
+        detected_lang,
+        query_embedding=query_embedding,
+        alternate_questions=alternate_questions,
+    )
 
 
 def split_compound_question(question: str) -> List[str]:
@@ -200,15 +238,12 @@ Answer:"""
 def _lookup_faq_answer(question: str, detected_lang: str) -> Optional[Tuple[str, str, str]]:
     all_faqs = _get_all_faqs()
     search_q = lang_service.normalize_vernacular_spelling(question.lower())
-    expanded_q = lang_service.expand_query(search_q)
-    candidates = engine.get_top_faq_candidates(
-        search_q, expanded_q, all_faqs, detected_lang, query_embedding=None
-    )
+    candidates = _get_faq_candidates(question, detected_lang, all_faqs)
     if candidates and candidates[0]['combined'] < 0.75:
         query_embedding = get_embedding(search_q, cache=ai_cache)
         if query_embedding:
-            candidates = engine.get_top_faq_candidates(
-                search_q, expanded_q, all_faqs, detected_lang,
+            candidates = _get_faq_candidates(
+                question, detected_lang, all_faqs,
                 query_embedding=query_embedding,
             )
     if not candidates:
@@ -239,7 +274,12 @@ def _lookup_faq_answer(question: str, detected_lang: str) -> Optional[Tuple[str,
     return (ai_ans, best_row[3], best_row[4])
 
 
-def _log_unanswered(question: str, ctx=None):
+def _log_unanswered(
+    question: str,
+    ctx=None,
+    detected_lang: Optional[str] = None,
+    detected_topic: Optional[str] = None,
+):
     """PERF: opens its own short-lived connection right when it's actually
     needed, instead of requiring find_answer() to check a connection out
     of the (small, 3-on-Vercel) pool at the very start of a request and
@@ -259,12 +299,15 @@ def _log_unanswered(question: str, ctx=None):
                 resolved_question = None
         cur.execute("""
             INSERT INTO unanswered_questions
-                (question, resolved_question, context, created_at)
-            VALUES (%s, %s, %s, NOW())
+                (question, resolved_question, context, detected_language,
+                 detected_topic, created_at)
+            VALUES (%s, %s, %s, %s, %s, NOW())
         """, (
             question[:500],
             resolved_question,
             (context_snapshot[:2000] if context_snapshot else None),
+            detected_lang or lang_service.detect_language(question),
+            detected_topic or lang_service.classify_topic(question),
         ))
         conn.commit()
     except Exception as e:
@@ -303,7 +346,14 @@ nothing else."""
 
 def log_unanswered_standalone(question: str, session_id: Optional[str] = None):
     ctx = get_conversation_context(session_id) if session_id else None
-    _log_unanswered(question, ctx)
+    _log_unanswered(
+        question,
+        ctx,
+        detected_lang=lang_service.detect_language(
+            question, prior_lang=getattr(ctx, "last_detected_lang", None)
+        ),
+        detected_topic=lang_service.classify_topic(question),
+    )
 
 
 def _try_resolve_pending_disambiguation(question: str, detected_lang: str, ctx):
@@ -372,18 +422,24 @@ def _get_query_embedding(question: str):
         return None
 
 
-def _handbook_best_score(question: str, query_embedding=None) -> Tuple[float, list]:
-    chunks = handbook_service.get_top_handbook_chunks(question, query_embedding=query_embedding)
+def _handbook_best_score(
+    question: str,
+    query_embedding=None,
+    detected_lang: str = "english",
+) -> Tuple[float, list]:
+    chunks = handbook_service.get_top_handbook_chunks(
+        question,
+        query_embedding=query_embedding,
+        detected_lang=detected_lang,
+    )
     score = chunks[0]['score'] if chunks else 0.0
     return score, chunks
 
 
 def _faq_candidates_and_score(question: str, detected_lang: str, query_embedding=None) -> Tuple[list, float]:
     all_faqs = _get_all_faqs()
-    search_q = lang_service.normalize_vernacular_spelling(question.lower())
-    expanded_q = lang_service.expand_query(search_q)
-    candidates = engine.get_top_faq_candidates(
-        search_q, expanded_q, all_faqs, detected_lang, query_embedding=query_embedding
+    candidates = _get_faq_candidates(
+        question, detected_lang, all_faqs, query_embedding=query_embedding
     )
     best_score = candidates[0]['combined'] if candidates else 0.0
     return candidates, best_score
@@ -400,7 +456,9 @@ def _score_sources_parallel(question: str, detected_lang: str, query_embedding=N
     for any reason (never raises past this function).
     """
     try:
-        hb_future = _SCORING_EXECUTOR.submit(_handbook_best_score, question, query_embedding)
+        hb_future = _SCORING_EXECUTOR.submit(
+            _handbook_best_score, question, query_embedding, detected_lang
+        )
         faq_future = _SCORING_EXECUTOR.submit(
             _faq_candidates_and_score, question, detected_lang, query_embedding
         )
@@ -408,7 +466,9 @@ def _score_sources_parallel(question: str, detected_lang: str, query_embedding=N
         faq_candidates, faq_score = faq_future.result()
     except Exception as e:
         logger.debug(f"_score_sources_parallel: pool failed, falling back to sequential: {e}")
-        hb_score, hb_chunks = _handbook_best_score(question, query_embedding=query_embedding)
+        hb_score, hb_chunks = _handbook_best_score(
+            question, query_embedding=query_embedding, detected_lang=detected_lang
+        )
         faq_candidates, faq_score = _faq_candidates_and_score(
             question, detected_lang, query_embedding=query_embedding
         )
@@ -516,7 +576,12 @@ def _give_up(question: str, candidates: list, hb_chunks: list, detected_lang: st
         result = (soft, 'Disambiguation', None, None, detected_lang)
         return result if return_topic else result[0]
 
-    _log_unanswered(question, ctx)
+    _log_unanswered(
+        question,
+        ctx,
+        detected_lang=detected_lang,
+        detected_topic=lang_service.classify_topic(question),
+    )
     result = (
         lang_service.get_logged_fallback_response(detected_lang),
         'Unknown', None, None, detected_lang,
@@ -1012,23 +1077,28 @@ def find_answer(question: str, return_topic: bool = False,
         hb_score, hb_chunks = _hb_score_early, _hb_chunks_early
         candidates, faq_best_score = _faq_cands_early, _faq_score_early
     else:
-        hb_score, hb_chunks = _handbook_best_score(question)
+        hb_score, hb_chunks = _handbook_best_score(
+            question, detected_lang=detected_lang
+        )
         search_q = lang_service.normalize_vernacular_spelling(question.lower())
-        expanded_q = lang_service.expand_query(search_q)
-        candidates = engine.get_top_faq_candidates(
-            search_q, expanded_q, _get_all_faqs(), detected_lang, query_embedding=None
+        candidates = _get_faq_candidates(
+            question, detected_lang, _get_all_faqs(), query_embedding=None
         )
         faq_best_score = candidates[0]['combined'] if candidates else 0.0
        
         if faq_best_score < 0.78 or hb_score < 0.45:
             query_embedding = get_embedding(search_q, cache=ai_cache)
             if query_embedding:
-                candidates = engine.get_top_faq_candidates(
-                    search_q, expanded_q, _get_all_faqs(), detected_lang,
+                candidates = _get_faq_candidates(
+                    question, detected_lang, _get_all_faqs(),
                     query_embedding=query_embedding,
                 )
                 faq_best_score = candidates[0]['combined'] if candidates else 0.0
-                hb_score, hb_chunks = _handbook_best_score(question, query_embedding=query_embedding)
+                hb_score, hb_chunks = _handbook_best_score(
+                    question,
+                    query_embedding=query_embedding,
+                    detected_lang=detected_lang,
+                )
 
     try:
         word_count = len(question.split())
@@ -1042,6 +1112,8 @@ def find_answer(question: str, return_topic: bool = False,
 
         def _faq_text_relevant(user_q: str, cand: dict) -> bool:
             try:
+                if cand.get('alternate_match'):
+                    return True
                 row = cand.get('faq') or cand.get('row')
                 faq_q = ''
                 if row is not None:
