@@ -292,7 +292,8 @@ def _extract_from_answer(user_question: str, best_text: str, answer: str,
             return None
         response = response.strip()
 
-        if not answer_is_grounded(response, answer):
+        # Literal token overlap rejects valid translations against English FAQs.
+        if detected_lang == 'english' and not answer_is_grounded(response, answer):
             return None
 
         if not verify_output_language(response, detected_lang):
@@ -309,7 +310,10 @@ def _extract_from_answer(user_question: str, best_text: str, answer: str,
                 retry_response = None
             if (retry_response and retry_response.strip()
                     and "CANNOT_ANSWER" not in retry_response
-                    and answer_is_grounded(retry_response.strip(), answer)
+                    and (
+                        detected_lang != 'english'
+                        or answer_is_grounded(retry_response.strip(), answer)
+                    )
                     and verify_output_language(retry_response.strip(), detected_lang)):
                 response = retry_response.strip()
             else:
@@ -318,7 +322,10 @@ def _extract_from_answer(user_question: str, best_text: str, answer: str,
                             "(e.g. to the raw FAQ answer text).")
                 return None
 
-        if not _answer_relevant_to_question(user_question, response, min_overlap=1):
+        if (
+            detected_lang == 'english'
+            and not _answer_relevant_to_question(user_question, response, min_overlap=1)
+        ):
             logger.info(f"answer-relevance REJECTED for q={user_question[:80]!r}")
             return None
 

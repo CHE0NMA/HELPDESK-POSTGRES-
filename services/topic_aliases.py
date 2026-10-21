@@ -25,6 +25,14 @@ _CACHE_TS: float = 0.0
 _CACHE_TTL = 120.0  # seconds
 _LOCK = Lock()
 
+_FULL_NAME_CAMPUS_INTENT_RE = re.compile(
+    r"\b(full name|real (full )?name|name of (this )?school|campuses|"
+    r"other campus(es)?|how many campuses|campus locations?|"
+    r"where (is|are) the (main )?campus(es)?|which campus(es)?|main campus|"
+    r"asa ang (mga )?campus|pila ka campus|asa ang main campus|"
+    r"which campuses? offer)\b",
+    re.I,
+)
 
 
 SCHEMA_SQL = """
@@ -357,13 +365,16 @@ _SEED_ALIASES: List[dict] = [
         "match_pattern": (
             r"\b(jewelry|necklace|ring|earrings|piercing|dress code|"
             r"how .{0,15}dress|proper attire|inappropriate attire|"
-            r"slippers|short pants|crop tops|tsinelas|damit|"
+            r"slippers|shorts|short pants|crop tops|tsinelas|damit|"
             r"ano ang damit|pananamit|bisti|pwede ba mag jewelry|"
             r"pwede ba magdala ug singsing|allowed to wear|"
             r"slippers allowed|are slippers|"
             # Bisaya / Tagalog natural phrasings
-            r"unsay (dapat )?suoton|unsaon pagbisti|unsa ang (dapat )?isul-ob|"
+            r"unsay (dapat )?suoton|unsa(y)? (ang )?(dapat )?(isuot|suoton|souton|sul-ob)|"
+            r"unsaon pagbisti|unsa ang (dapat )?isul-ob|"
             r"unsa (man )?ang dress code|dress code diri|suoton diri|"
+            r"pwede ra ba mag short|mag shorts? diri|short diri sa school|"
+            r"wear shorts? .{0,25}(school|campus)|"
             r"ano ang (dapat )?isuot|paano magdamit|anong damit|"
             r"mga lalaki|sa lalaki|for (the )?men|for (the )?guys|"
             r"mga babae|sa babae|for (the )?ladies|for (the )?girls)\b"
@@ -825,6 +836,11 @@ def match_aliases(question: str, get_db_fn=None) -> List[dict]:
     for a in aliases:
         try:
             if re.search(a["match_pattern"], q, re.I):
+                if (
+                    a.get("topic_key") in {"campus_location", "full_name_campuses"}
+                    and not _FULL_NAME_CAMPUS_INTENT_RE.search(q)
+                ):
+                    continue
                 hits.append(a)
         except re.error:
             logger.warning(f"bad alias regex id={a.get('id')}: {a.get('match_pattern')}")

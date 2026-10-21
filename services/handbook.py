@@ -8,7 +8,7 @@ from ai_providers import ai_cache, circuit_breaker, llm_chat
 from database import get_db
 from services import nlg
 from services.ai_retrieval import (
-    llm_expand_retrieval_query,
+    llm_expand_school_query,
     llm_pick_sections,
     llm_self_check,
 )
@@ -30,6 +30,7 @@ HANDBOOK_KEYWORDS = [
     'code of conduct', 'behavioral code', 'discipline', 'disciplinary',
     'violation', 'penalty', 'sanction', 'offense', 'offence',
     'dress code', 'uniform', 'attire', 'appearance', 'jewelry', 'jewellery',
+    'earring', 'earrings',
     'attendance', 'absent', 'absence', 'tardiness', 'tardy',
     'suspension', 'expulsion', 'grounds for', 'prohibited', 'allowed',
     'fraternity', 'sorority', 'hazing', 'bullying', 'bully', 'bullies', 'bullied',
@@ -58,6 +59,7 @@ _GENERIC = {
 _QUERY_EXPANSIONS = [
 
     (r'\b(unsay (dapat )?(suoton|isuot uniform|suot uniform)|'
+     r'unsa (ang )?(dapat )?(suoton|isuot uniform|suot uniform|suot)|'
      r'isuot uniform|suot uniform|suoton|sout)\b',
      'dress attire clothing appearance'),
     (r'\b(light|minor)\s+offenses?\b', 'first degree offense demerit'),
@@ -141,8 +143,10 @@ _QUERY_EXPANSIONS = [
      'worship absences dormitory pledge 20 30'),
     (r'\b(community service instead of fine|community service or fine)\b',
      'disciplinary measures community service fines up to 1500'),
-    (r'\b(slippers|short pants|crop tops)\b',
-     'slippers short pants crop tops first degree inappropriate attire'),
+    (r'\b(slippers|shorts|short pants|crop tops)\b|'
+     r'\b(?:wear|wearing|mag|magsuot|mag\s+suot)\s+short\b',
+     'dress attire clothing appearance slippers short pants crop tops '
+     'first degree inappropriate attire'),
     (r'\b(questionable music|indecent songs|rules about music)\b',
      'questionable music indecent songs first degree'),
     (r'\b(incomplete grades?|complete an incomplete|deadline for incomplete)\b',
@@ -243,7 +247,10 @@ _FORCED_TOPIC_MATCHES = [
      r'which locations?|names? of the (other )?campuses?|main campus)\b',
      ['meetings'],
      ['held within the campus', 'regular meetings of the members']),
-    (r'\b(dress code|how .{0,15}dress|proper attire|uniform)\b',
+    (r'\b(dress code|how .{0,15}dress|proper attire|uniform|shorts|short pants)\b|'
+     r'\b(unsa|unsay).{0,35}\b(isuot|suot|suoton|souton)\b|'
+     r'\b(pwede|puwede).{0,30}\b(mag\s+short|magsuot|mag\s+suot)\b|'
+     r'\b(?:wear|wearing)\s+short\b',
      ['dress and appearance', 'school uniform', 'dress'],
      ['uniform', 'attire', 'appearance']),
 ]
@@ -331,6 +338,16 @@ def is_handbook_question(question: str) -> bool:
     """
     q = normalize_vernacular_spelling(question.lower())
     if any(kw in q for kw in HANDBOOK_KEYWORDS):
+        return True
+    if re.search(
+        r'\b(unsa|unsay|unsaon).{0,35}\b(suoton|isuot|suot|shorts?|damit|'
+        r'sinina|bisti|panapton)\b|'
+        r'\b(pwede|puwede).{0,30}\b(magsuot|mag\s+suot|mag\s+shorts?|'
+        r'short|shorts|wear)\b.{0,35}\b(school|campus|diri|dinhi|diha)?\b|'
+        r'\b(shorts?|short pants)\b.{0,30}\b(school|campus|allowed|okay|'
+        r'policy|rule|pwede|bawal)\b',
+        q, re.I,
+    ):
         return True
     if re.search(
         r'\b(what (?:would|will) happen(?:s)? if i|what happens if i|what if i|'
@@ -912,47 +929,15 @@ def get_top_handbook_chunks(
     context_hint: Optional[str] = None,
     detected_lang: str = "english",
 ) -> List[Dict]:
-    """Retrieve normally first; interpret Filipino phrasing only on weak hits."""
+    """Search the original and canonical paraphrases for Filipino questions."""
+    variants = llm_expand_school_query(question, detected_lang)
     chunks = _get_top_handbook_chunks(
         question,
         max_chunks=max_chunks,
         query_embedding=query_embedding,
         context_hint=context_hint,
+        alternate_questions=variants or None,
     )
-    supported_languages = {
-        "tagalog", "bisaya", "mixed_te", "mixed_be", "mixed_tb",
-    }
-    if (
-        detected_lang not in supported_languages
-        or (
-            chunks
-            and (
-                chunks[0].get("_raw_score", 0.0) >= 0.20
-                or chunks[0].get("_ai_picked")
-            )
-        )
-    ):
-        return chunks
-
-    variants = llm_expand_retrieval_query(question, detected_lang, "student handbook")
-    if not variants:
-        return chunks
-    expanded_chunks = _get_top_handbook_chunks(
-        question,
-        max_chunks=max_chunks,
-        query_embedding=query_embedding,
-        context_hint=context_hint,
-        alternate_questions=variants,
-    )
-    if (
-        expanded_chunks
-        and (
-            not chunks
-            or expanded_chunks[0].get("_raw_score", 0.0)
-            > chunks[0].get("_raw_score", 0.0)
-        )
-    ):
-        return expanded_chunks
     return chunks
 
 
@@ -1275,10 +1260,17 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
                     c.get('_forced') or c.get('_forced_content') for c in chunks
                 )
                 min_ov = 0.25 if is_forced else 0.35
-                if not answer_is_grounded(response, source_blob, min_overlap=min_ov):
+                # Translated answers need semantic validation, not English word overlap.
+                if (
+                    detected_lang == 'english'
+                    and not answer_is_grounded(response, source_blob, min_overlap=min_ov)
+                ):
                     logger.info(f"handbook grounding rejected for q={question[:80]!r}")
                     response = None
-                elif not _answer_relevant_to_question(question, response, min_overlap=1):
+                elif (
+                    detected_lang == 'english'
+                    and not _answer_relevant_to_question(question, response, min_overlap=1)
+                ):
                     logger.info(f"handbook answer-relevance REJECTED (is_forced={is_forced}) "
                                 f"for q={question[:80]!r}")
                     response = None
@@ -1299,7 +1291,12 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
                     retry_ok = (
                         retry_response and retry_response.strip()
                         and "CANNOT_ANSWER" not in retry_response.upper()
-                        and answer_is_grounded(retry_response.strip(), source_blob, min_overlap=min_ov)
+                        and (
+                            detected_lang != 'english'
+                            or answer_is_grounded(
+                                retry_response.strip(), source_blob, min_overlap=min_ov
+                            )
+                        )
                         and verify_output_language(retry_response.strip(), detected_lang)
                     )
                     if retry_ok and retry_response is not None:
@@ -1321,7 +1318,7 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
                         "does not say",
                     )
                     _is_negation = any(m in response.lower() for m in _NEGATION_MARKERS)
-                    if len(chunks) > 1 and not _is_negation:
+                    if len(chunks) > 1 and not _is_negation and detected_lang == 'english':
                         
                         top_only_ratio = grounding_ratio(response, chunks[0].get('content', ''))
                         if top_only_ratio < 0.15:
@@ -1362,7 +1359,10 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
     if forced and content:
         if not clean:
             clean = content[:600].strip()
-        if not _answer_relevant_to_question(question, content):
+        if (
+            detected_lang == 'english'
+            and not _answer_relevant_to_question(question, content)
+        ):
             logger.info(
                 f"handbook forced-topic fallback REJECTED (chunk irrelevant to question) "
                 f"for q={question[:80]!r} chunk={title!r}"
@@ -1373,7 +1373,10 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
         final = nlg.speak_naturally(final, question, detected_lang=detected_lang)
         return final
 
-    if not clean or not _answer_relevant_to_question(question, clean):
+    if not clean or (
+        detected_lang == 'english'
+        and not _answer_relevant_to_question(question, clean)
+    ):
         return None
     page_note = f"\n\n(More detail is on page {page}.)" if page else ""
     final = f"{clean}{page_note}".strip()

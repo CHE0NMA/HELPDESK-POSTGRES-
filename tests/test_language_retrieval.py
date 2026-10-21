@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from services import ai_retrieval, faq, handbook, language, nlg
+from services import ai_retrieval, faq, handbook, language, nlg, topic_aliases
 from services.answer_engine import (
     _extract_from_answer,
     build_disambiguation,
@@ -30,6 +30,104 @@ class BisayaLanguageTests(unittest.TestCase):
             "bisaya",
         )
 
+    def test_casual_bisaya_and_tagalog_phrasing_is_detected_and_normalized(self):
+        bisaya_questions = (
+            "pwede ba mag sout og earings diri sa school",
+            "unsaon pagsul-ob ug hikaw dinhi",
+            "ngano man dili pwede magsout og hikaw",
+            "naa bay klase ugma",
+            "tagpila ang tuition sa nursing",
+        )
+        for question in bisaya_questions:
+            with self.subTest(question=question):
+                self.assertEqual(_heuristic_language(question)[0], "bisaya")
+                if "hikaw" in question or "earings" in question:
+                    self.assertIn("earrings", normalize_vernacular_spelling(question))
+
+        tagalog_questions = (
+            "pwede ba akong magsuot ng hikaw sa paaralan",
+            "bakit hindi puwedeng magsuot ng earrings dito",
+            "maaari ba akong mag suot ng earing sa school",
+            "pwedeng bumisita muna sa registrar",
+        )
+        for question in tagalog_questions:
+            with self.subTest(question=question):
+                self.assertEqual(_heuristic_language(question)[0], "tagalog")
+                if "hikaw" in question or "earring" in question:
+                    self.assertIn("earring", normalize_vernacular_spelling(question))
+
+    def test_tuition_language_and_semester_phrases_expand_to_search_terms(self):
+        tagalog = "magkano tuition sa BSCS 2nd year 1 sem"
+        bisaya = "tagpila ang tuition sa BSCS 2nd year 1 sem"
+
+        self.assertEqual(_heuristic_language(tagalog)[0], "tagalog")
+        self.assertEqual(_heuristic_language(bisaya)[0], "bisaya")
+
+        expanded = expand_query(normalize_vernacular_spelling(tagalog))
+        self.assertIn("how much tuition fee cost", expanded)
+        self.assertIn("first semester", expanded)
+        self.assertIn("year level", expanded)
+        self.assertIn("tuition", normalize_vernacular_spelling("tagpila ang tuision"))
+
+    def test_earring_questions_are_recognized_as_handbook_questions(self):
+        for question in (
+            "pwede ba mag sout og earings diri sa school",
+            "pwede ba akong magsuot ng hikaw sa paaralan",
+        ):
+            with self.subTest(question=question):
+                self.assertTrue(handbook.is_handbook_question(question))
+
+    def test_casual_dress_questions_route_to_the_handbook(self):
+        questions = (
+            "unsa dapat souton sulod sa school",
+            "unsay dress code policy diri sa school",
+            "pwede ra ba mag short diri sa school",
+            "is it okay to wear short inside the campus",
+            "What is the dress code policy?",
+        )
+        for question in questions:
+            with self.subTest(question=question):
+                self.assertTrue(handbook.is_handbook_question(question))
+                self.assertIn(
+                    "dress",
+                    handbook.expand_query_for_retrieval(question).lower(),
+                )
+
+        with patch.object(topic_aliases, "forced_topic_for", return_value=None):
+            for question in questions:
+                with self.subTest(forced_topic=question):
+                    forced = handbook._forced_topic_for(question)
+                    self.assertIsNotNone(forced)
+                    self.assertIn("dress and appearance", forced[0])
+
+    def test_bare_campus_mention_does_not_force_campus_location_content(self):
+        stale_campus_alias = {
+            "id": 123,
+            "topic_key": "campus_location",
+            "match_pattern": r"\bcampus\b",
+            "title_needles": ["meetings"],
+            "content_needles": ["held within the campus"],
+        }
+        with patch.object(
+            topic_aliases,
+            "_load_aliases",
+            return_value=[stale_campus_alias],
+        ):
+            self.assertEqual(
+                topic_aliases.match_aliases(
+                    "is it okay to wear short inside the campus",
+                    get_db_fn=lambda: None,
+                ),
+                [],
+            )
+            self.assertEqual(
+                topic_aliases.match_aliases(
+                    "where is the main campus",
+                    get_db_fn=lambda: None,
+                )[0]["topic_key"],
+                "campus_location",
+            )
+
     def test_normalized_bisaya_dress_query_matches_uniform_source(self):
         self.assertTrue(
             handbook._answer_relevant_to_question(
@@ -50,6 +148,16 @@ class BisayaLanguageTests(unittest.TestCase):
             "bisaya",
         )
 
+    def test_bisaya_output_with_shared_magsuot_word_passes_language_check(self):
+        response = "Pwede ba magsuot og shorts sulod sa campus?"
+
+        self.assertEqual(_heuristic_language(response)[0], "bisaya")
+        self.assertTrue(language.verify_output_language(response, "bisaya"))
+        self.assertEqual(
+            _heuristic_language("Pwede ba akong magsuot ng hikaw sa paaralan?")[0],
+            "tagalog",
+        )
+
     def test_bisaya_search_phrases_expand_to_matching_concepts(self):
         tuition = expand_query(normalize_vernacular_spelling(
             "pila ang tuition sa nursing"
@@ -64,6 +172,49 @@ class BisayaLanguageTests(unittest.TestCase):
 
 
 class FaqRelevanceTests(unittest.TestCase):
+    def test_tagalog_program_year_semester_tuition_query_reaches_faq_answer(self):
+        question = "magkano tuition sa BSCS 2nd year 1 sem"
+        faq_row = (
+            "Tuition fees vary by program and year level.",
+            "How much is the tuition fee?",
+            2, "Fees", "tuition", "tuition fee", None, 0, None, None,
+        )
+
+        with patch.object(faq, "_get_all_faqs", return_value=[faq_row]), \
+             patch.object(faq, "get_embedding", return_value=None), \
+             patch.object(
+                 faq,
+                 "llm_expand_faq_query",
+                 return_value=[
+                     "How much is tuition for BSCS 2nd year, semester 1?"
+                 ],
+             ), \
+             patch.object(
+                 faq.engine,
+                 "get_top_faq_candidates",
+                 wraps=faq.engine.get_top_faq_candidates,
+             ) as rank_candidates, \
+             patch.object(
+                 faq.engine,
+                 "smart_extract_answer",
+                 return_value=("Ang tuition ay depende sa programa at year level.", None),
+             ) as extract:
+            result = faq._lookup_faq_answer(question, "tagalog")
+
+        self.assertEqual(
+            result,
+            ("Ang tuition ay depende sa programa at year level.", "Fees", "tuition"),
+        )
+        extract.assert_called_once()
+        self.assertGreaterEqual(
+            extract.call_args.kwargs["candidates"][0]["combined"],
+            faq.engine.FUZZY_MIN_SCORE,
+        )
+        searched_queries = rank_candidates.call_args.kwargs["alternate_questions"]
+        self.assertTrue(
+            any("bscs" in query and "semester 1" in query for query in searched_queries)
+        )
+
     def test_ai_rephrasing_improves_tagalog_and_bisaya_faq_matching(self):
         faq_row = (
             "Students may wear simple earrings.",
@@ -130,6 +281,38 @@ class FaqRelevanceTests(unittest.TestCase):
         cache_set.assert_called_once()
         self.assertEqual(cache_set.call_args.args[1], [])
 
+    def test_query_expansion_cannot_drop_a_program_code(self):
+        with patch.object(ai_retrieval.ai_cache, "get", return_value=None), \
+             patch.object(ai_retrieval.ai_cache, "set") as cache_set, \
+             patch.object(
+                 ai_retrieval, "llm_chat",
+                 return_value='["How much is tuition for second-year students?"]',
+             ):
+            variants = ai_retrieval.llm_expand_retrieval_query(
+                "magkano tuition sa BSCS 2nd year",
+                "tagalog",
+                "FAQ",
+            )
+
+        self.assertEqual(variants, [])
+        self.assertEqual(cache_set.call_args.args[1], [])
+
+    def test_query_expansion_cannot_drop_a_negated_policy_intent(self):
+        with patch.object(ai_retrieval.ai_cache, "get", return_value=None), \
+             patch.object(ai_retrieval.ai_cache, "set") as cache_set, \
+             patch.object(
+                 ai_retrieval, "llm_chat",
+                 return_value='["Can students wear earrings at school?"]',
+             ):
+            variants = ai_retrieval.llm_expand_retrieval_query(
+                "dili ba pwede magsuot og earrings sa school",
+                "bisaya",
+                "student handbook",
+            )
+
+        self.assertEqual(variants, [])
+        self.assertEqual(cache_set.call_args.args[1], [])
+
     def test_retrieval_uses_reviewed_student_paraphrase_alias(self):
         faq_row = (
             "Students may wear simple earrings.",
@@ -147,20 +330,23 @@ class FaqRelevanceTests(unittest.TestCase):
         self.assertEqual(candidates[0]["faq"], faq_row)
         self.assertTrue(candidates[0]["alternate_match"])
 
-    def test_faq_query_expansion_only_runs_when_lexical_match_is_weak(self):
+    def test_faq_query_expansion_also_runs_when_lexical_match_is_strong(self):
         faq_row = (
             "Tuition varies by program and year level.",
             "How much is the tuition fee?",
             2, "Fees", "tuition", "tuition fee", None, 0, None, None,
         )
-        with patch.object(faq, "llm_expand_faq_query") as expand:
+        with patch.object(
+            faq, "llm_expand_faq_query",
+            return_value=["What is the tuition fee for BSCS?"],
+        ) as expand:
             faq._get_faq_candidates(
                 "How much is the tuition fee?",
                 "bisaya",
                 [faq_row],
             )
 
-        expand.assert_not_called()
+        expand.assert_called_once()
 
     def test_faq_query_expansion_skips_when_faq_corpus_is_empty(self):
         with patch.object(faq, "llm_expand_faq_query") as expand:
@@ -193,15 +379,14 @@ class FaqRelevanceTests(unittest.TestCase):
         self.assertGreaterEqual(candidates[0]["combined"], 0.60)
         self.assertTrue(candidates[0]["alternate_match"])
 
-    def test_handbook_query_expansion_recovers_weak_multilingual_hits(self):
-        initial_chunks = [{"section_title": "General rules", "_raw_score": 0.08}]
-        expanded_chunks = [{"section_title": "Student conduct", "_raw_score": 0.32}]
+    def test_handbook_retrieval_searches_original_and_expansion_together(self):
+        chunks = [{"section_title": "Student conduct", "_raw_score": 0.32}]
         with patch.object(
             handbook, "_get_top_handbook_chunks",
-            side_effect=[initial_chunks, expanded_chunks],
+            return_value=chunks,
         ) as retrieve, patch.object(
             handbook,
-            "llm_expand_retrieval_query",
+            "llm_expand_school_query",
             return_value=["Student dress and appearance policy"],
         ) as expand:
             result = handbook.get_top_handbook_chunks(
@@ -209,42 +394,29 @@ class FaqRelevanceTests(unittest.TestCase):
                 detected_lang="bisaya",
             )
 
-        self.assertEqual(result, expanded_chunks)
+        self.assertEqual(result, chunks)
         expand.assert_called_once()
+        retrieve.assert_called_once()
         self.assertEqual(
             retrieve.call_args.kwargs["alternate_questions"],
             ["Student dress and appearance policy"],
         )
 
-    def test_handbook_query_expansion_skips_strong_hits(self):
-        chunks = [{"section_title": "Dress and appearance", "_raw_score": 0.42}]
-        with patch.object(
-            handbook, "_get_top_handbook_chunks", return_value=chunks
-        ), patch.object(handbook, "llm_expand_retrieval_query") as expand:
-            result = handbook.get_top_handbook_chunks(
-                "unsa ang dress code",
-                detected_lang="bisaya",
-            )
-
-        self.assertEqual(result, chunks)
-        expand.assert_not_called()
-
-    def test_handbook_query_expansion_runs_when_initial_retrieval_has_no_hits(self):
-        expanded_chunks = [{"section_title": "Student conduct", "_raw_score": 0.16}]
+    def test_handbook_retrieval_falls_back_to_original_when_expansion_is_unavailable(self):
         with patch.object(
             handbook, "_get_top_handbook_chunks",
-            side_effect=[[], expanded_chunks],
+            return_value=[],
         ), patch.object(
             handbook,
-            "llm_expand_retrieval_query",
-            return_value=["Student dress and appearance policy"],
+            "llm_expand_school_query",
+            return_value=[],
         ):
             result = handbook.get_top_handbook_chunks(
                 "unsa ang dapat isul-ob sa campus",
                 detected_lang="bisaya",
             )
 
-        self.assertEqual(result, expanded_chunks)
+        self.assertEqual(result, [])
 
     def test_unanswered_log_stores_detected_language_and_topic(self):
         class Cursor:
@@ -292,6 +464,70 @@ class FaqRelevanceTests(unittest.TestCase):
 
         self.assertIsNone(answer)
         self_check.assert_not_called()
+
+    def test_bisaya_faq_translation_uses_semantic_source_check(self):
+        translated = "Kinahanglan nga simple ug limpyo ang sinina."
+        with patch(
+            "services.answer_engine.answer_is_grounded", return_value=False
+        ) as lexical_check, patch(
+            "services.answer_engine._answer_relevant_to_question",
+            return_value=False,
+        ), patch(
+            "services.answer_engine.llm_self_check", return_value=True
+        ):
+            answer = _extract_from_answer(
+                "unsa dapat souton sulod sa school",
+                "What is the dress code policy?",
+                "Students should dress modestly and wear simple but neat clothing.",
+                lambda prompt, max_tokens: translated,
+                detected_lang="bisaya",
+            )
+
+        self.assertEqual(answer, translated)
+        lexical_check.assert_not_called()
+
+    def test_bisaya_handbook_translation_uses_semantic_source_check(self):
+        translated = "Kinahanglan nga simple ug limpyo ang sinina."
+        chunks = [{
+            "section_title": "Dress and appearance",
+            "page_start": 25,
+            "content": (
+                "Students should dress modestly and wear simple but neat clothing."
+            ),
+        }]
+        with patch.object(handbook, "get_relevant_chunks", return_value=chunks), \
+             patch.object(handbook.circuit_breaker, "is_open", return_value=False), \
+             patch.object(handbook, "llm_chat", return_value=translated), \
+             patch.object(handbook, "answer_is_grounded", return_value=False) as lexical_check, \
+             patch.object(handbook, "llm_self_check", return_value=True), \
+             patch.object(handbook, "_forced_topic_for", return_value=None):
+            answer = handbook._build_handbook_answer_from_chunks(
+                "unsa dapat souton sulod sa school",
+                chunks,
+                detected_lang="bisaya",
+            )
+
+        self.assertEqual(answer, translated)
+        lexical_check.assert_not_called()
+
+    def test_bisaya_natural_rephrase_uses_semantic_source_check(self):
+        canonical = (
+            "Students should dress modestly and wear simple but neat clothing."
+        )
+        translated = "Kinahanglan nga simple ug limpyo ang sinina."
+        with patch.object(nlg.circuit_breaker, "is_open", return_value=False), \
+             patch.object(nlg.ai_cache, "get", return_value=None), \
+             patch.object(nlg, "llm_chat_fast", return_value=translated), \
+             patch.object(nlg, "answer_is_grounded", return_value=False) as lexical_check, \
+             patch("services.ai_retrieval.llm_self_check", return_value=True):
+            response = nlg.speak_naturally(
+                canonical,
+                "unsa dapat souton sulod sa school",
+                detected_lang="bisaya",
+            )
+
+        self.assertEqual(response, translated)
+        lexical_check.assert_not_called()
 
     def test_tuition_question_outranks_installment_faq_priority(self):
         faqs = [

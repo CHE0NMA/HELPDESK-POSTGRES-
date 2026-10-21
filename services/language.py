@@ -207,18 +207,19 @@ def _heuristic_language(text: str) -> Tuple[str, bool]:
     """
     t = text.lower()
     has_tagalog = bool(re.search(
-        r'\b(po|opo|paano|bakit|magkano|kumusta|kamusta|salamat|ano|saan|kailan'
-        r'|pwede|puwede|gusto|ayaw|wala|meron|mayroon|yung|yun|ito|iyon|naman'
+        r'\b(po|opo|paano|pano|bakit|bat|magkano|kumusta|kamusta|salamat|ano|anong|saan|san|kailan|kelan'
+        r'|pwede|pwedeng|puwede|puwedeng|dito|diyan|doon|dun|nasa|ang|ng|huwag|wag'
+        r'|sino|sino-sino|alin|kanino|ilan|ilang|muna|gusto|ayaw|wala|meron|mayroon|yung|yun|ito|iyan|iyon|naman'
         r'|talaga|lang|din|rin|ba|ko|mo|niya|natin|nila|siya|sila|kayo|tayo'
-        r'|hindi|oo|sige|kasi|kailangan|dapat|maaari|tulungan|tulong'
+        r'|hindi|oo|sige|kasi|kailangan|dapat|maaari|sana|mga|tulungan|tulong'
         r'|mag[a-z]{2,}|nag[a-z]{2,})\b',
         t,
     ))
     has_bisaya = bool(re.search(
-        r'\b(unsa|unsay|ngano|giunsa|jud|gyud|pud|usab|kaayo|mao|amo|kinsa|asa|kanus-a'
-        r'|naa|wala|nay|naay|dili|oo|sige|lagi|bitaw|diha|dinhi|adto|karon'
-        r'|buhat|himoa|palihug|salamat|maayo|unta|gusto|ganahan|pwede'
-        r'|mo[a-z]{3,})\b',
+        r'\b(unsa|unsay|unsaon|ngano|giunsa|jud|gyud|pud|usab|kaayo|mao|amo|kinsa|asa|diin|kanus-a|kanusa|diri|dinhi|dinha|diha|didto|ngadto'
+        r'|naa|duna|wala|nay|naay|dili|di|oo|sige|lagi|bitaw|adto|karon|pila|tagpila|pilay|kapila|bayran'
+        r'|buhat|himoa|palihug|salamat|maayo|unta|gusto|ganahan|kinahanglan|pwede'
+        r'|sulod|sul-ob|isul-ob|ug|og|bai|bako|sout|suot|mo[a-z]{3,})\b',
         t,
     ))
     has_english = bool(re.search(
@@ -227,15 +228,21 @@ def _heuristic_language(text: str) -> Tuple[str, bool]:
     ))
 
     has_strong_bisaya = bool(re.search(
-        r'\b(unsay|gikan|hangtod|hangtud|kutob|sulod|og|bai|bako|suoton)\b', t
+        r'\b(unsay|unsaon|ngano|kanus-a|kanusa|gikan|hangtod|hangtud|kutob|sulod|og|ug|bai|bako|pila|pilay|'
+        r'sout|suoton|sul-ob|isul-ob|ug|diri|dinhi|dinha|diha|didto|ngadto|diin|'
+        r'dili|naa|naay|ganahan|kinahanglan|tagpila|pilay|kapila|mag\s*sout)\b', t
     )) or bool(
         re.search(r'\bpila\b', t)
         and re.search(r'\b(tuition|fee|bayad|gasto|cost|price)\b', t)
     )
     has_strong_tagalog = bool(re.search(
-        r'\b(ako|magsuot|mag[a-z]{2,}|nag[a-z]{2,}|magkano|paano|bakit|'
+        r'\b(ako|pwedeng|puwedeng|mag(?!suot\b|sout(?:on)?\b)[a-z]{2,}|nag[a-z]{2,}|magkano|paano|pano|bakit|bat|'
+        r'anong|saan|san|kailan|kelan|sino|ilan|ilang|'
         r'naman|talaga|hindi|yung|iyon|opo)\b', t
-    ))
+    )) or bool(
+        re.search(r'\b(magsuot|mag\s+suot)\b', t)
+        and not re.search(r'\b(og|ug)\b', t)
+    )
     if has_strong_bisaya:
         if has_strong_tagalog:
             return 'mixed_tb', False
@@ -360,7 +367,8 @@ def classify_topic(question: str) -> str:
         ],
         'tuition': [
             'tuition', 'fee', 'payment', 'cost', 'price', 'bayad', 'bayaran',
-            'bayran', 'magkano', 'pila ang tuition', 'matrikula', 'gasto',
+            'bayran', 'magkano', 'pila ang tuition', 'tagpila', 'pilay',
+            'matrikula', 'matricula', 'gasto',
         ],
         'scholarship': [
             'scholarship', 'scholar', 'financial aid', 'assistance', 'iskolar',
@@ -842,7 +850,10 @@ _VERNACULAR_VARIANTS: Dict[str, str] = {
     'isul-ob': 'isuot uniform', 'isulob': 'isuot uniform',
     'isuutin': 'isuot uniform', 'suoton': 'isuot uniform',
     'sul-ob': 'isuot uniform', 'ipasul-ob': 'isuot uniform',
-    'sout': 'suot',
+    'sout': 'suot', 'souton': 'isuot uniform', 'mag-sout': 'mag suot',
+    'earings': 'earrings', 'earing': 'earring', 'earringgs': 'earrings',
+    'hikaw': 'earrings',
+    'tuision': 'tuition', 'tution': 'tuition', 'tuetion': 'tuition',
     'sinina': 'uniform', 'bisti': 'uniform', 'panapton': 'uniform',
 }
 
@@ -919,14 +930,35 @@ def expand_query(text: str) -> str:
     normalized = expand_abbreviations(normalized)
 
     aliases = []
-    if re.search(r'\bpila\b', normalized, re.I) and re.search(
-        r'\b(tuition|fee|bayad|gasto|cost|price)\b', normalized, re.I
-    ):
+    asks_cost = re.search(
+        r'\b(pila|pilay|tagpila|magkano|how much)\b', normalized, re.I
+    )
+    mentions_cost = re.search(
+        r'\b(tuition|fee|bayad|bayran|bayaran|matrikula|matricula|gasto|cost|price)\b',
+        normalized,
+        re.I,
+    )
+    if asks_cost and mentions_cost:
         aliases.append('how much tuition fee cost')
     if re.search(r'\bgikan\b', normalized, re.I):
         aliases.append('from')
     if re.search(r'\b(hangtod|hangtud|kutob)\b', normalized, re.I):
         aliases.append('until')
+    semester_ordinals = (
+        (r'\b(1st|first|1|una|unang)\s*(sem|semester|semestre)\b', 'first semester first sem'),
+        (r'\b(2nd|second|2|ikaduha|ikaduhang)\s*(sem|semester|semestre)\b', 'second semester second sem'),
+        (r'\b(3rd|third|3|ikatulo|ikatulong)\s*(sem|semester|semestre)\b', 'third semester third sem'),
+    )
+    for pattern, alias in semester_ordinals:
+        if re.search(pattern, normalized, re.I):
+            aliases.append(alias)
+    if re.search(
+        r'\b(\d+(st|nd|rd|th)?|first|second|third|fourth|una|unang|ikaduha|ikaduhang|'
+        r'ikatulo|ikatulong)\s*(year|taon|tuig)\b',
+        normalized,
+        re.I,
+    ):
+        aliases.append('year level')
 
     return f"{normalized} {' '.join(aliases)}".strip()
 

@@ -97,17 +97,14 @@ def _get_faq_candidates(
 ) -> List[Dict]:
     search_q = lang_service.normalize_vernacular_spelling(question.lower())
     expanded_q = lang_service.expand_query(search_q)
-    candidates = engine.get_top_faq_candidates(
-        search_q,
-        expanded_q,
-        all_faqs,
-        detected_lang,
-        query_embedding=query_embedding,
-    )
-    if not all_faqs or (
-        candidates and candidates[0]["combined"] >= 0.78
-    ):
-        return candidates
+    if not all_faqs or detected_lang == "english":
+        return engine.get_top_faq_candidates(
+            search_q,
+            expanded_q,
+            all_faqs,
+            detected_lang,
+            query_embedding=query_embedding,
+        )
 
     alternate_questions = [
         lang_service.expand_query(
@@ -115,8 +112,6 @@ def _get_faq_candidates(
         )
         for variant in llm_expand_faq_query(question, detected_lang)
     ]
-    if not alternate_questions:
-        return candidates
     return engine.get_top_faq_candidates(
         search_q,
         expanded_q,
@@ -1252,6 +1247,22 @@ def find_answer(question: str, return_topic: bool = False,
                 )
                 faq_cache.set(cache_key, result_data)
                 return result_data
+
+        selected_source = (
+            'handbook' if (handbook_should_lead or is_hb or pure_handbook_topics)
+            else 'faq' if candidates
+            else 'none'
+        )
+        logger.debug(
+            "Retrieval ranking: language=%s source=%s handbook_score=%.3f "
+            "faq_score=%.3f handbook_candidates=%d faq_candidates=%d",
+            detected_lang,
+            selected_source,
+            hb_score,
+            faq_best_score,
+            len(hb_chunks),
+            len(candidates),
+        )
 
         if handbook_should_lead or is_hb or pure_handbook_topics:
             hb_ans = handbook_service.answer_handbook_question(

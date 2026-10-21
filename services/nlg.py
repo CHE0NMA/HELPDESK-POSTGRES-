@@ -140,6 +140,21 @@ def lang_name(detected_lang: str) -> str:
     return _LANG_NAMES.get(detected_lang, 'English')
 
 
+def _rephrase_is_grounded(
+    response: str,
+    canonical_text: str,
+    question: str,
+    detected_lang: str,
+) -> bool:
+    """Use semantic checking for translations, where English word overlap fails."""
+    if detected_lang == 'english':
+        return answer_is_grounded(response, canonical_text, min_overlap=0.4)
+
+    from services.ai_retrieval import llm_self_check
+
+    return llm_self_check(question, response, canonical_text)
+
+
 def speak_naturally(canonical_text: str, question: str, detected_lang: str = 'english',
                      extra_note: str = "") -> str:
     """Paraphrase `canonical_text` (which is already 100% factually
@@ -200,7 +215,9 @@ def speak_naturally(canonical_text: str, question: str, detected_lang: str = 'en
             return fallback_text
         response = response.strip()
 
-        if not answer_is_grounded(response, canonical_text, min_overlap=0.4):
+        if not _rephrase_is_grounded(
+            response, canonical_text, question, detected_lang
+        ):
             logger.info(f"speak_naturally: rephrase failed local fact-check, using canonical text. "
                         f"canonical={canonical_text!r} rephrase={response!r}")
             return fallback_text
@@ -218,7 +235,12 @@ def speak_naturally(canonical_text: str, question: str, detected_lang: str = 'en
             except Exception:
                 retry_response = None
             if (retry_response and retry_response.strip()
-                    and answer_is_grounded(retry_response.strip(), canonical_text, min_overlap=0.4)
+                    and _rephrase_is_grounded(
+                        retry_response.strip(),
+                        canonical_text,
+                        question,
+                        detected_lang,
+                    )
                     and verify_output_language(retry_response.strip(), detected_lang)):
                 response = retry_response.strip()
             else:
