@@ -359,6 +359,9 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
     <div class="toolbar">
       <span class="page-title">All Negative Feedback</span>
       <input type="text" class="filter-input" id="searchInput" placeholder="Search by question or answer…" oninput="filterTable()" autocomplete="off">
+      <a class="btn-select-toggle" href="/self_heal">
+        <i class="bi bi-arrow-repeat"></i> Review learning drafts
+      </a>
       <button type="button" class="btn-select-toggle" id="btnSelectToggle" onclick="toggleSelectionMode()">
         <i class="bi bi-check2-square"></i> Select
       </button>
@@ -401,6 +404,7 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
               <div class="draft-meta" style="margin:.25rem 0 0">
                 <span class="pill pill-purple">{{ f.detected_language }}</span>
                 <span class="pill pill-blue">{{ f.detected_topic }}</span>
+                <span class="pill">{{ f.source_type }}{% if f.source_ref %}: {{ f.source_ref }}{% endif %}</span>
               </div>
             </td>
             <td><span class="cell-text" onclick='showFull("Bot Answer", {{ f.answer|tojson }})'>{{ f.answer[:80] }}{% if f.answer|length > 80 %}...{% endif %}</span></td>

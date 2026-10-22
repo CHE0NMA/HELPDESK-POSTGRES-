@@ -1,12 +1,12 @@
 """
-services/answer_memory.py — successful-answer cache + feedback loop.
+services/answer_memory.py — verified-answer cache + feedback records.
 
-When a grounded answer is thumbs-up'd (or repeatedly served without
-complaint), we store question_norm → answer so identical / near-identical
-asks skip LLM extraction next time.
+Student ratings are feedback signals, not proof that an answer is correct.
+Cached answers are returned only when explicitly marked verified; reviewed
+corrections remain the normal way to teach a durable answer without code edits.
 
-Feedback (thumbs down + optional correction) lands in answer_feedback for
-admin review and for suggest_aliases_from_unanswered-style jobs.
+Feedback lands in answer_feedback for analysis, and negative feedback can
+remove a verified cached answer for the same question and language.
 """
 from __future__ import annotations
 
@@ -25,15 +25,10 @@ def normalize_question(q: str) -> str:
 
 
 def get_cached_answer(get_db_fn, question: str, detected_lang: str = "english") -> Optional[dict]:
-    """Return {'answer': str, 'faq_id': int|None} for a previously
-    successful grounded answer, or None.
+    """Return a previously verified exact-question answer, or None.
 
-    BUG FIX: used to return a bare answer string, so callers had no way
-    to know the cached answer's original faq_id -- services/faq.py's
-    find_answer() was hardcoding faq_id=None on every cache hit, which
-    silently starved promote_high_frequency_faqs() of usage data for
-    exactly the FAQs popular enough to be getting cached. Now returns
-    faq_id alongside the text so it can keep flowing into chat_history.
+    Unverified legacy rows are deliberately ignored; a thumbs-up alone is
+    not enough to make an answer authoritative.
     """
     if not question:
         return None
@@ -46,6 +41,7 @@ def get_cached_answer(get_db_fn, question: str, detected_lang: str = "english") 
                 """
                 SELECT answer_text, id, faq_id FROM answer_success_cache
                 WHERE question_norm = %s AND detected_lang = %s
+                  AND is_verified = TRUE
                 LIMIT 1
                 """,
                 (qn, detected_lang),
@@ -79,6 +75,7 @@ def store_successful_answer(
     source_type: str = "handbook",
     chunk_ids: Optional[List[int]] = None,
     faq_id: Optional[int] = None,
+    is_verified: bool = False,
 ) -> bool:
     if not question or not answer_text or len(answer_text) < 20:
         return False
@@ -90,13 +87,15 @@ def store_successful_answer(
             cur.execute(
                 """
                 INSERT INTO answer_success_cache
-                    (question_norm, detected_lang, source_type, chunk_ids, faq_id, answer_text)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                    (question_norm, detected_lang, source_type, chunk_ids, faq_id,
+                     is_verified, answer_text)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (question_norm, detected_lang) DO UPDATE SET
                     answer_text = EXCLUDED.answer_text,
                     source_type = EXCLUDED.source_type,
                     chunk_ids = EXCLUDED.chunk_ids,
                     faq_id = EXCLUDED.faq_id,
+                    is_verified = EXCLUDED.is_verified,
                     hit_count = answer_success_cache.hit_count + 1,
                     last_hit_at = NOW()
                 """,
@@ -106,6 +105,7 @@ def store_successful_answer(
                     source_type,
                     chunk_ids or [],
                     faq_id,
+                    is_verified,
                     answer_text[:4000],
                 ),
             )
@@ -128,6 +128,7 @@ def record_feedback(
     chunk_ids: Optional[List[int]] = None,
     faq_id: Optional[int] = None,
     session_id: Optional[str] = None,
+    detected_lang: str = "english",
 ) -> bool:
     if not question or rating not in ("thumbs_up", "thumbs_down"):
         return False
@@ -140,8 +141,8 @@ def record_feedback(
                 """
                 INSERT INTO answer_feedback
                     (question, question_norm, rating, correction, source_type,
-                     chunk_ids, faq_id, session_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                     chunk_ids, faq_id, detected_language, session_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     question[:500],
@@ -151,14 +152,16 @@ def record_feedback(
                     source_type,
                     chunk_ids or [],
                     faq_id,
+                    detected_lang,
                     session_id,
                 ),
             )
 
             if rating == "thumbs_down":
                 cur.execute(
-                    "DELETE FROM answer_success_cache WHERE question_norm = %s",
-                    (qn,),
+                    "DELETE FROM answer_success_cache "
+                    "WHERE question_norm = %s AND detected_lang = %s",
+                    (qn, detected_lang),
                 )
             conn.commit()
             return True
@@ -168,17 +171,3 @@ def record_feedback(
     except Exception as e:
         logger.error(f"record_feedback: {e}")
         return False
-
-
-def promote_from_thumbs_up(
-    get_db_fn,
-    question: str,
-    answer_text: str,
-    detected_lang: str = "english",
-    source_type: str = "handbook",
-) -> None:
-    """Call when the student gives thumbs_up — lock in the answer."""
-    store_successful_answer(
-        get_db_fn, question, answer_text, detected_lang=detected_lang, source_type=source_type
-    )
-    record_feedback(get_db_fn, question, "thumbs_up", source_type=source_type)

@@ -214,6 +214,7 @@ CREATE TABLE IF NOT EXISTS chat_history (
     detected_language VARCHAR(20),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     faq_id INTEGER,
+    source_ref TEXT,
     -- chat_uuid: NOT in your dump, but routes/chat.py's _log_chat() inserts
     -- it (session.get('current_chat_uuid')). Added as nullable so that
     -- INSERT doesn't fail — if this column already exists in your real
@@ -385,10 +386,16 @@ CREATE TABLE IF NOT EXISTS satisfaction_feedback (
     rating VARCHAR(20),
     detected_language VARCHAR(20),
     detected_topic VARCHAR(100),
+    source_type VARCHAR(100),
+    source_ref TEXT,
+    faq_id INTEGER,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 ALTER TABLE satisfaction_feedback ADD COLUMN IF NOT EXISTS detected_language VARCHAR(20);
 ALTER TABLE satisfaction_feedback ADD COLUMN IF NOT EXISTS detected_topic VARCHAR(100);
+ALTER TABLE satisfaction_feedback ADD COLUMN IF NOT EXISTS source_type VARCHAR(100);
+ALTER TABLE satisfaction_feedback ADD COLUMN IF NOT EXISTS source_ref TEXT;
+ALTER TABLE satisfaction_feedback ADD COLUMN IF NOT EXISTS faq_id INTEGER;
 CREATE INDEX IF NOT EXISTS idx_satisfaction_feedback_created_at ON satisfaction_feedback(created_at);
 
 CREATE TABLE IF NOT EXISTS topic_classifications (
@@ -487,9 +494,12 @@ CREATE TABLE IF NOT EXISTS answer_feedback (
     source_type     TEXT,
     chunk_ids       INT[],
     faq_id          INT,
+    detected_language TEXT NOT NULL DEFAULT 'english',
     session_id      TEXT,
     created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+ALTER TABLE answer_feedback
+    ADD COLUMN IF NOT EXISTS detected_language TEXT NOT NULL DEFAULT 'english';
 CREATE INDEX IF NOT EXISTS idx_af_created ON answer_feedback (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_af_norm ON answer_feedback (question_norm);
 
@@ -500,10 +510,13 @@ CREATE TABLE IF NOT EXISTS answer_success_cache (
     source_type     TEXT NOT NULL,
     chunk_ids       INT[],
     faq_id          INT,
+    is_verified     BOOLEAN NOT NULL DEFAULT FALSE,
     answer_text     TEXT NOT NULL,
     hit_count       INT NOT NULL DEFAULT 1,
     last_hit_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT answer_success_cache_q_lang UNIQUE (question_norm, detected_lang)
 );
+ALTER TABLE answer_success_cache
+    ADD COLUMN IF NOT EXISTS is_verified BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS idx_asc_lang ON answer_success_cache (detected_lang);

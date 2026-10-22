@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS pending_correction_drafts (
     id              SERIAL PRIMARY KEY,
     question        TEXT NOT NULL,
     question_norm   TEXT NOT NULL,
+    detected_language TEXT NOT NULL DEFAULT 'english',
     draft_answer    TEXT NOT NULL,
     source_type     TEXT NOT NULL,        -- 'handbook' | 'faq'
     source_ref      TEXT,                 -- section title / faq id, for admin context
@@ -54,9 +55,14 @@ CREATE TABLE IF NOT EXISTS pending_correction_drafts (
     status          TEXT NOT NULL DEFAULT 'pending',  -- pending | approved | dismissed
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     reviewed_at     TIMESTAMPTZ,
-    reviewed_by     TEXT,
-    CONSTRAINT pending_correction_drafts_q_key UNIQUE (question_norm)
+    reviewed_by     TEXT
 );
+ALTER TABLE pending_correction_drafts
+    ADD COLUMN IF NOT EXISTS detected_language TEXT NOT NULL DEFAULT 'english';
+ALTER TABLE pending_correction_drafts
+    DROP CONSTRAINT IF EXISTS pending_correction_drafts_q_key;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pcd_question_language
+    ON pending_correction_drafts (question_norm, detected_language);
 ALTER TABLE pending_correction_drafts
     ADD COLUMN IF NOT EXISTS student_suggestions TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
 CREATE INDEX IF NOT EXISTS idx_pcd_status ON pending_correction_drafts (status, created_at DESC);
@@ -90,7 +96,8 @@ def _normalize(q: str) -> str:
 
 
 def _save_draft(get_db_fn, question: str, draft_answer: str, source_type: str,
-                 source_ref: Optional[str], times_asked: int) -> bool:
+                 source_ref: Optional[str], times_asked: int,
+                 detected_language: str = "english") -> bool:
     qn = _normalize(question)
     if not qn or not draft_answer or len(draft_answer) < 20:
         return False
@@ -101,16 +108,25 @@ def _save_draft(get_db_fn, question: str, draft_answer: str, source_type: str,
             cur.execute(
                 """
                 INSERT INTO pending_correction_drafts
-                    (question, question_norm, draft_answer, source_type, source_ref, times_asked)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (question_norm) DO UPDATE SET
+                    (question, question_norm, detected_language, draft_answer,
+                     source_type, source_ref, times_asked)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (question_norm, detected_language) DO UPDATE SET
                     draft_answer = EXCLUDED.draft_answer,
                     source_type = EXCLUDED.source_type,
                     source_ref = EXCLUDED.source_ref,
                     times_asked = GREATEST(pending_correction_drafts.times_asked, EXCLUDED.times_asked)
                 WHERE pending_correction_drafts.status = 'pending'
                 """,
-                (question[:500], qn, draft_answer[:4000], source_type, source_ref, times_asked),
+                (
+                    question[:500],
+                    qn,
+                    detected_language,
+                    draft_answer[:4000],
+                    source_type,
+                    source_ref,
+                    times_asked,
+                ),
             )
             conn.commit()
             return True
@@ -122,7 +138,13 @@ def _save_draft(get_db_fn, question: str, draft_answer: str, source_type: str,
         return False
 
 
-def save_feedback_draft(get_db_fn, question: str, suggested_answer: str) -> bool:
+def save_feedback_draft(
+    get_db_fn,
+    question: str,
+    suggested_answer: str,
+    source_ref: Optional[str] = None,
+    detected_language: str = "english",
+) -> bool:
     """Queue a student's suggested correction for an admin to verify.
 
     Feedback never overwrites an existing draft or publishes an answer.
@@ -138,11 +160,11 @@ def save_feedback_draft(get_db_fn, question: str, suggested_answer: str) -> bool
         cur.execute(
             """
             INSERT INTO pending_correction_drafts
-                (question, question_norm, draft_answer, source_type, source_ref,
-                 times_asked, student_suggestions)
-            VALUES (%s, %s, %s, 'student_feedback',
-                    'Student suggestion - verify before approving', 1, ARRAY[]::TEXT[])
-            ON CONFLICT (question_norm) DO UPDATE SET
+                (question, question_norm, detected_language, draft_answer,
+                 source_type, source_ref, times_asked, student_suggestions)
+            VALUES (%s, %s, %s, %s, 'student_feedback', %s, 1, ARRAY[]::TEXT[])
+            ON CONFLICT (question_norm, detected_language) DO UPDATE SET
+                times_asked = pending_correction_drafts.times_asked + 1,
                 student_suggestions = CASE
                     WHEN EXCLUDED.draft_answer = ANY(pending_correction_drafts.student_suggestions)
                         THEN pending_correction_drafts.student_suggestions
@@ -152,7 +174,14 @@ def save_feedback_draft(get_db_fn, question: str, suggested_answer: str) -> bool
                 END
             WHERE pending_correction_drafts.status = 'pending'
             """,
-            (question[:500], qn, answer[:4000]),
+            (
+                question[:500],
+                qn,
+                detected_language,
+                answer[:4000],
+                f"Student suggestion - verify before approving"
+                f"{': ' + source_ref if source_ref else ''}"[:500],
+            ),
         )
         conn.commit()
         return cur.rowcount > 0
@@ -185,10 +214,13 @@ def run_self_heal_pass(get_db_fn, min_count: int = 2, limit: int = 50) -> int:
     try:
         cur.execute(
             """
-            SELECT LOWER(TRIM(question)) AS q, COUNT(*) AS cnt, MAX(question) AS sample
+            SELECT LOWER(TRIM(question)) AS q,
+                   COALESCE(detected_language, 'english') AS detected_language,
+                   COUNT(*) AS cnt,
+                   MAX(question) AS sample
             FROM unanswered_questions
             WHERE question IS NOT NULL AND LENGTH(TRIM(question)) > 5
-            GROUP BY LOWER(TRIM(question))
+            GROUP BY LOWER(TRIM(question)), COALESCE(detected_language, 'english')
             HAVING COUNT(*) >= %s
             ORDER BY cnt DESC
             LIMIT %s
@@ -204,7 +236,7 @@ def run_self_heal_pass(get_db_fn, min_count: int = 2, limit: int = 50) -> int:
         conn.close()
 
     created = 0
-    for _, count, sample in rows:
+    for _, detected_language, count, sample in rows:
         try:
             if get_correction(get_db_fn, sample):
                 continue  # already has an admin correction -- nothing to draft
@@ -212,19 +244,39 @@ def run_self_heal_pass(get_db_fn, min_count: int = 2, limit: int = 50) -> int:
             pass
 
         try:
-            answer = handbook_service.answer_handbook_question(sample, detected_lang='english')
+            answer = handbook_service.answer_handbook_question(
+                sample, detected_lang=detected_language
+            )
             if answer and 'CANNOT_ANSWER' not in answer.upper():
-                chunks = handbook_service.get_top_handbook_chunks(sample, max_chunks=1)
+                chunks = handbook_service.get_top_handbook_chunks(
+                    sample, max_chunks=1, detected_lang=detected_language
+                )
                 source_ref = chunks[0].get('section_title') if chunks else None
-                if _save_draft(get_db_fn, sample, answer, 'handbook', source_ref, count):
+                if _save_draft(
+                    get_db_fn,
+                    sample,
+                    answer,
+                    'handbook',
+                    source_ref,
+                    count,
+                    detected_language=detected_language,
+                ):
                     created += 1
                 continue
         except Exception as e:
             logger.warning(f"self_heal handbook attempt failed for {sample[:60]!r}: {e}")
 
         try:
-            faq_answer, faq_ref = _try_faq_answer(sample)
-            if faq_answer and _save_draft(get_db_fn, sample, faq_answer, 'faq', faq_ref, count):
+            faq_answer, faq_ref = _try_faq_answer(sample, detected_language)
+            if faq_answer and _save_draft(
+                get_db_fn,
+                sample,
+                faq_answer,
+                'faq',
+                faq_ref,
+                count,
+                detected_language=detected_language,
+            ):
                 created += 1
         except Exception as e:
             logger.warning(f"self_heal faq attempt failed for {sample[:60]!r}: {e}")
@@ -233,7 +285,7 @@ def run_self_heal_pass(get_db_fn, min_count: int = 2, limit: int = 50) -> int:
     return created
 
 
-def _try_faq_answer(question: str):
+def _try_faq_answer(question: str, detected_lang: str = "english"):
     """Best-effort FAQ attempt using answer_engine directly (not
     services.faq's find_answer, which has session/chat-history side
     effects that don't belong in an offline batch job). Mirrors the same
@@ -244,9 +296,8 @@ def _try_faq_answer(question: str):
     considered live, which is also why _get_all_faqs() itself has no
     WHERE clause) instead of duplicating that query here, so this can
     never drift out of sync with the real table again."""
-    from services import answer_engine as engine
     from services.embeddings import get_embedding
-    from services.faq import _get_all_faqs
+    from services.faq import _get_all_faqs, _get_faq_candidates
 
     try:
         all_faqs = _get_all_faqs()
@@ -258,9 +309,13 @@ def _try_faq_answer(question: str):
         return None, None
 
     q_embedding = get_embedding(question)
-    candidates = engine.get_top_faq_candidates(
-        question, question, all_faqs, 'english', query_embedding=q_embedding,
+    candidates = _get_faq_candidates(
+        question,
+        detected_lang,
+        all_faqs,
+        query_embedding=q_embedding,
     )
+    from services import answer_engine as engine
     if not candidates or candidates[0]['combined'] < engine.FUZZY_MIN_SCORE:
         return None, None
     if engine.faq_should_disambiguate(candidates, user_question=question):
@@ -268,7 +323,7 @@ def _try_faq_answer(question: str):
 
     from ai_providers import ai_cache, llm_chat
     ai_ans, matched = engine.smart_extract_answer(
-        user_question=question, candidates=candidates, detected_lang='english',
+        user_question=question, candidates=candidates, detected_lang=detected_lang,
         llm_chat_fn=llm_chat, ai_cache=ai_cache,
     )
     if not ai_ans:
@@ -286,7 +341,7 @@ def list_pending_drafts(get_db_fn) -> List[dict]:
         cur.execute(
             """
                  SELECT id, question, draft_answer, source_type, source_ref, times_asked,
-                     created_at, student_suggestions
+                     created_at, student_suggestions, detected_language
             FROM pending_correction_drafts
             WHERE status = 'pending'
             ORDER BY times_asked DESC, created_at DESC
@@ -297,6 +352,7 @@ def list_pending_drafts(get_db_fn) -> List[dict]:
             "source_ref": r[4], "times_asked": r[5],
             "created_at": r[6].isoformat() if r[6] else None,
             "student_suggestions": list(r[7] or []),
+            "detected_language": r[8] or "english",
         } for r in cur.fetchall()]
     except Exception as e:
         logger.error(f"list_pending_drafts failed: {e}")

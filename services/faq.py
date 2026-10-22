@@ -51,6 +51,35 @@ def _get_all_faqs():
         conn.close()
 
 
+def _find_exact_faq(question: str) -> Optional[Sequence[Any]]:
+    """Find an FAQ whose complete question matches, without fuzzy ranking."""
+    question_key = engine.normalize_text(question)
+    if not question_key:
+        return None
+
+    exact_rows = [
+        row for row in _get_all_faqs()
+        if len(row) > 1
+        and row[1]
+        and engine.normalize_text(row[1]) == question_key
+        and row[0]
+    ]
+    if not exact_rows:
+        return None
+    if len({str(row[0]).strip() for row in exact_rows}) > 1:
+        logger.warning(
+            "Exact FAQ question maps to multiple different answers; using normal retrieval"
+        )
+        return None
+    return max(
+        exact_rows,
+        key=lambda row: (
+            float(row[7] or 0) if len(row) > 7 else 0,
+            int(row[2] or 0) if len(row) > 2 else 0,
+        ),
+    )
+
+
 COMPOUND_SPLIT_RE = re.compile(
     r'(?:'
     r'\s+(?:and|at saka|saka|tas|ug|dayon|unya|,\s*and)\s+'
@@ -790,6 +819,73 @@ Translated answer:"""
 def find_answer(question: str, return_topic: bool = False,
                 session_id: Optional[str] = None):
     ctx = get_conversation_context(session_id or 'default')
+
+    is_translation_followup = (
+        _is_translate_request(question) and bool(getattr(ctx, 'last_answer', None))
+    )
+    if not ctx.last_disambiguation and not is_translation_followup:
+        exact_answer = None
+        try:
+            from services.corrections import get_exact_correction
+            exact_correction = get_exact_correction(get_db, question)
+            if exact_correction:
+                exact_answer = (
+                    exact_correction['answer'],
+                    'Corrected',
+                    exact_correction.get('faq_id'),
+                    None,
+                )
+            else:
+                exact_faq = _find_exact_faq(question)
+                if exact_faq:
+                    answer, _, faq_id, topic, intent = exact_faq[:5]
+                    image = exact_faq[8] if len(exact_faq) > 8 else None
+                    if image:
+                        answer = f"{answer}\n\n[Image: {image}]"
+                    exact_answer = (answer, topic, faq_id, intent)
+                else:
+                    exact_handbook = handbook_service.get_exact_handbook_answer(question)
+                    if exact_handbook:
+                        answer, section_titles = exact_handbook
+                        ctx.update(
+                            topic='Handbook',
+                            intent='handbook_query',
+                            user_msg=question,
+                            bot_response=answer,
+                            handbook_sections=section_titles,
+                            clear_schedule_context=True,
+                        )
+                        result = (
+                            answer,
+                            'Handbook',
+                            None,
+                            'handbook_query',
+                            ctx.last_detected_lang or 'english',
+                        )
+                        return result if return_topic else result[0]
+        except Exception as e:
+            logger.warning("Exact knowledge lookup failed; using normal retrieval: %s", e)
+
+        if exact_answer:
+            answer, topic, faq_id, intent = exact_answer
+            ctx.update(
+                topic=topic or 'FAQ',
+                intent=intent,
+                user_msg=question,
+                bot_response=answer,
+                faq_answer=answer,
+                faq_question=question,
+                detected_lang=ctx.last_detected_lang or 'english',
+                clear_schedule_context=True,
+            )
+            result = (
+                answer,
+                topic or 'FAQ',
+                faq_id,
+                intent,
+                ctx.last_detected_lang or 'english',
+            )
+            return result if return_topic else result[0]
 
     _lang_and_class = lang_service.classify_and_detect_language(
         question, prior_lang=ctx.last_detected_lang

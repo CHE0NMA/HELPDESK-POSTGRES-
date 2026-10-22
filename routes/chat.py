@@ -55,19 +55,89 @@ MATH_PATTERNS = [
 ]
 
 
-def _log_chat(session_id, user_msg, bot_response, category, detected_lang, faq_id=None):
+def _chat_source_ref(session_id, category, faq_id=None):
+    if faq_id:
+        return f"FAQ #{faq_id}"
+    normalized_category = (category or "").lower()
+    if "handbook" in normalized_category:
+        sections = get_conversation_context(session_id).handbook_sections or []
+        return "; ".join(sections[:3]) or "Student handbook"
+    if "schedule" in normalized_category or "date" in normalized_category:
+        return category
+    return category or None
+
+
+def _log_chat(
+    session_id,
+    user_msg,
+    bot_response,
+    category,
+    detected_lang,
+    faq_id=None,
+    source_ref=None,
+):
     conn = get_db()
     cur = conn.cursor()
     try:
         chat_uuid = session.get('current_chat_uuid')
         cur.execute("""
             INSERT INTO chat_history
-            (session_id, user_message, bot_response, category, detected_language, faq_id, chat_uuid, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
-        """, (session_id, user_msg, bot_response[:2000], category, detected_lang, faq_id, chat_uuid))
+            (session_id, user_message, bot_response, category, detected_language,
+             faq_id, chat_uuid, source_ref, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        """, (
+            session_id,
+            user_msg,
+            bot_response[:2000],
+            category,
+            detected_lang,
+            faq_id,
+            chat_uuid,
+            source_ref,
+        ))
         conn.commit()
     except Exception as e:
         logger.error(f"_log_chat error: {e}")
+    finally:
+        cur.close()
+        conn.close()
+
+
+def _feedback_source(session_id: str, question: str, answer: str):
+    """Resolve feedback provenance from the persisted chat turn, not client data."""
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """
+            SELECT category, faq_id, source_ref
+            FROM chat_history
+            WHERE session_id = %s AND user_message = %s AND bot_response = %s
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (session_id, question, answer[:2000]),
+        )
+        row = cur.fetchone()
+        if not row:
+            return "unknown", None, None
+
+        category, faq_id, source_ref = row
+        category = (category or "").strip()
+        normalized_category = category.lower()
+        if faq_id:
+            source_type = "faq"
+            source_ref = source_ref or f"FAQ #{faq_id}"
+        elif "handbook" in normalized_category:
+            source_type = "handbook"
+            source_ref = source_ref or category or "handbook"
+        elif "schedule" in normalized_category or "date" in normalized_category:
+            source_type = "schedule"
+            source_ref = category
+        else:
+            source_type = category or "unknown"
+            source_ref = category or None
+        return source_type, source_ref, faq_id
     finally:
         cur.close()
         conn.close()
@@ -183,13 +253,32 @@ def chat():
             category = result[3] if len(result) > 3 else None
         else:
             answer, topic, faq_id, category = result, 'Unknown', None, None
+        if topic == 'Disambiguation' and not category:
+            category = topic
+
+        disambiguation_options = []
+        if category == 'Disambiguation':
+            pending = get_conversation_context(session_id).last_disambiguation or {}
+            disambiguation_options = [
+                option.get('label', '').strip()
+                for option in pending.get('options', [])
+                if option.get('label', '').strip()
+            ]
 
         if topic and topic not in ('Unknown', 'Clarification', 'Disambiguation', 'Follow-up'):
             session['last_topic'] = topic
             if category:
                 session['last_category'] = category
 
-        _log_chat(session_id, user_msg, strip_html(answer), category or '', detected_lang, faq_id=faq_id)
+        _log_chat(
+            session_id,
+            user_msg,
+            strip_html(answer),
+            category or '',
+            detected_lang,
+            faq_id=faq_id,
+            source_ref=_chat_source_ref(session_id, category, faq_id),
+        )
 
         conversation_turn = session.get('conversation_turn', 0) + 1
         session['conversation_turn'] = conversation_turn
@@ -200,12 +289,17 @@ def chat():
         )
         formatted = format_bot_message(answer or '', show_images=show_images)
 
-        return jsonify({'reply': f'<div class="text">{formatted}</div>', 'category': category,
-                        'chat_uuid': session.get('current_chat_uuid'), 'new_chat': started_new_chat})
+        return jsonify({
+            'reply': f'<div class="text">{formatted}</div>',
+            'category': category,
+            'disambiguation_options': disambiguation_options,
+            'chat_uuid': session.get('current_chat_uuid'),
+            'new_chat': started_new_chat,
+        })
 
     except Exception as e:
         logger.error(f"Chat error: {e}", exc_info=True)
-        return jsonify({'reply': 'Sorry, an error occurred. Please try again.'})
+        return jsonify({'reply': 'Sorry, an error occurred. Please try again.'}), 503
 
 
 @bp.route('/api/chat/stream', methods=['POST'])
@@ -239,26 +333,38 @@ def satisfaction_feedback():
     data = request.get_json(silent=True) or {}
     rating = data.get('rating')
     question = data.get('question')
-    answer = strip_html(data.get('answer') or '')
-    sid = data.get('session_id') or session.get('chat_session') or 'anonymous'
+    raw_answer = data.get('answer') or ''
+    suggestion = data.get('suggestion', '')
+    sid = (
+        session.get('persistent_session_id')
+        or session.get('chat_session')
+        or data.get('session_id')
+        or 'anonymous'
+    )
     if rating not in ('thumbs_up', 'thumbs_down') or not question:
         return jsonify({'status': 'error', 'message': 'Missing data'}), 400
+    if not isinstance(question, str) or not isinstance(raw_answer, str):
+        return jsonify({'status': 'error', 'message': 'Question and answer must be text'}), 400
+    if suggestion and (not isinstance(suggestion, str) or len(suggestion) > 1200):
+        return jsonify({'status': 'error', 'message': 'Suggestion must be text under 1200 characters'}), 400
+    answer = strip_html(raw_answer)
     if str(data.get('correction') or '').strip():
         return jsonify({'status': 'error', 'message': 'Only staff can submit answer corrections'}), 403
 
     detected_lang = lang_service.detect_language(question)
     detected_topic = lang_service.classify_topic(question)
+    source_type, source_ref, faq_id = _feedback_source(sid, question, answer)
     conn = get_db()
     cur = conn.cursor()
     try:
         cur.execute("""
             INSERT INTO satisfaction_feedback
                 (session_id, question, answer, rating, detected_language,
-                 detected_topic, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                 detected_topic, source_type, source_ref, faq_id, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
         """, (
             sid, (question or '')[:500], (answer or '')[:1000], rating,
-            detected_lang, detected_topic,
+            detected_lang, detected_topic, source_type, source_ref, faq_id,
         ))
         conn.commit()
     except Exception as e:
@@ -278,19 +384,32 @@ def satisfaction_feedback():
         except Exception:
             pass
 
-    # Best-effort learning hooks — failures here must not fail the request.
+    # Ratings are signals, not ground truth. Only approved corrections are
+    # eligible for reuse; suggestions stay in the review queue.
     correction_queued = False
     try:
-        from services.answer_memory import promote_from_thumbs_up, record_feedback
-        if rating == 'thumbs_up':
-            promote_from_thumbs_up(
-                get_db, question, answer or '',
-                detected_lang='english', source_type='chat',
-            )
-        else:
-            feedback_saved = record_feedback(
-                get_db, question, 'thumbs_down',
-                session_id=sid, source_type='chat',
+        from services.answer_memory import record_feedback
+        record_feedback(
+            get_db,
+            question,
+            rating,
+            session_id=sid,
+            source_type=source_type,
+            faq_id=faq_id,
+            detected_lang=detected_lang,
+        )
+        if (
+            rating == 'thumbs_down'
+            and isinstance(suggestion, str)
+            and len(suggestion.strip()) >= 20
+        ):
+            from services.self_heal import save_feedback_draft
+            correction_queued = save_feedback_draft(
+                get_db,
+                question,
+                suggestion.strip(),
+                source_ref=source_ref,
+                detected_language=detected_lang,
             )
     except Exception as mem_err:
         logger.debug(f"answer_memory hook: {mem_err}")
@@ -358,30 +477,12 @@ def feedback():
 
 @bp.route('/suggested_questions')
 def suggested_questions():
-    conn = get_db()
-    cur = conn.cursor()
     try:
-        cur.execute("""
-            SELECT user_message, COUNT(*) as frequency
-            FROM chat_history
-            WHERE created_at >= NOW() - INTERVAL '30 days'
-            GROUP BY user_message
-            ORDER BY frequency DESC
-            LIMIT 10
-        """)
-        rows = cur.fetchall()
-        suggestions = []
-        for row in rows:
-            msg = row[0].strip()
-            if len(msg) > 5 and msg.lower() not in ['hi', 'hello', 'hey', 'yes', 'no', 'ok', 'thanks', 'thank you']:
-                suggestions.append({'user_message': msg, 'frequency': row[1]})
-        return jsonify(suggestions)
+        from services.popular_questions import get_popular_knowledge_questions
+        return jsonify(get_popular_knowledge_questions(get_db, limit=10, days=30))
     except Exception as e:
         logger.error(f"Suggested questions error: {e}")
         return jsonify([])
-    finally:
-        cur.close()
-        conn.close()
 
 
 @bp.route('/related_suggestions', methods=['POST'])

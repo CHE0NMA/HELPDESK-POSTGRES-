@@ -7,6 +7,10 @@ from services.answer_engine import (
     build_disambiguation,
     get_top_faq_candidates,
 )
+from services.conversation import (
+    ConversationContext,
+    resolve_disambiguation_choice,
+)
 from services.language import (
     _heuristic_language,
     expand_query,
@@ -169,6 +173,125 @@ class BisayaLanguageTests(unittest.TestCase):
         self.assertIn("how much", tuition)
         self.assertIn("from", year_range)
         self.assertIn("until", year_range)
+
+
+class ExactSourceReplyTests(unittest.TestCase):
+    def test_numbered_disambiguation_selection_resolves_click_choice(self):
+        choices = [
+            {"label": "Dress and appearance", "faq_id": 1},
+            {"label": "Attendance policy", "faq_id": 2},
+            {"label": "Tuition fees", "faq_id": 3},
+        ]
+
+        self.assertEqual(
+            resolve_disambiguation_choice(
+                "2",
+                {"options": choices},
+            ),
+            choices[1],
+        )
+
+    def test_exact_faq_returns_source_answer_without_ai_processing(self):
+        question = "Is the registrar open on Saturdays?"
+        answer = "The registrar is open on Saturdays from 8:00 AM to 12:00 PM."
+        faq_row = (
+            answer, question, 17, "Office Hours", "office_hours",
+            None, None, 10, None, None,
+        )
+        ctx = ConversationContext("exact-faq-test")
+        ctx.last_detected_lang = "english"
+
+        with patch.object(faq, "get_conversation_context", return_value=ctx), \
+             patch.object(faq, "_get_all_faqs", return_value=[faq_row]), \
+             patch(
+                 "services.corrections.get_exact_correction",
+                 return_value=None,
+             ), \
+             patch.object(
+                 faq.handbook_service,
+                 "get_exact_handbook_answer",
+                 return_value=None,
+             ), \
+             patch.object(
+                 faq.lang_service,
+                 "classify_and_detect_language",
+             ) as classify, \
+             patch.object(faq.engine, "smart_extract_answer") as generate:
+            result = faq.find_answer(question, return_topic=True)
+
+        self.assertEqual(result, (answer, "Office Hours", 17, "office_hours", "english"))
+        self.assertEqual(ctx.last_answer, answer)
+        classify.assert_not_called()
+        generate.assert_not_called()
+
+    def test_near_faq_question_is_not_an_exact_match(self):
+        row = (
+            "The registrar is open on Saturdays.",
+            "Is the registrar open on Saturdays?",
+            17, "Office Hours", "office_hours", None, None, 10, None, None,
+        )
+        with patch.object(faq, "_get_all_faqs", return_value=[row]):
+            self.assertIsNone(
+                faq._find_exact_faq("Is the registrar open on Saturdays in June?")
+            )
+
+    def test_conflicting_duplicate_faq_answers_are_not_selected(self):
+        rows = [
+            ("Yes.", "Can students wear earrings?", 1, "Rules", "dress", None, None, 2, None, None),
+            ("No.", "Can students wear earrings!", 2, "Rules", "dress", None, None, 1, None, None),
+        ]
+        with patch.object(faq, "_get_all_faqs", return_value=rows):
+            self.assertIsNone(faq._find_exact_faq("Can students wear earrings?"))
+
+    def test_exact_handbook_prompt_returns_source_without_ai_processing(self):
+        question = "What is the dress code policy?"
+        answer = "Students must dress modestly and neatly."
+        ctx = ConversationContext("exact-handbook-test")
+
+        with patch.object(faq, "get_conversation_context", return_value=ctx), \
+             patch("services.corrections.get_exact_correction", return_value=None), \
+             patch.object(faq, "_get_all_faqs", return_value=[]), \
+             patch.object(
+                 faq.handbook_service,
+                 "get_exact_handbook_answer",
+                 return_value=(answer, ["Dress and Appearance"]),
+             ), \
+             patch.object(
+                 faq.lang_service,
+                 "classify_and_detect_language",
+             ) as classify:
+            result = faq.find_answer(question, return_topic=True)
+
+        self.assertEqual(result, (answer, "Handbook", None, "handbook_query", "english"))
+        self.assertEqual(ctx.last_handbook_sections, ["Dress and Appearance"])
+        classify.assert_not_called()
+
+    def test_exact_approved_correction_takes_priority(self):
+        question = "How do I request a transcript?"
+        correction = {
+            "answer": "Submit the request to the registrar.",
+            "faq_id": 34,
+        }
+        ctx = ConversationContext("exact-correction-test")
+
+        with patch.object(faq, "get_conversation_context", return_value=ctx), \
+             patch(
+                 "services.corrections.get_exact_correction",
+                 return_value=correction,
+             ), \
+             patch.object(faq, "_get_all_faqs") as get_faqs, \
+             patch.object(
+                 faq.lang_service,
+                 "classify_and_detect_language",
+             ) as classify:
+            result = faq.find_answer(question, return_topic=True)
+
+        self.assertEqual(
+            result,
+            (correction["answer"], "Corrected", 34, None, "english"),
+        )
+        get_faqs.assert_not_called()
+        classify.assert_not_called()
 
 
 class FaqRelevanceTests(unittest.TestCase):

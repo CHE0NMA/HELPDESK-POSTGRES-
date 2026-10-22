@@ -153,16 +153,6 @@ def analytics_chart_data():
         """)
         chat_dates = cur.fetchall()
 
-        cur.execute("""
-            SELECT user_message, COUNT(*) as freq
-            FROM chat_history
-            GROUP BY user_message
-            ORDER BY freq DESC
-            LIMIT 20
-        """)
-        popular = cur.fetchall()
-
-
         total_questions = 0
         total_visitors = 0
         cur.execute("SELECT SUM(question_count), COUNT(*) FROM visitor_stats")
@@ -198,10 +188,18 @@ def analytics_chart_data():
         cur.execute("SELECT rating, COUNT(*) FROM satisfaction_feedback GROUP BY rating")
         satisfaction = {r[0]: r[1] for r in cur.fetchall()}
 
+        from services.popular_questions import get_popular_knowledge_questions
+        popular = get_popular_knowledge_questions(
+            get_db,
+            limit=20,
+            days=None,
+            connection=conn,
+        )
+
         total_q = total_questions
         return jsonify({
             'activity': [{'date': str(r[0]), 'count': r[1]} for r in chat_dates],
-            'popular': [{'question': r[0], 'count': r[1]} for r in popular],
+            'popular': [{'question': r['question'], 'count': r['count']} for r in popular],
             'categories': [{'name': r[0], 'count': r[1]} for r in categories],
             'stats': {
                 'total_queries': total_q,
@@ -541,43 +539,37 @@ def api_report():
 @bp.route('/api/featured')
 def api_featured():
     """Most-asked questions for the landing page Featured grid."""
-    conn = get_db()
-    cur = conn.cursor()
     try:
-        cur.execute("""
-            SELECT user_message, COUNT(*) AS freq
-            FROM chat_history
-            WHERE created_at >= NOW() - INTERVAL '60 days'
-              AND LENGTH(user_message) > 8
-              AND LOWER(user_message) NOT IN (
-                'hi','hello','hey','yes','no','ok','thanks','thank you',
-                'kumusta','kamusta','musta'
-              )
-            GROUP BY user_message
-            ORDER BY freq DESC
-            LIMIT 8
-        """)
-        rows = cur.fetchall()
-        items = []
-        for msg, freq in rows:
-            items.append({'question': msg, 'category': '', 'count': freq})
+        from services.popular_questions import get_popular_knowledge_questions
+        items = get_popular_knowledge_questions(get_db, limit=8, days=60)
         if not items:
-            cur.execute("""
-                SELECT question, topic
-                FROM faq
-                WHERE question IS NOT NULL AND question != ''
-                ORDER BY priority_score DESC NULLS LAST, id DESC
-                LIMIT 8
-            """)
-            for q, topic in cur.fetchall():
-                items.append({'question': q, 'category': topic or 'General', 'count': 0})
+            from services.popular_questions import has_question_context
+            conn = get_db()
+            cur = conn.cursor()
+            try:
+                cur.execute("""
+                    SELECT question, topic
+                    FROM faq
+                    WHERE question IS NOT NULL AND question != ''
+                    ORDER BY priority_score DESC NULLS LAST, id DESC
+                    LIMIT 40
+                """)
+                for q, topic in cur.fetchall():
+                    if has_question_context(q):
+                        items.append({
+                            'question': q,
+                            'category': topic or 'FAQ',
+                            'count': 0,
+                        })
+                    if len(items) >= 8:
+                        break
+            finally:
+                cur.close()
+                conn.close()
         return jsonify(items)
     except Exception as e:
         logger.error(f"api_featured error: {e}")
         return jsonify([])
-    finally:
-        cur.close()
-        conn.close()
 
 
 @bp.route('/api/recent')

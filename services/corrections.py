@@ -216,6 +216,50 @@ def get_correction(get_db_fn: Callable[[], Any], question: str) -> Optional[dict
     return find_similar_correction(get_db_fn, question)
 
 
+def get_exact_correction(
+    get_db_fn: Callable[[], Any],
+    question: str,
+) -> Optional[dict]:
+    """Look up an approved correction without invoking fuzzy/semantic search."""
+    if not question or not _ensure_table(get_db_fn):
+        return None
+    normalized_full = re.sub(r"\s+", " ", question.strip().lower())
+    normalized_full = re.sub(r"[^\w\s]", "", normalized_full)
+    if len(normalized_full) > 300:
+        return None
+    qn = normalize_question(question)
+    if not qn:
+        return None
+    try:
+        conn = get_db_fn()
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                """
+                SELECT id, question, answer, faq_id FROM answer_corrections
+                WHERE question_norm = %s
+                LIMIT 1
+                """,
+                (qn,),
+            )
+            row = cur.fetchone()
+        finally:
+            cur.close()
+            conn.close()
+        if not row:
+            return None
+        _bump_hit(get_db_fn, row[0])
+        return {
+            "id": row[0],
+            "question": row[1],
+            "answer": row[2],
+            "faq_id": row[3],
+        }
+    except Exception as e:
+        logger.error(f"get_exact_correction failed: {e}")
+        return None
+
+
 def save_correction(get_db_fn: Callable[[], Any], question: str, answer: str,
                     created_by: Optional[str] = None, faq_id: Optional[int] = None,
                     source_report_id: Optional[str] = None) -> bool:

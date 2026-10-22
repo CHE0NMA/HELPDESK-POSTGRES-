@@ -587,12 +587,15 @@ def reports():
         return redirect('/admin')
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT id, question, answer, created_at, detected_language, detected_topic "
-                "FROM satisfaction_feedback "
-                "WHERE rating='thumbs_down' ORDER BY created_at DESC")
+    cur.execute(
+        "SELECT id, question, answer, created_at, detected_language, detected_topic, "
+        "source_type, source_ref, faq_id FROM satisfaction_feedback "
+        "WHERE rating='thumbs_down' ORDER BY created_at DESC"
+    )
     sat_rows = cur.fetchall()
     cur.execute(
-        "SELECT id, question, answer, created_at, detected_language, detected_topic "
+        "SELECT id, question, answer, created_at, detected_language, detected_topic, "
+        "NULL, NULL, NULL "
         "FROM bad_feedback ORDER BY created_at DESC"
     )
     bad_rows = cur.fetchall()
@@ -607,7 +610,10 @@ def reports():
         return {'id': f'{prefix}{r[0]}', 'question': r[1], 'answer': r[2],
                 'days_ago': (today.date() - r[3].date()).days if r[3] else 0,
                 'detected_language': r[4] or 'unknown',
-                'detected_topic': r[5] or 'general'}
+                'detected_topic': r[5] or 'general',
+                'source_type': r[6] or 'unknown',
+                'source_ref': r[7],
+                'faq_id': r[8]}
 
     feedbacks = [_row('sf_', r) for r in sat_rows] + [_row('bf_', r) for r in bad_rows]
     feedbacks.sort(key=lambda f: f['days_ago'])

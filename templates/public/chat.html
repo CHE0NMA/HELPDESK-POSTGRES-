@@ -624,6 +624,28 @@
   .suggestions-container {
     display: flex; flex-direction: column; gap: .45rem; margin-top: .5rem;
   }
+  .disambiguation-options {
+    display: flex; flex-direction: column; gap: .45rem; margin-top: .65rem;
+  }
+  .disambiguation-option {
+    display: flex; align-items: flex-start; gap: .65rem; width: 100%;
+    padding: .65rem .85rem; border-radius: 11px;
+    background: rgba(21,101,192,.12); border: 1px solid rgba(66,165,245,.22);
+    color: var(--text); font: inherit; font-size: .84rem; line-height: 1.4;
+    text-align: left; cursor: pointer; transition: all .18s;
+  }
+  .disambiguation-option i { color: var(--accent2); flex-shrink: 0; }
+  .disambiguation-option:hover {
+    background: var(--brand); border-color: var(--brand); color: #fff;
+  }
+  .disambiguation-option:disabled { opacity: .6; cursor: wait; }
+  .retry-response-btn {
+    display: inline-flex; align-items: center; gap: .4rem;
+    margin-top: .65rem; padding: .42rem .75rem; border-radius: 9px;
+    background: rgba(255,82,82,.1); border: 1px solid rgba(255,82,82,.35);
+    color: #ff8a80; font: inherit; font-size: .78rem; cursor: pointer;
+  }
+  .retry-response-btn:hover { background: rgba(255,82,82,.2); color: #fff; }
 
   .related-topics-box {
     background: linear-gradient(135deg, rgba(10,40,80,.9), rgba(6,20,45,.95));
@@ -1299,6 +1321,63 @@ function flattenNestedText(root) {
   });
 }
 
+function renderDisambiguationReply(container, replyHtml, options) {
+  if (!container) return;
+  const source = document.createElement('div');
+  source.innerHTML = unwrapReplyHtml(replyHtml);
+  source.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+
+  const lines = source.textContent.split(/\r?\n/);
+  const numberedOptions = [];
+  const introLines = [];
+  let reachedOptions = false;
+  lines.forEach(line => {
+    const match = line.trim().match(/^\d+[.)]\s*(.+)$/);
+    if (match) {
+      reachedOptions = true;
+      numberedOptions.push(match[1].trim());
+    } else if (!reachedOptions && line.trim()) {
+      introLines.push(line.trim());
+    }
+  });
+
+  const labels = Array.isArray(options) && options.length
+    ? options
+    : numberedOptions;
+  container.replaceChildren();
+  const intro = introLines.join(' ').trim();
+  if (intro) {
+    const prompt = document.createElement('div');
+    prompt.textContent = intro;
+    container.appendChild(prompt);
+  }
+
+  if (!labels.length) {
+    container.textContent = source.textContent.trim();
+    return;
+  }
+
+  const choices = document.createElement('div');
+  choices.className = 'disambiguation-options';
+  labels.forEach((label, index) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'disambiguation-option';
+    button.innerHTML = '<i class="bi bi-chat-right-quote"></i>';
+    const text = document.createElement('span');
+    text.textContent = label;
+    button.appendChild(text);
+    button.addEventListener('click', () => {
+      choices.querySelectorAll('button').forEach(option => {
+        option.disabled = true;
+      });
+      sendSuggestion(String(index + 1));
+    });
+    choices.appendChild(button);
+  });
+  container.appendChild(choices);
+}
+
 async function typeReply(container, html) {
   if (!container) return;
   const unwrapped = unwrapReplyHtml(html);
@@ -1384,27 +1463,39 @@ function handleServerSessionChange(data, userDiv, botRow) {
 }
 
 /* ---------- send ---------- */
-async function send() {
+async function send(retryMessage = null, retryUserDiv = null, retryBotRow = null) {
   if (sending) return;
-  const msg = msgInput.value.trim();
+  const isRetry = Boolean(retryMessage && retryUserDiv && retryBotRow);
+  const msg = isRetry ? retryMessage : msgInput.value.trim();
   if (!msg) return;
   if (msg.length > MAX_CHARS) { showToast(`Max ${MAX_CHARS} characters`); return; }
-  if (messageCount >= MAX_MESSAGES) { showToast('Rate limit reached. Please wait.', 'danger'); return; }
+  if (!isRetry && messageCount >= MAX_MESSAGES) { showToast('Rate limit reached. Please wait.', 'danger'); return; }
 
-  incrementMessageCount();
-  if (firstMessage) hideWelcome();
+  if (!isRetry) {
+    incrementMessageCount();
+    if (firstMessage) hideWelcome();
+  }
   sending = true;
   sendBtn.disabled = true;
   hideTypeahead();
 
-  const userDiv = appendUserMsg(msg);
-  msgInput.value = '';
-  autoResize(msgInput);
+  const userDiv = isRetry ? retryUserDiv : appendUserMsg(msg);
+  if (!isRetry) {
+    msgInput.value = '';
+    autoResize(msgInput);
+  } else {
+    const content = retryBotRow.querySelector('.bot-content');
+    content.replaceChildren();
+    const indicator = document.createElement('div');
+    indicator.className = 'typing-indicator';
+    indicator.innerHTML = '<div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>';
+    content.appendChild(indicator);
+  }
   // User just sent — pin to bottom so the new reply stays in view
   _stickToBottom = true;
   scrollToBottom(true);
 
-  const botRow = appendBotTyping();
+  const botRow = isRetry ? retryBotRow : appendBotTyping();
   scrollToBottom(true);
   const t0 = performance.now();
 
@@ -1414,6 +1505,7 @@ async function send() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: msg, session_id: persistentSessionId }),
     });
+    if (!res.ok) throw new Error(`Chat request failed with status ${res.status}`);
     const data = await res.json();
     // Remember this chat so New Chat keeps it in the sidebar
     {
@@ -1452,7 +1544,16 @@ async function send() {
       box.appendChild(footer);
       contentDiv.appendChild(box);
       addFeedbackRow(contentDiv, msg, '[Related topics shown]');
-    } else if (category === 'Disambiguation' || rawReply.includes('suggestions-container') || rawReply.includes('suggestion-btn')) {
+    } else if (category === 'Disambiguation') {
+      const textDiv = botRow.querySelector('.text');
+      renderDisambiguationReply(
+        textDiv,
+        rawReply,
+        data.disambiguation_options
+      );
+      if (textDiv) textDiv.classList.add('reveal');
+      addFeedbackRow(botRow.querySelector('.bot-content'), msg, rawReply);
+    } else if (rawReply.includes('suggestions-container') || rawReply.includes('suggestion-btn')) {
       const processed = processReplyHtml(unwrapReplyHtml(rawReply));
       const textDiv = botRow.querySelector('.text');
       if (textDiv) {
@@ -1486,7 +1587,17 @@ async function send() {
     removeBotTyping(botRow);
     const t = botRow.querySelector('.text');
     if (t) {
-      t.innerHTML = `<span style="color:#ff5252"><i class="bi bi-exclamation-circle"></i> Connection error. Please try again.</span>`;
+      t.replaceChildren();
+      const error = document.createElement('span');
+      error.style.color = '#ff5252';
+      error.innerHTML = '<i class="bi bi-exclamation-circle"></i> Connection error. Please try again.';
+      t.appendChild(error);
+      const retry = document.createElement('button');
+      retry.type = 'button';
+      retry.className = 'retry-response-btn';
+      retry.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Retry';
+      retry.addEventListener('click', () => send(msg, userDiv, botRow));
+      t.appendChild(retry);
     }
   }
 
@@ -1508,6 +1619,13 @@ window.sendSuggestion = sendSuggestion;
 async function sendSatisfactionFeedback(btn, rating, question, answer) {
   const row = btn.closest('.feedback-row');
   if (!row) return;
+  let suggestion = '';
+  if (rating === 'thumbs_down') {
+    suggestion = window.prompt(
+      'If you know the correct answer, you can suggest it for staff review. It will not be used until approved.',
+      ''
+    ) || '';
+  }
   const allBtns = row.querySelectorAll('.fb-btn');
   allBtns.forEach(b => {
     b.style.pointerEvents = 'none';
@@ -1518,13 +1636,18 @@ async function sendSatisfactionFeedback(btn, rating, question, answer) {
     const r = await fetch('/api/satisfaction', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rating, question, answer, correction: '', session_id: persistentSessionId }),
+      body: JSON.stringify({
+        rating, question, answer, suggestion, correction: '',
+        session_id: persistentSessionId
+      }),
     });
     if (r.ok) {
       btn.classList.add('active');
       const message = rating === 'thumbs_up'
         ? 'Thanks!'
-        : 'Feedback sent';
+        : (suggestion.trim().length >= 20
+          ? 'Feedback sent for staff review'
+          : 'Feedback sent');
       showToast(message,
                 rating === 'thumbs_up' ? 'success' : 'warning');
     } else {

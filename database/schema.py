@@ -289,9 +289,13 @@ def ensure_core_tables():
                 detected_language VARCHAR(20),
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 faq_id INTEGER,
-                chat_uuid VARCHAR(36)
+                chat_uuid VARCHAR(36),
+                source_ref TEXT
             )
         """)
+        cur.execute(
+            "ALTER TABLE chat_history ADD COLUMN IF NOT EXISTS source_ref TEXT"
+        )
         cur.execute(
             "CREATE INDEX IF NOT EXISTS idx_chat_history_session_id ON chat_history(session_id)"
         )
@@ -323,6 +327,9 @@ def ensure_core_tables():
                 rating VARCHAR(20),
                 detected_language VARCHAR(20),
                 detected_topic VARCHAR(100),
+                source_type VARCHAR(100),
+                source_ref TEXT,
+                faq_id INTEGER,
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -333,6 +340,18 @@ def ensure_core_tables():
         cur.execute(
             "ALTER TABLE satisfaction_feedback "
             "ADD COLUMN IF NOT EXISTS detected_topic VARCHAR(100)"
+        )
+        cur.execute(
+            "ALTER TABLE satisfaction_feedback "
+            "ADD COLUMN IF NOT EXISTS source_type VARCHAR(100)"
+        )
+        cur.execute(
+            "ALTER TABLE satisfaction_feedback "
+            "ADD COLUMN IF NOT EXISTS source_ref TEXT"
+        )
+        cur.execute(
+            "ALTER TABLE satisfaction_feedback "
+            "ADD COLUMN IF NOT EXISTS faq_id INTEGER"
         )
         cur.execute(
             "CREATE INDEX IF NOT EXISTS idx_satisfaction_feedback_created_at "

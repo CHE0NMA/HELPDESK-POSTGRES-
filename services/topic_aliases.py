@@ -79,9 +79,12 @@ CREATE TABLE IF NOT EXISTS answer_feedback (
     source_type     TEXT,              -- handbook | faq | schedule
     chunk_ids       INT[],
     faq_id          INT,
+    detected_language TEXT NOT NULL DEFAULT 'english',
     session_id      TEXT,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE answer_feedback
+    ADD COLUMN IF NOT EXISTS detected_language TEXT NOT NULL DEFAULT 'english';
 
 CREATE INDEX IF NOT EXISTS idx_af_created ON answer_feedback (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_af_norm ON answer_feedback (question_norm);
@@ -94,12 +97,15 @@ CREATE TABLE IF NOT EXISTS answer_success_cache (
     source_type     TEXT NOT NULL,
     chunk_ids       INT[],
     faq_id          INT,
+    is_verified     BOOLEAN NOT NULL DEFAULT FALSE,
     answer_text     TEXT NOT NULL,
     hit_count       INT NOT NULL DEFAULT 1,
     last_hit_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT answer_success_cache_q_lang UNIQUE (question_norm, detected_lang)
 );
+ALTER TABLE answer_success_cache
+    ADD COLUMN IF NOT EXISTS is_verified BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS idx_asc_lang ON answer_success_cache (detected_lang);
 
 """

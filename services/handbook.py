@@ -941,6 +941,50 @@ def get_top_handbook_chunks(
     return chunks
 
 
+def get_exact_handbook_answer(question: str) -> Optional[Tuple[str, List[str]]]:
+    """Return current handbook source text for a question previously shown as a prompt.
+
+    Landing-page popular handbook questions retain their matched section titles
+    in chat history. Exact-click reuse can serve those current source excerpts
+    without rerunning the AI router or answer generator.
+    """
+    if not question:
+        return None
+
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """
+            SELECT DISTINCT hc.section_title, hc.content
+            FROM chat_history ch
+            JOIN handbook_chunks hc
+              ON hc.section_title = ANY(string_to_array(ch.source_ref, '; '))
+            WHERE ch.user_message = %s
+              AND ch.category = 'handbook_query'
+              AND ch.source_ref IS NOT NULL
+              AND hc.is_active = 1
+            ORDER BY hc.section_title
+            LIMIT 3
+            """,
+            (question,),
+        )
+        rows = cur.fetchall()
+        rows = [
+            (title, content)
+            for title, content in rows
+            if title and isinstance(content, str) and content.strip()
+        ]
+        if not rows:
+            return None
+        return "\n\n".join(content.strip() for _, content in rows), [
+            title for title, _ in rows
+        ]
+    finally:
+        cur.close()
+        conn.close()
+
+
 def _page_ref(chunk: Dict) -> str:
     ps, pe = chunk.get('page_start'), chunk.get('page_end')
     return f"p.{ps}" if ps == pe else f"pp.{ps}-{pe}"
