@@ -105,7 +105,7 @@ class ChatFeedbackTests(unittest.TestCase):
             return_value=type(
                 "Context",
                 (),
-                {"handbook_sections": ["Dress and appearance", "Jewelry"]},
+                {"last_handbook_sections": ["Dress and appearance", "Jewelry"]},
             )(),
         ):
             source_ref = _chat_source_ref("s1", "handbook_query")

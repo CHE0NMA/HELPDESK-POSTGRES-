@@ -60,7 +60,7 @@ def _chat_source_ref(session_id, category, faq_id=None):
         return f"FAQ #{faq_id}"
     normalized_category = (category or "").lower()
     if "handbook" in normalized_category:
-        sections = get_conversation_context(session_id).handbook_sections or []
+        sections = get_conversation_context(session_id).last_handbook_sections or []
         return "; ".join(sections[:3]) or "Student handbook"
     if "schedule" in normalized_category or "date" in normalized_category:
         return category

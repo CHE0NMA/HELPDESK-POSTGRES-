@@ -132,6 +132,23 @@ class BisayaLanguageTests(unittest.TestCase):
                 "campus_location",
             )
 
+    def test_programs_alias_regex_is_valid_and_matches_offering_questions(self):
+        programs_alias = next(
+            alias for alias in topic_aliases._SEED_ALIASES
+            if alias["topic_key"] == "programs"
+        )
+        with patch.object(
+            topic_aliases,
+            "_load_aliases",
+            return_value=[programs_alias],
+        ):
+            matches = topic_aliases.match_aliases(
+                "what programs does PAC offer?",
+                get_db_fn=lambda: None,
+            )
+
+        self.assertEqual([match["topic_key"] for match in matches], ["programs"])
+
     def test_normalized_bisaya_dress_query_matches_uniform_source(self):
         self.assertTrue(
             handbook._answer_relevant_to_question(

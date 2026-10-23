@@ -25,6 +25,31 @@ _CACHE_TS: float = 0.0
 _CACHE_TTL = 120.0  # seconds
 _LOCK = Lock()
 
+_PROGRAMS_ALIAS_PATTERN = (
+    r"\b(?:(?:programs?|courses?|kurso).{0,25}(?:offer|available|does pac|meron)|"
+    r"nursing|midwifery|business administration|education programs?|"
+    r"tesda|it or computer|computer science|information technology|"
+    r"bsba|bsit|bpa|beed|bsed|bped|"
+    r"which campus(es)? .{0,20}offer|"
+    r"naa bay nursing|naa bay midwifery|naa bay education|"
+    r"meron bang nursing|meron bang midwifery|"
+    r"ano ang mga program|unsa ang mga kurso|"
+    r"is there nursing|is there midwifery|"
+    r"do they have education|is business administration available)\b"
+)
+_LEGACY_BAD_PROGRAMS_ALIAS_PATTERN = (
+    r"\b(programs?|courses?|kurso).{0,25}(offer|available|does pac|meron)|"
+    r"nursing|midwifery|business administration|education programs?|"
+    r"tesda|it or computer|computer science|information technology|"
+    r"bsba|bsit|bpa|beed|bsed|bped|"
+    r"which campus(es)? .{0,20}offer|"
+    r"naa bay nursing|naa bay midwifery|naa bay education|"
+    r"meron bang nursing|meron bang midwifery|"
+    r"ano ang mga program|unsa ang mga kurso|"
+    r"is there nursing|is there midwifery|"
+    r"do they have education|is business administration available)\b"
+)
+
 _FULL_NAME_CAMPUS_INTENT_RE = re.compile(
     r"\b(full name|real (full )?name|name of (this )?school|campuses|"
     r"other campus(es)?|how many campuses|campus locations?|"
@@ -117,6 +142,18 @@ def ensure_topic_alias_schema(get_db_fn) -> None:
     cur = conn.cursor()
     try:
         cur.execute(SCHEMA_SQL)
+        cur.execute(
+            """
+            UPDATE handbook_topic_aliases
+            SET match_pattern = %s
+            WHERE topic_key = %s AND match_pattern = %s
+            """,
+            (
+                _PROGRAMS_ALIAS_PATTERN,
+                "programs",
+                _LEGACY_BAD_PROGRAMS_ALIAS_PATTERN,
+            ),
+        )
         conn.commit()
         logger.info("handbook_topic_aliases schema ensured")
     except Exception as e:
@@ -565,18 +602,7 @@ _SEED_ALIASES: List[dict] = [
 
     {
         "topic_key": "programs",
-        "match_pattern": (
-            r"\b(programs?|courses?|kurso).{0,25}(offer|available|does pac|meron)|"
-            r"nursing|midwifery|business administration|education programs?|"
-            r"tesda|it or computer|computer science|information technology|"
-            r"bsba|bsit|bpa|beed|bsed|bped|"
-            r"which campus(es)? .{0,20}offer|"
-            r"naa bay nursing|naa bay midwifery|naa bay education|"
-            r"meron bang nursing|meron bang midwifery|"
-            r"ano ang mga program|unsa ang mga kurso|"
-            r"is there nursing|is there midwifery|"
-            r"do they have education|is business administration available)\b"
-        ),
+        "match_pattern": _PROGRAMS_ALIAS_PATTERN,
         "title_needles": ["academic program offerings", "academic program", "program offerings"],
         "content_needles": [
             "bachelor of science in nursing", "midwifery", "bachelor of early childhood",
