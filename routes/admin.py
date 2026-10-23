@@ -687,17 +687,25 @@ def add_correction():
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
     d = request.get_json(silent=True) or request.form
-    question = (d.get('question') or '').strip()
-    answer = (d.get('answer') or '').strip()
+    question = d.get('question')
+    answer = d.get('answer')
+    if not isinstance(question, str) or not isinstance(answer, str):
+        return jsonify({'error': 'question and answer must be text'}), 400
+    question = question.strip()
+    answer = answer.strip()
     if not question or not answer:
         return jsonify({'error': 'question and answer are required'}), 400
 
     from services.corrections import save_correction
     faq_id = d.get('faq_id')
+    try:
+        faq_id = int(faq_id) if faq_id not in (None, '') else None
+    except (TypeError, ValueError):
+        return jsonify({'error': 'faq_id must be an integer'}), 400
     ok = save_correction(
         get_db, question, answer,
         created_by=session.get('admin_user', 'admin'),
-        faq_id=int(faq_id) if faq_id else None,
+        faq_id=faq_id,
         source_report_id=d.get('source_report_id'),
     )
     if not ok:

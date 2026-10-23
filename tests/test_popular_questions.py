@@ -72,11 +72,9 @@ class PopularQuestionTests(unittest.TestCase):
             {"limit": 8, "days": 60},
         )
 
-    def test_only_contextual_faq_and_handbook_questions_are_returned(self):
+    def test_popular_questions_only_return_canonical_faq_prompts(self):
         connection = FakeConnection([
             ("How much is the tuition fee for BSCS?", 12, "Fees"),
-            ("Can students wear earrings at school?", 10, "Handbook"),
-            ("What about it?", 9, "Handbook"),
             ("Thanks", 8, "FAQ"),
             ("What is the tuition fee?", 7, "Fees"),
         ])
@@ -91,16 +89,48 @@ class PopularQuestionTests(unittest.TestCase):
             [item["question"] for item in items],
             [
                 "How much is the tuition fee for BSCS?",
-                "Can students wear earrings at school?",
                 "What is the tuition fee?",
             ],
         )
         self.assertTrue(all(item["category"] for item in items))
         self.assertEqual(connection.cur.params, (30, 50))
         self.assertIn("LEFT JOIN faq f ON f.id = ch.faq_id", connection.cur.query)
-        self.assertIn("handbook_query", connection.cur.query)
+        self.assertIn("WHERE f.id IS NOT NULL", connection.cur.query)
+        self.assertNotIn("handbook_query", connection.cur.query)
         self.assertTrue(connection.cur.closed)
         self.assertTrue(connection.closed)
+
+    def test_related_suggestions_are_always_canonical_faq_questions(self):
+        class SuggestionCursor(FakeCursor):
+            def __init__(self):
+                super().__init__([("What are the admission requirements?",)])
+                self.queries = []
+
+            def execute(self, query, params=()):
+                super().execute(query, params)
+                self.queries.append(query)
+
+        class SuggestionConnection(FakeConnection):
+            def __init__(self):
+                self.cur = SuggestionCursor()
+                self.closed = False
+
+        connection = SuggestionConnection()
+        with patch("routes.chat.get_db", return_value=connection):
+            response = self.client.post(
+                "/related_suggestions",
+                json={
+                    "user_message": "offensive text from a chat turn",
+                    "category": "Admissions",
+                },
+            )
+
+        self.assertEqual(response.get_json(), [
+            {"user_message": "What are the admission requirements?"},
+        ])
+        self.assertTrue(connection.cur.queries)
+        self.assertTrue(all("JOIN faq f ON f.id = ch.faq_id" in q for q in connection.cur.queries))
+        self.assertTrue(all("f.question" in q for q in connection.cur.queries))
 
     def test_reuses_caller_connection_for_dashboard_analytics(self):
         connection = FakeConnection([
@@ -122,7 +152,7 @@ class PopularQuestionTests(unittest.TestCase):
     def test_limits_are_bounded_and_contextless_phrases_are_excluded(self):
         connection = FakeConnection([
             ("Then?", 100, "Handbook"),
-            ("What is the campus location?", 2, "Handbook"),
+            ("What is the campus location?", 2, "FAQ"),
         ])
 
         items = get_popular_knowledge_questions(

@@ -334,7 +334,6 @@ def satisfaction_feedback():
     rating = data.get('rating')
     question = data.get('question')
     raw_answer = data.get('answer') or ''
-    suggestion = data.get('suggestion', '')
     sid = (
         session.get('persistent_session_id')
         or session.get('chat_session')
@@ -345,10 +344,8 @@ def satisfaction_feedback():
         return jsonify({'status': 'error', 'message': 'Missing data'}), 400
     if not isinstance(question, str) or not isinstance(raw_answer, str):
         return jsonify({'status': 'error', 'message': 'Question and answer must be text'}), 400
-    if suggestion and (not isinstance(suggestion, str) or len(suggestion) > 1200):
-        return jsonify({'status': 'error', 'message': 'Suggestion must be text under 1200 characters'}), 400
     answer = strip_html(raw_answer)
-    if str(data.get('correction') or '').strip():
+    if str(data.get('correction') or data.get('suggestion') or '').strip():
         return jsonify({'status': 'error', 'message': 'Only staff can submit answer corrections'}), 403
 
     detected_lang = lang_service.detect_language(question)
@@ -384,9 +381,7 @@ def satisfaction_feedback():
         except Exception:
             pass
 
-    # Ratings are signals, not ground truth. Only approved corrections are
-    # eligible for reuse; suggestions stay in the review queue.
-    correction_queued = False
+    # Ratings are signals, not ground truth; only staff can submit corrections.
     try:
         from services.answer_memory import record_feedback
         record_feedback(
@@ -398,19 +393,6 @@ def satisfaction_feedback():
             faq_id=faq_id,
             detected_lang=detected_lang,
         )
-        if (
-            rating == 'thumbs_down'
-            and isinstance(suggestion, str)
-            and len(suggestion.strip()) >= 20
-        ):
-            from services.self_heal import save_feedback_draft
-            correction_queued = save_feedback_draft(
-                get_db,
-                question,
-                suggestion.strip(),
-                source_ref=source_ref,
-                detected_language=detected_lang,
-            )
     except Exception as mem_err:
         logger.debug(f"answer_memory hook: {mem_err}")
 
@@ -420,10 +402,7 @@ def satisfaction_feedback():
         except Exception as uq_err:
             logger.debug(f"log_unanswered_standalone after thumbs_down: {uq_err}")
 
-    return jsonify({
-        'status': 'success',
-        'correction_queued': correction_queued,
-    })
+    return jsonify({'status': 'success'})
 
 @bp.route('/api/chat_rating', methods=['POST'])
 @csrf.exempt
@@ -499,27 +478,27 @@ def related_suggestions():
     try:
         try:
             cur.execute("""
-                SELECT user_message FROM (
-                    SELECT user_message, MAX(created_at) AS last_asked
-                    FROM chat_history
-                    WHERE to_tsvector('english', user_message) @@ plainto_tsquery('english', %s)
-                      AND user_message != %s AND LENGTH(user_message) > 5
-                    GROUP BY user_message
-                ) t
-                ORDER BY last_asked DESC LIMIT 5
+                SELECT f.question
+                FROM chat_history ch
+                JOIN faq f ON f.id = ch.faq_id
+                WHERE to_tsvector('english', ch.user_message) @@ plainto_tsquery('english', %s)
+                  AND f.question != %s AND LENGTH(TRIM(f.question)) > 5
+                GROUP BY f.question
+                ORDER BY MAX(ch.created_at) DESC
+                LIMIT 5
             """, (user_msg, user_msg))
             rows = cur.fetchall()
         except Exception:
-
             conn.rollback()
             cur.execute("""
-                SELECT user_message FROM (
-                    SELECT user_message, MAX(created_at) AS last_asked
-                    FROM chat_history
-                    WHERE user_message ILIKE %s AND user_message != %s AND LENGTH(user_message) > 5
-                    GROUP BY user_message
-                ) t
-                ORDER BY last_asked DESC LIMIT 5
+                SELECT f.question
+                FROM chat_history ch
+                JOIN faq f ON f.id = ch.faq_id
+                WHERE ch.user_message ILIKE %s
+                  AND f.question != %s AND LENGTH(TRIM(f.question)) > 5
+                GROUP BY f.question
+                ORDER BY MAX(ch.created_at) DESC
+                LIMIT 5
             """, (f'%{user_msg[:20]}%', user_msg))
             rows = cur.fetchall()
 
@@ -528,28 +507,27 @@ def related_suggestions():
 
         if category and category != 'Unknown':
             cur.execute("""
-                SELECT user_message FROM chat_history
-                WHERE category = %s AND user_message != %s AND LENGTH(user_message) > 5
-                ORDER BY created_at DESC LIMIT 5
+                SELECT f.question
+                FROM chat_history ch
+                JOIN faq f ON f.id = ch.faq_id
+                WHERE f.topic = %s AND f.question != %s
+                  AND LENGTH(TRIM(f.question)) > 5
+                GROUP BY f.question
+                ORDER BY MAX(ch.created_at) DESC
+                LIMIT 5
             """, (category, user_msg))
             rows = cur.fetchall()
             if rows:
-                seen = set()
-                deduped = []
-                for r in rows:
-                    if r[0] not in seen:
-                        seen.add(r[0])
-                        deduped.append(r[0])
-                return jsonify([{'user_message': m} for m in deduped])
+                return jsonify([{'user_message': r[0]} for r in rows])
 
         cur.execute("""
-            SELECT user_message FROM (
-                SELECT user_message, MAX(created_at) AS last_asked
-                FROM chat_history
-                WHERE user_message != %s AND LENGTH(user_message) > 5
-                GROUP BY user_message
-            ) t
-            ORDER BY last_asked DESC LIMIT 5
+            SELECT f.question
+            FROM chat_history ch
+            JOIN faq f ON f.id = ch.faq_id
+            WHERE f.question != %s AND LENGTH(TRIM(f.question)) > 5
+            GROUP BY f.question
+            ORDER BY MAX(ch.created_at) DESC
+            LIMIT 5
         """, (user_msg,))
         rows = cur.fetchall()
         return jsonify([{'user_message': r[0]} for r in rows])

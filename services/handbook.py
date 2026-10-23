@@ -1205,7 +1205,12 @@ def get_relevant_chunks(question: str, candidates: List[Dict]) -> List[Dict]:
     return []
 
 
-def _extract_relevant_sentences(content: str, question: str, max_sentences: int = 5) -> str:
+def _extract_relevant_sentences(
+    content: str,
+    question: str,
+    max_sentences: int = 4,
+    max_words: int = 100,
+) -> str:
     q_words = _content_words(expand_query_for_retrieval(question))
     sentences = re.split(r'(?<=[.!?])\s+', content or '')
     ranked = []
@@ -1216,10 +1221,24 @@ def _extract_relevant_sentences(content: str, question: str, max_sentences: int 
         hits = sum(1 for w in q_words if w in s.lower())
         ranked.append((hits, s))
     ranked.sort(key=lambda x: x[0], reverse=True)
-    chosen = [s for hits, s in ranked[:max_sentences] if hits > 0]
+    chosen = [s for hits, s in ranked if hits > 0]
     if not chosen:
-        chosen = [s for _, s in ranked[:2]]
-    return ' '.join(chosen)
+        chosen = [s for _, s in ranked]
+
+    selected = []
+    word_count = 0
+    for sentence in chosen:
+        sentence_words = len(sentence.split())
+        if sentence_words > max_words:
+            continue
+        if selected and (
+            len(selected) >= max_sentences
+            or word_count + sentence_words > max_words
+        ):
+            continue
+        selected.append(sentence)
+        word_count += sentence_words
+    return ' '.join(selected)
 
 
 def _answer_relevant_to_question(question: str, answer: str, min_overlap: int = 1) -> bool:
@@ -1278,6 +1297,7 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
             Instructions:
             - Sound natural and clear — like a real chatbot, not a formal document.
             - Identify the exact fact requested and answer that directly first; do not substitute related facts from the same excerpt.
+            - Be concise: answer in no more than 120 words. For broad policies, summarize the key rules in at most 5 short bullets; do not reproduce the full handbook section or add an introduction or conclusion.
             - NEVER start with "According to the section…" or similar citations. Just answer.
             - If the question is yes/no (starts with Is/Are/Can/Do/Does/Will/May/Allowed/
               Pwede/Okay ba), your FIRST WORD must be "Yes" or "No", then a short reason.
@@ -1297,7 +1317,7 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
 
             Answer:"""
 
-            response = llm_chat(prompt, max_tokens=450)
+            response = llm_chat(prompt, max_tokens=220)
             if response and "CANNOT_ANSWER" not in response.upper():
                 response = response.strip()
                 is_forced = bool(_forced_topic_for(question)) or any(
@@ -1326,15 +1346,17 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
                     retry_prompt = prompt + (
                         f"\n\nYour previous attempt was not in {nlg.lang_name(detected_lang)} — "
                         f"try again, and make sure the reply is actually in "
-                        f"{nlg.lang_name(detected_lang)} this time, not English."
+                        f"{nlg.lang_name(detected_lang)} this time, not English. "
+                        "Keep it under 120 words."
                     )
                     try:
-                        retry_response = llm_chat(retry_prompt, max_tokens=480)
+                        retry_response = llm_chat(retry_prompt, max_tokens=220)
                     except Exception:
                         retry_response = None
                     retry_ok = (
                         retry_response and retry_response.strip()
                         and "CANNOT_ANSWER" not in retry_response.upper()
+                        and len(retry_response.split()) <= 140
                         and (
                             detected_lang != 'english'
                             or answer_is_grounded(
@@ -1374,6 +1396,13 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
                             )
                             response = None
                 if response and "CANNOT_ANSWER" not in response.upper():
+                    if len(response.split()) > 140:
+                        logger.info(
+                            "handbook answer exceeded concise length limit "
+                            f"({len(response.split())} words) for q={question[:80]!r}"
+                        )
+                        response = None
+                if response and "CANNOT_ANSWER" not in response.upper():
                     if llm_self_check(question, response, source_blob):
                         return response
                     logger.info(f"handbook answer self-check REJECTED for q={question[:80]!r}")
@@ -1386,7 +1415,7 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
     page = top.get('page_start')
     content = (top.get('content') or '').strip()
 
-    clean = _extract_relevant_sentences(content, question, max_sentences=6)
+    clean = _extract_relevant_sentences(content, question)
     if not clean and forced:
         _, content_needles = forced
         lines = []
@@ -1413,9 +1442,14 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
             )
             return None
         page_note = f"\n\n(More detail is on page {page}.)" if page else ""
-        final = f"{clean}{page_note}".strip()
-        final = nlg.speak_naturally(final, question, detected_lang=detected_lang)
-        return final
+        canonical = f"{clean}{page_note}".strip()
+        final = nlg.speak_naturally(
+            canonical,
+            question,
+            detected_lang=detected_lang,
+            extra_note="Keep the answer concise and under 100 words.",
+        )
+        return final if len(final.split()) <= 120 else canonical
 
     if not clean or (
         detected_lang == 'english'
@@ -1423,9 +1457,14 @@ def _build_handbook_answer_from_chunks(question: str, chunks: List[Dict],
     ):
         return None
     page_note = f"\n\n(More detail is on page {page}.)" if page else ""
-    final = f"{clean}{page_note}".strip()
-    final = nlg.speak_naturally(final, question, detected_lang=detected_lang)
-    return final
+    canonical = f"{clean}{page_note}".strip()
+    final = nlg.speak_naturally(
+        canonical,
+        question,
+        detected_lang=detected_lang,
+        extra_note="Keep the answer concise and under 100 words.",
+    )
+    return final if len(final.split()) <= 120 else canonical
 
 
 def _merge_compound_answers(original_question: str, sub_answers: List[Tuple[str, str]],
@@ -1554,7 +1593,12 @@ def answer_handbook_question(question: str, detected_lang: str = 'english',
         if hint_parts:
             context_hint = "\n".join(hint_parts)
 
-    cache_key = f"handbook_{hash(question.lower().strip())}_{hash(context_hint or '')}"
+    is_followup = bool(ctx and ctx.is_followup(question))
+    context_cache_key = hash(context_hint or "") if is_followup else 0
+    cache_key = (
+        f"handbook_{hash(question.lower().strip())}_"
+        f"{detected_lang}_{context_cache_key}"
+    )
     cached = ai_cache.get(cache_key)
     if cached:
         return cached

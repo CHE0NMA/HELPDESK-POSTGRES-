@@ -260,28 +260,61 @@ class ExactSourceReplyTests(unittest.TestCase):
         with patch.object(faq, "_get_all_faqs", return_value=rows):
             self.assertIsNone(faq._find_exact_faq("Can students wear earrings?"))
 
-    def test_exact_handbook_prompt_returns_source_without_ai_processing(self):
+    def test_repeated_handbook_question_does_not_return_raw_source_excerpt(self):
         question = "What is the dress code policy?"
-        answer = "Students must dress modestly and neatly."
+        answer = "Keep the dress code answer concise."
         ctx = ConversationContext("exact-handbook-test")
 
         with patch.object(faq, "get_conversation_context", return_value=ctx), \
+             patch.object(ctx, "update"), \
              patch("services.corrections.get_exact_correction", return_value=None), \
+             patch("services.corrections.get_correction", return_value=None), \
              patch.object(faq, "_get_all_faqs", return_value=[]), \
              patch.object(
                  faq.handbook_service,
                  "get_exact_handbook_answer",
                  return_value=(answer, ["Dress and Appearance"]),
-             ), \
+             ) as exact_source, \
              patch.object(
                  faq.lang_service,
                  "classify_and_detect_language",
-             ) as classify:
+                 return_value={
+                     "language": "english",
+                     "is_gibberish": False,
+                     "is_school_related": True,
+                 },
+             ), \
+             patch(
+                 "services.answer_memory.get_cached_answer",
+                 return_value=None,
+             ), \
+             patch(
+                 "services.topic_aliases.is_handbook_only",
+                 return_value=False,
+             ), \
+             patch.object(
+                 faq,
+                 "_score_sources_parallel",
+                 return_value={
+                     "hb_score": 0.2,
+                     "hb_chunks": [{"section_title": "Dress and Appearance"}],
+                     "faq_candidates": [],
+                     "faq_score": 0.0,
+                 },
+             ), \
+             patch.object(
+                 faq.handbook_service,
+                 "answer_handbook_question",
+                 return_value=answer,
+             ) as answer_handbook:
             result = faq.find_answer(question, return_topic=True)
 
-        self.assertEqual(result, (answer, "Handbook", None, "handbook_query", "english"))
-        self.assertEqual(ctx.last_handbook_sections, ["Dress and Appearance"])
-        classify.assert_not_called()
+        self.assertEqual(
+            result,
+            (answer, "Handbook", None, "handbook_query", "english"),
+        )
+        exact_source.assert_not_called()
+        answer_handbook.assert_called_once()
 
     def test_exact_approved_correction_takes_priority(self):
         question = "How do I request a transcript?"
@@ -649,6 +682,95 @@ class FaqRelevanceTests(unittest.TestCase):
 
         self.assertEqual(answer, translated)
         lexical_check.assert_not_called()
+
+    def test_handbook_relevant_sentence_fallback_respects_word_limit(self):
+        content = (
+            "Students should dress modestly and wear simple but neat clothing. "
+            "Students must not wear jewelry except a wedding ring. "
+            + "Additional unrelated policy detail. " * 30
+        )
+
+        answer = handbook._extract_relevant_sentences(
+            content,
+            "What is the dress code policy?",
+            max_sentences=4,
+            max_words=16,
+        )
+
+        self.assertLessEqual(len(answer.split()), 16)
+        self.assertIn("dress modestly", answer)
+
+    def test_overlong_handbook_generation_falls_back_to_concise_source_text(self):
+        question = "What is the dress code policy?"
+        chunk = {
+            "section_title": "Dress code",
+            "page_start": 25,
+            "content": "The dress code requires modest and neat attire for all students.",
+        }
+        long_answer = "Dress code policy requires modest clothes. " * 150
+        with patch.object(handbook, "get_relevant_chunks", return_value=[chunk]), \
+             patch.object(handbook.circuit_breaker, "is_open", return_value=False), \
+             patch.object(handbook, "llm_chat", return_value=long_answer) as llm_chat, \
+             patch.object(handbook, "answer_is_grounded", return_value=True), \
+             patch.object(handbook, "_answer_relevant_to_question", return_value=True), \
+             patch.object(handbook, "_forced_topic_for", return_value=None), \
+             patch.object(
+                 handbook.nlg,
+                 "speak_naturally",
+                 side_effect=lambda canonical, *args, **kwargs: canonical,
+             ):
+            answer = handbook._build_handbook_answer_from_chunks(
+                question,
+                [chunk],
+            )
+
+        self.assertIn("modest and neat attire", answer)
+        self.assertLessEqual(len(answer.split()), 120)
+        prompt, = llm_chat.call_args.args
+        self.assertIn("no more than 120 words", prompt)
+        self.assertEqual(llm_chat.call_args.kwargs["max_tokens"], 220)
+
+    def test_repeated_standalone_handbook_question_reuses_same_answer(self):
+        question = "What is the dress code policy?"
+        answer = "Students should dress modestly and wear simple, neat clothing."
+        ctx = type(
+            "Context",
+            (),
+            {
+                "last_handbook_sections": [],
+                "conversation_history": [],
+                "is_followup": lambda self, text: False,
+                "clear_disambiguation": lambda self: None,
+                "update": lambda self, **kwargs: None,
+            },
+        )()
+        cached_answers = {}
+
+        def cache_get(key):
+            return cached_answers.get(key)
+
+        def cache_set(key, result):
+            cached_answers[key] = result
+
+        with patch.object(handbook.ai_cache, "get", side_effect=cache_get), \
+             patch.object(handbook.ai_cache, "set", side_effect=cache_set), \
+             patch.object(
+                 handbook,
+                 "get_top_handbook_chunks",
+                 return_value=[{"section_title": "Dress code", "score": 1.0}],
+             ) as retrieve, \
+             patch.object(
+                 handbook,
+                 "_build_handbook_answer_from_chunks",
+                 return_value=answer,
+             ) as build:
+            first = handbook.answer_handbook_question(question, ctx=ctx)
+            second = handbook.answer_handbook_question(question, ctx=ctx)
+
+        self.assertEqual(first, answer)
+        self.assertEqual(second, answer)
+        retrieve.assert_called_once()
+        build.assert_called_once()
 
     def test_bisaya_natural_rephrase_uses_semantic_source_check(self):
         canonical = (

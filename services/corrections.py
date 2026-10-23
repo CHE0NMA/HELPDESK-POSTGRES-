@@ -38,6 +38,7 @@ than a wrong FAQ match) -- see find_similar_correction() below.
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
 from typing import Any, Callable, List, Optional
@@ -299,7 +300,7 @@ def save_correction(get_db_fn: Callable[[], Any], question: str, answer: str,
                     embedding = COALESCE(EXCLUDED.embedding, answer_corrections.embedding),
                     updated_at = NOW()
             """, (qn, question[:500], answer[:4000], faq_id, created_by, source_report_id,
-                  list(embedding) if embedding else None))
+                  json.dumps(list(embedding)) if embedding else None))
             conn.commit()
             return True
         finally:

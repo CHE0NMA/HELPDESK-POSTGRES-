@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import ANY, patch
+from unittest.mock import patch
 
 from flask import Flask
 
@@ -145,20 +145,21 @@ class ChatFeedbackTests(unittest.TestCase):
         self.assertIn("detected_lang = %s", delete_query)
         self.assertEqual(delete_params, ("pila ang tuition", "bisaya"))
 
-    def test_students_cannot_submit_answer_corrections(self):
-        with patch("routes.chat.get_db") as get_db:
-            response = self.client.post(
-                "/api/satisfaction",
-                json={
-                    "rating": "thumbs_down",
-                    "question": "Can I wear earrings?",
-                    "answer": "Yes.",
-                    "correction": "Students may not wear earrings.",
-                },
-            )
+    def test_students_cannot_submit_corrections_or_suggestions(self):
+        for field in ("correction", "suggestion"):
+            with self.subTest(field=field), patch("routes.chat.get_db") as get_db:
+                response = self.client.post(
+                    "/api/satisfaction",
+                    json={
+                        "rating": "thumbs_down",
+                        "question": "Can I wear earrings?",
+                        "answer": "Yes.",
+                        field: "Students may not wear earrings.",
+                    },
+                )
 
-        self.assertEqual(response.status_code, 403)
-        get_db.assert_not_called()
+            self.assertEqual(response.status_code, 403)
+            get_db.assert_not_called()
 
     def test_thumbs_down_without_correction_is_still_recorded(self):
         connection = FakeConnection()
@@ -222,18 +223,12 @@ class ChatFeedbackTests(unittest.TestCase):
         self.assertEqual(record_feedback.call_args.kwargs["detected_lang"], "tagalog")
         self.assertEqual(record_feedback.call_args.kwargs["faq_id"], 7)
 
-    def test_thumbs_down_suggestion_enters_staff_review_queue(self):
+    def test_thumbs_down_feedback_does_not_accept_student_corrections(self):
         connection = FakeConnection()
         suggestion = "Students are not allowed to wear earrings at school."
-        with patch("routes.chat.get_db", return_value=connection), \
-             patch("routes.chat.lang_service.detect_language", return_value="english"), \
-             patch("routes.chat.lang_service.classify_topic", return_value="dress_code"), \
-             patch("routes.chat._feedback_source", return_value=("handbook", "dress policy", None)), \
-             patch("services.answer_memory.record_feedback", return_value=True), \
-             patch(
-                 "services.self_heal.save_feedback_draft",
-                 return_value=True,
-             ) as save_draft, patch("routes.chat.log_unanswered_standalone"):
+        with patch("routes.chat.get_db") as get_db, patch(
+            "services.self_heal.save_feedback_draft"
+        ) as save_draft:
             response = self.client.post(
                 "/api/satisfaction",
                 json={
@@ -245,15 +240,9 @@ class ChatFeedbackTests(unittest.TestCase):
                 },
             )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.get_json()["correction_queued"])
-        save_draft.assert_called_once_with(
-            ANY,
-            "Can I wear earrings?",
-            suggestion,
-            source_ref="dress policy",
-            detected_language="english",
-        )
+        self.assertEqual(response.status_code, 403)
+        get_db.assert_not_called()
+        save_draft.assert_not_called()
 
     def test_report_feedback_records_language_and_topic(self):
         connection = FakeConnection()

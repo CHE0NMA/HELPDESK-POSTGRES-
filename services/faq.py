@@ -843,26 +843,6 @@ def find_answer(question: str, return_topic: bool = False,
                     if image:
                         answer = f"{answer}\n\n[Image: {image}]"
                     exact_answer = (answer, topic, faq_id, intent)
-                else:
-                    exact_handbook = handbook_service.get_exact_handbook_answer(question)
-                    if exact_handbook:
-                        answer, section_titles = exact_handbook
-                        ctx.update(
-                            topic='Handbook',
-                            intent='handbook_query',
-                            user_msg=question,
-                            bot_response=answer,
-                            handbook_sections=section_titles,
-                            clear_schedule_context=True,
-                        )
-                        result = (
-                            answer,
-                            'Handbook',
-                            None,
-                            'handbook_query',
-                            ctx.last_detected_lang or 'english',
-                        )
-                        return result if return_topic else result[0]
         except Exception as e:
             logger.warning("Exact knowledge lookup failed; using normal retrieval: %s", e)
 

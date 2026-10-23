@@ -1,9 +1,10 @@
 import unittest
+import json
 import sys
 import types
 from unittest.mock import Mock, patch
 
-from services import self_heal
+from services import corrections, self_heal
 
 
 class FakeCursor:
@@ -108,6 +109,24 @@ class FeedbackDraftTests(unittest.TestCase):
 
 
 class AdminApprovalTests(unittest.TestCase):
+    def test_correction_embedding_is_serialized_as_json_for_jsonb(self):
+        connection = FakeConnection()
+        with patch.object(corrections, "_TABLE_READY", True), \
+                patch(
+                    "services.embeddings.get_embedding",
+                    return_value=[0.1, 0.2, 0.3],
+                ):
+            saved = corrections.save_correction(
+                lambda: connection,
+                "What is the dress code?",
+                "Students should dress modestly.",
+            )
+
+        self.assertTrue(saved)
+        self.assertEqual(json.loads(connection.cur.params[6]), [0.1, 0.2, 0.3])
+        self.assertTrue(connection.committed)
+        self.assertTrue(connection.closed)
+
     def test_edited_admin_answer_is_the_answer_promoted(self):
         lookup = FakeConnection(row=("Who founded the school?", "Initial generated draft."))
         update = FakeConnection()

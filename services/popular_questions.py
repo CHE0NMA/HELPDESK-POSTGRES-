@@ -1,4 +1,4 @@
-"""Popular prompts backed by an actual FAQ or handbook answer."""
+"""Popular prompts backed only by canonical FAQ entries."""
 from __future__ import annotations
 
 import re
@@ -43,12 +43,7 @@ def get_popular_knowledge_questions(
     days: Optional[int] = 30,
     connection: Optional[Any] = None,
 ) -> list[dict]:
-    """Return only contextual questions answered from a FAQ or handbook.
-
-    FAQ prompts use the canonical FAQ wording. Handbook prompts retain the
-    student's wording, but contextless follow-ups and conversational turns
-    are excluded.
-    """
+    """Return contextual FAQ prompts using canonical FAQ wording only."""
     safe_limit = max(1, min(int(limit), 100))
     safe_days = int(days) if days is not None else None
     if safe_days is not None:
@@ -64,31 +59,16 @@ def get_popular_knowledge_questions(
             else ""
         )
         query = f"""
-            SELECT
-                CASE
-                    WHEN f.id IS NOT NULL THEN f.question
-                    ELSE TRIM(ch.user_message)
-                END AS question,
+            SELECT f.question,
                 COUNT(*) AS frequency,
-                CASE
-                    WHEN f.id IS NOT NULL THEN COALESCE(NULLIF(TRIM(f.topic), ''), 'FAQ')
-                    ELSE 'Handbook'
-                END AS category
+                COALESCE(NULLIF(TRIM(f.topic), ''), 'FAQ') AS category
             FROM chat_history ch
             LEFT JOIN faq f ON f.id = ch.faq_id
-            WHERE (f.id IS NOT NULL OR LOWER(COALESCE(ch.category, '')) = 'handbook_query')
+            WHERE f.id IS NOT NULL
               AND ch.user_message IS NOT NULL
               AND LENGTH(TRIM(ch.user_message)) > 8
               {time_filter}
-            GROUP BY
-                CASE
-                    WHEN f.id IS NOT NULL THEN f.question
-                    ELSE TRIM(ch.user_message)
-                END,
-                CASE
-                    WHEN f.id IS NOT NULL THEN COALESCE(NULLIF(TRIM(f.topic), ''), 'FAQ')
-                    ELSE 'Handbook'
-                END
+            GROUP BY f.question, COALESCE(NULLIF(TRIM(f.topic), ''), 'FAQ')
             ORDER BY frequency DESC
             LIMIT %s
         """
