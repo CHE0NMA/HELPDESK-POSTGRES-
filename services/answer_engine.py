@@ -28,6 +28,7 @@ from services.disambiguation import FAQ_POLICY, select_contenders, should_disamb
 from services.embeddings import cosine_similarity
 from services.grounding import answer_is_grounded
 from services.language import verify_output_language
+from services.personnel_titles import personnel_titles
 
 logger = logging.getLogger("pac_helpdesk.answer_engine")
 
@@ -70,6 +71,7 @@ def get_top_faq_candidates(user_question: str, expanded_question: str,
     ))
     search_norms = [q for q in (user_norm, expanded_norm) if q]
     query_norms = list(dict.fromkeys((*search_norms, *alternate_norms)))
+    query_roles = personnel_titles(user_question)
 
     for faq in all_faqs:
         if len(faq) >= 9:
@@ -133,6 +135,14 @@ def get_top_faq_candidates(user_question: str, expanded_question: str,
             and alternate_ratio > max(base_combined, alias_ratio)
         )
         combined = max(base_combined, alternate_ratio, alias_ratio)
+        faq_roles = personnel_titles(" ".join(
+            str(faq[index] or "")
+            for index in (0, 1, 3, 4, 5, 6)
+            if len(faq) > index
+        ))
+        personnel_match = bool(query_roles & faq_roles)
+        if personnel_match:
+            combined = max(combined, 0.80)
 
         if kw and user_norm:
             kw_list = kw.lower().split(',')
@@ -161,6 +171,7 @@ def get_top_faq_candidates(user_question: str, expanded_question: str,
             'token_ratio': token_ratio, 'partial_ratio': partial_ratio,
             'full_ratio': full_ratio, 'expanded_ratio': expanded_ratio,
             'alternate_match': trusted_alias_match or ai_alternate_match,
+            'personnel_title_match': personnel_match,
             'semantic_score': semantic_score,
             'combined': combined, 'fuzzy': max(token_ratio, partial_ratio, full_ratio),
             'best_q_text': question,

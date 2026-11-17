@@ -15,6 +15,7 @@ from services.conversation import (
     get_conversation_context,
     resolve_disambiguation_choice,
 )
+from services.disambiguation import FAQ_POLICY
 from services.embeddings import get_embedding
 from services.ai_retrieval import llm_expand_faq_query, llm_self_check
 from utils.text import normalize_input
@@ -27,6 +28,33 @@ _SCORING_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="faq_sc
 _FAQ_ROWS_CACHE = None
 _FAQ_ROWS_TS = 0.0
 _FAQ_CACHE_TTL = 45.0
+FAQ_IMAGE_MIN_SCORE = 0.85
+
+
+def _image_for_faq_candidate(
+    candidate: Optional[Dict],
+    candidates: Optional[Sequence[Dict]] = None,
+) -> Optional[str]:
+    """Return an image only for a high-confidence FAQ match."""
+    if not candidate or candidate.get('combined', 0.0) < FAQ_IMAGE_MIN_SCORE:
+        return None
+    row = candidate.get('faq') or ()
+    image_path = row[8] if len(row) > 8 else None
+    if not image_path:
+        return None
+
+    score = candidate['combined']
+    for other in candidates or ():
+        if other is candidate:
+            continue
+        other_row = other.get('faq') or ()
+        other_image = other_row[8] if len(other_row) > 8 else None
+        other_score = other.get('combined', 0.0)
+        if (other_image and other_image != image_path
+                and other_score >= FAQ_IMAGE_MIN_SCORE
+                and abs(score - other_score) <= FAQ_POLICY.max_gap):
+            return None
+    return image_path
 
 
 def _get_all_faqs():
@@ -71,13 +99,23 @@ def _find_exact_faq(question: str) -> Optional[Sequence[Any]]:
             "Exact FAQ question maps to multiple different answers; using normal retrieval"
         )
         return None
-    return max(
+    best = max(
         exact_rows,
         key=lambda row: (
             float(row[7] or 0) if len(row) > 7 else 0,
             int(row[2] or 0) if len(row) > 2 else 0,
         ),
     )
+    image_paths = {
+        row[8] if len(row) > 8 else None
+        for row in exact_rows
+    }
+    if len(image_paths) > 1:
+        logger.warning(
+            "Exact FAQ question maps to multiple images; suppressing the image"
+        )
+        return (*best[:8], None, *best[9:])
+    return best
 
 
 COMPOUND_SPLIT_RE = re.compile(
@@ -1408,7 +1446,7 @@ def find_answer(question: str, return_topic: bool = False,
             if ai_ans:
                 best_row = (matched_cand or best)['faq']
                 answer, question_text, fid, topic, intent, _, _, _ = best_row[:8]
-                img = best_row[8] if len(best_row) > 8 else None
+                img = _image_for_faq_candidate(matched_cand or best, candidates)
                 if (hb_score >= CROSS_CHECK_HANDBOOK_BAR + 0.05
                         and hb_score >= best['combined']
                         and hb_chunks and not circuit_breaker.is_open()):
@@ -1433,7 +1471,7 @@ def find_answer(question: str, return_topic: bool = False,
         if best['combined'] >= engine.FUZZY_MIN_SCORE or best['fuzzy'] >= 0.60:
             row = best['faq']
             answer, question_text, fid, topic, intent, _, _, _ = row[:8]
-            img = row[8] if len(row) > 8 else None
+            img = _image_for_faq_candidate(best, candidates)
             answer_text = (answer or '') + (f"\n\n[Image: {img}]" if img else "")
             if detected_lang != 'english':
                 answer_text = lang_service.get_translation_unavailable_response(detected_lang)

@@ -14,6 +14,7 @@ from ai_providers import ai_cache, circuit_breaker
 from ai_providers.providers import llm_chat_fast
 from database import get_db
 from services.config import bot_identity_line
+from services.personnel_titles import has_personnel_title
 
 logger = logging.getLogger("pac_helpdesk.language")
 
@@ -212,14 +213,23 @@ def _heuristic_language(text: str) -> Tuple[str, bool]:
         r'|sino|sino-sino|alin|kanino|ilan|ilang|muna|gusto|ayaw|wala|meron|mayroon|yung|yun|ito|iyan|iyon|naman'
         r'|talaga|lang|din|rin|ba|ko|mo|niya|natin|nila|siya|sila|kayo|tayo'
         r'|hindi|oo|sige|kasi|kailangan|dapat|maaari|sana|mga|tulungan|tulong'
-        r'|mag[a-z]{2,}|nag[a-z]{2,})\b',
+        r'|paki|pakisuyo|nasaan|kanino|alin|alinman|dahil|pero|kaya|'
+        r'namin|amin|iyo|inyong|samin|saamin|dito|doon|niyo|nyo|'
+        r'bayad|bayaran|gastos|matrikula|eskwela|paaralan|klase|'
+        r'liban|lumiban|absent|grado|marka|papeles|dokumento|'
+        r'pagpapatala|pagpapalista|magbabayad|nakapag|'
+        r'mag[a-z]{2,}|nag[a-z]{2,})\b',
         t,
     ))
     has_bisaya = bool(re.search(
         r'\b(unsa|unsay|unsaon|ngano|giunsa|jud|gyud|pud|usab|kaayo|mao|amo|kinsa|asa|diin|kanus-a|kanusa|diri|dinhi|dinha|diha|didto|ngadto'
         r'|naa|duna|wala|nay|naay|dili|di|oo|sige|lagi|bitaw|adto|karon|pila|tagpila|pilay|kapila|bayran'
         r'|buhat|himoa|palihug|salamat|maayo|unta|gusto|ganahan|kinahanglan|pwede'
-        r'|sulod|sul-ob|isul-ob|ug|og|bai|bako|sout|suot|mo[a-z]{3,})\b',
+        r'|sulod|sul-ob|isul-ob|ug|og|bai|bako|sout|suot|'
+        r'kay|kayng|puhon|ba|man|unsa pay|naa ba|wala pa|pila ka|'
+        r'eskwela|eskwelahan|bayad|bayranan|gasto|matrikula|'
+        r'klase|klaseng|absent|liban|grado|papeles|requirements|'
+        r'nag[a-z]{2,}|gi[a-z]{2,}|mo[a-z]{3,}|mu[a-z]{3,})\b',
         t,
     ))
     has_english = bool(re.search(
@@ -230,7 +240,10 @@ def _heuristic_language(text: str) -> Tuple[str, bool]:
     has_strong_bisaya = bool(re.search(
         r'\b(unsay|unsaon|ngano|kanus-a|kanusa|gikan|hangtod|hangtud|kutob|sulod|og|ug|bai|bako|pila|pilay|'
         r'sout|suoton|sul-ob|isul-ob|ug|diri|dinhi|dinha|diha|didto|ngadto|diin|'
-        r'dili|naa|naay|ganahan|kinahanglan|tagpila|pilay|kapila|mag\s*sout)\b', t
+        r'dili|naa|naay|ganahan|kinahanglan|tagpila|pilay|kapila|mag\s*sout|'
+        r'palihug|unsa pay|kinsa|asa|bayranan|eskwelahan|klaseng|'
+        r'walay klase|wala nakaeskwela|dili nakaeskwela|'
+        r'nag[a-z]{2,}|gi[a-z]{2,})\b', t
     )) or bool(
         re.search(r'\bpila\b', t)
         and re.search(r'\b(tuition|fee|bayad|gasto|cost|price)\b', t)
@@ -238,7 +251,10 @@ def _heuristic_language(text: str) -> Tuple[str, bool]:
     has_strong_tagalog = bool(re.search(
         r'\b(ako|pwedeng|puwedeng|mag(?!suot\b|sout(?:on)?\b)[a-z]{2,}|nag[a-z]{2,}|magkano|paano|pano|bakit|bat|'
         r'anong|saan|san|kailan|kelan|sino|ilan|ilang|'
-        r'naman|talaga|hindi|yung|iyon|opo)\b', t
+        r'naman|talaga|hindi|yung|iyon|opo|'
+        r'paki|pakisuyo|nasaan|dahil|pero|namin|amin|niyo|nyo|'
+        r'bayad|bayaran|gastos|eskwela|eskwelahan|paaralan|'
+        r'liban|lumiban|grado|marka|papeles|dokumento)\b', t
     )) or bool(
         re.search(r'\b(magsuot|mag\s+suot)\b', t)
         and not re.search(r'\b(og|ug)\b', t)
@@ -594,7 +610,7 @@ def _obviously_not_gibberish_and_school_related(question: str) -> bool:
         'paano', 'unsa', 'ano', 'kailan', 'magkano', 'saan', 'asa',
     )
     ql = q.lower()
-    return any(t in ql for t in topical)
+    return has_personnel_title(q) or any(t in ql for t in topical)
 
 
 def classify_question_ai(question: str) -> dict:
@@ -836,7 +852,6 @@ _VERNACULAR_VARIANTS: Dict[str, str] = {
 
     'bulana': 'buwan', 'bulanan': 'buwan', 'bulan': 'buwan',
     'buwana': 'buwan', 'buwanan': 'buwan',
-
     'simana': 'semana', 'simanaha': 'semana', 'semanaha': 'semana',
     'simanahan': 'semana', 'semanahan': 'semana',
 
@@ -855,6 +870,22 @@ _VERNACULAR_VARIANTS: Dict[str, str] = {
     'hikaw': 'earrings',
     'tuision': 'tuition', 'tution': 'tuition', 'tuetion': 'tuition',
     'sinina': 'uniform', 'bisti': 'uniform', 'panapton': 'uniform',
+    'eskwela': 'school', 'eskwelahan': 'school', 'iskwela': 'school',
+    'iskwelahan': 'school', 'paaralan': 'school',
+    'nakaeskwela': 'attend school', 'nakasulod': 'attend class',
+    'matrikula': 'tuition', 'matricula': 'tuition',
+    'bayranan': 'payment fee', 'pangbayad': 'payment',
+    'papeles': 'documents requirements', 'dokumento': 'documents',
+    'kinahanglanon': 'requirements',
+    'grado': 'grades', 'marka': 'grades', 'puntos': 'grades',
+    'liban': 'absence absent', 'lumiban': 'absence absent',
+    'pagliban': 'absence attendance',
+    'klase': 'class', 'klaseng': 'class',
+    'opisina': 'office', 'tanggapan': 'office',
+    'kurso': 'course program', 'programa': 'program course',
+    'iskolar': 'scholarship', 'iskolarship': 'scholarship',
+    'nakatapos': 'graduate graduation', 'nagtapos': 'graduate graduation',
+    'puy-anan': 'housing dormitory',
 }
 
 _VERNACULAR_WORD_RE = re.compile(r"[a-zA-Z']+(?:-[a-zA-Z']+)?")
@@ -930,11 +961,91 @@ def expand_query(text: str) -> str:
     normalized = expand_abbreviations(normalized)
 
     aliases = []
+    concept_aliases = (
+        (
+            r'\b(unsa|unsay|unsaon|ano|anong|paano|pano|pa.?no)\b',
+            'what how process procedure',
+        ),
+        (
+            r'\b(ngano|bakit|bat|nganong)\b',
+            'why reason explanation',
+        ),
+        (
+            r'\b(kinsa|sino|kanino|kang kinsa)\b',
+            'who person in charge contact',
+        ),
+        (
+            r'\b(asa|diin|saan|san|nasaan|asa dapit|saan banda)\b',
+            'where location office',
+        ),
+        (
+            r'\b(kanus-a|kanusa|kailan|kelan|karun|karon|ugma)\b',
+            'when date time',
+        ),
+        (
+            r'\b(pwede|pwede ba|puwede|maaari|makahimo|allowed|'
+            r'dili pwede|di pwede|hindi pwede|bawal)\b',
+            'allowed permitted policy rules',
+        ),
+        (
+            r'\b(kinahanglan|kailangan|ano ang kailangan|unsa ang kailangan|'
+            r'papeles|dokumento|requirements)\b',
+            'requirements documents needed',
+        ),
+        (
+            r'\b(mag enroll|mag-enroll|enroll|enrollment|pag enroll|'
+            r'pagpapatala|pagpapalista|paenroll)\b',
+            'enrollment admission registration',
+        ),
+        (
+            r'\b(bayad|bayaran|bayran|bayranan|gasto|pangbayad|'
+            r'magbayad|magbabayad|pagbayad|pag bayad|mobayad|'
+            r'nagbayad|nagbabayad|mag bayad|pambayad)\b',
+            'payment fee tuition cost',
+        ),
+        (
+            r'\b(klase|klaseng|class|schedule|iskedyul|oras sa klase)\b',
+            'class schedule timetable',
+        ),
+        (
+            r'\b(kurso|programa|course|program|degree|degree program)\b',
+            'course program offering',
+        ),
+        (
+            r'\b(grado|marka|puntos|grade|grades|score|gpa|gwa)\b',
+            'grades academic record',
+        ),
+        (
+            r'\b(iskolar|iskolarship|scholarship|financial aid|tulong pinansyal)\b',
+            'scholarship financial assistance',
+        ),
+        (
+            r'\b(nagtapos|nakatapos|magtapos|graduation|graduate)\b',
+            'graduation requirements',
+        ),
+        (
+            r'\b(puy-anan|dormitory|dorm|boarding house|housing)\b',
+            'housing dormitory residence',
+        ),
+        (
+            r'\b(absent|liban|lumiban|pagliban|hindi pumasok|'
+            r'dili nakaeskwela|dili kaadto|di nakapasok|wala nakaeskwela|'
+            r'wala naka school|wala attend school|nakasulod|pumasok|'
+            r'wa ko kasulod|wala ko kasulod|wala nakasulod|di nakasulod|'
+            r'walang pasok|'
+            r'walay klase|walay class|way klase|way class)\b',
+            'absence attendance missed class',
+        ),
+    )
+    for pattern, alias in concept_aliases:
+        if re.search(pattern, normalized, re.I):
+            aliases.append(alias)
+
     asks_cost = re.search(
         r'\b(pila|pilay|tagpila|magkano|how much)\b', normalized, re.I
     )
     mentions_cost = re.search(
-        r'\b(tuition|fee|bayad|bayran|bayaran|matrikula|matricula|gasto|cost|price)\b',
+        r'\b(tuition|fee|bayad|bayran|bayaran|bayranan|matrikula|matricula|gasto|cost|price)\b',
         normalized,
         re.I,
     )

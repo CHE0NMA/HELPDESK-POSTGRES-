@@ -26,10 +26,12 @@ bp = Blueprint('admin', __name__)
 def check_duplicate_faq(question, threshold=85):
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT id, question FROM faq")
-    existing = cur.fetchall()
-    cur.close()
-    conn.close()
+    try:
+        cur.execute("SELECT id, question FROM faq")
+        existing = cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
     norm_new = normalize_input(question)
     from fuzzywuzzy import fuzz
     return [{'id': fid, 'question': eq, 'similarity': fuzz.token_set_ratio(norm_new, normalize_input(eq))}
@@ -285,20 +287,22 @@ def add_faq():
     question = d.get('question', '').strip()
     if not question:
         return jsonify({'error': 'Question is required'}), 400
-    dups = check_duplicate_faq(question)
-    if dups:
-        return jsonify({'error': f'Duplicate: "{dups[0]["question"]}" ({dups[0]["similarity"]}% similar)'}), 409
-
-    f = request.files.get('image')
-    stored_name = None
-    if f and f.filename:
-        stored_name = f"{uuid.uuid4().hex}_{f.filename}"
-        f.save(os.path.join(os.environ.get('UPLOAD_FOLDER', 'uploads'), stored_name))
-
-    public_uuid = str(uuid.uuid4())
-    conn = get_db()
-    cur = conn.cursor()
+    conn = None
+    cur = None
     try:
+        dups = check_duplicate_faq(question)
+        if dups:
+            return jsonify({'error': f'Duplicate: "{dups[0]["question"]}" ({dups[0]["similarity"]}% similar)'}), 409
+
+        f = request.files.get('image')
+        stored_name = None
+        if f and f.filename:
+            stored_name = f"{uuid.uuid4().hex}_{f.filename}"
+            f.save(os.path.join(os.environ.get('UPLOAD_FOLDER', 'uploads'), stored_name))
+
+        public_uuid = str(uuid.uuid4())
+        conn = get_db()
+        cur = conn.cursor()
         cur.execute("""
             INSERT INTO faq (topic, intent, question, answer, image_path, keywords, related_questions,
                               language, category, priority_score, attachment_url, public_uuid)
@@ -320,12 +324,15 @@ def add_faq():
 
         return jsonify({'success': True, 'message': 'FAQ added successfully', 'uuid': public_uuid})
     except Exception as e:
-        conn.rollback()
-        logger.error(f"Add FAQ error: {e}")
+        if conn is not None:
+            conn.rollback()
+        logger.exception(f"Add FAQ error: {e}")
         return jsonify({'error': str(e)}), 500
     finally:
-        cur.close()
-        conn.close()
+        if cur is not None:
+            cur.close()
+        if conn is not None:
+            conn.close()
 
 
 @bp.route('/update_faq', methods=['POST'])

@@ -31,6 +31,7 @@ from services import language as lang_service
 from services.conversation import get_conversation_context, conversation_contexts
 from services.faq import find_answer, log_unanswered_standalone
 from services.formatting import format_bot_message
+from services.profanity import find_flagged_terms
 from utils.security import check_session_rate_limit
 from utils.text import strip_html
 
@@ -53,6 +54,58 @@ MATH_PATTERNS = [
     r'\d+\s*times\s*\d+', r'what is \d+',
     r'calculate', r'math', r'plus', r'minus', r'times', r'divided by',
 ]
+
+PROFANITY_WARNINGS = {
+    'english': "Please keep your message respectful. I'll still help with your school-related question.",
+    'tagalog': "Pakiusap, gumamit ng magalang na pananalita. Tutulungan pa rin kita sa tanong mo.",
+    'bisaya': "Palihog paggamit ug matinahurong mga pulong. Motabang gihapon ko sa imong pangutana.",
+}
+
+
+def _flag_profanity(question, detected_language, terms):
+    if not terms:
+        return None
+
+    conn = None
+    cur = None
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO bad_feedback "
+            "(question, answer, detected_language, detected_topic) "
+            "VALUES (%s, %s, %s, %s)",
+            (
+                question[:500],
+                f"Automatically flagged language: {', '.join(terms)}",
+                detected_language,
+                "profanity",
+            ),
+        )
+        conn.commit()
+    except Exception:
+        if conn is not None:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        logger.exception("Could not save flagged-language report")
+    finally:
+        if cur is not None:
+            try:
+                cur.close()
+            except Exception:
+                logger.exception("Could not close profanity-report cursor")
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                logger.exception("Could not close profanity-report connection")
+
+    return PROFANITY_WARNINGS.get(
+        detected_language,
+        PROFANITY_WARNINGS['english'],
+    )
 
 
 def _chat_source_ref(session_id, category, faq_id=None):
@@ -229,15 +282,22 @@ def chat():
         ctx_for_lang = get_conversation_context(session_id)
         detected_lang = lang_service.detect_language(user_msg, prior_lang=ctx_for_lang.last_detected_lang)
         ctx_for_lang.last_detected_lang = detected_lang
+        flagged_terms = find_flagged_terms(user_msg)
 
         if any(re.search(p, user_msg.lower()) for p in MATH_PATTERNS):
             reply = "I can only answer PAC-related questions."
+            warning = _flag_profanity(user_msg, detected_lang, flagged_terms)
+            if warning:
+                reply = f"{warning}\n\n{reply}"
             _log_chat(session_id, user_msg, reply, 'Math', detected_lang)
             return jsonify({'reply': f'<div class="text">{reply}</div>', 'category': 'Math',
                              'chat_uuid': session.get('current_chat_uuid'), 'new_chat': started_new_chat})
 
         if GREETING_RX.search(user_msg) or user_msg.lower().strip() in ['hi', 'hello', 'hey', 'kamusta', 'kumusta', 'musta']:
             reply = lang_service.get_greeting(detected_lang)
+            warning = _flag_profanity(user_msg, detected_lang, flagged_terms)
+            if warning:
+                reply = f"{warning}\n\n{reply}"
             _log_chat(session_id, user_msg, reply, 'Greeting', detected_lang)
             get_conversation_context(session_id).update(user_msg=user_msg, bot_response=reply)
             return jsonify({'reply': f'<div class="text">{reply}</div>', 'category': 'Greeting',
@@ -255,6 +315,9 @@ def chat():
             answer, topic, faq_id, category = result, 'Unknown', None, None
         if topic == 'Disambiguation' and not category:
             category = topic
+        warning = _flag_profanity(user_msg, detected_lang, flagged_terms)
+        if warning:
+            answer = f"{warning}\n\n{answer or ''}"
 
         disambiguation_options = []
         if category == 'Disambiguation':

@@ -407,18 +407,18 @@ textarea.form-control { resize:vertical; min-height:80px; }
           <input type="hidden" name="faq_uuid" id="faq_uuid">
           <input type="hidden" name="faq_id" id="faq_id">
           <div class="row g-2 mb-3">
-            <div class="col-md-4"><label class="form-label">Topic *</label><input name="topic" id="topic" class="form-control" required></div>
-            <div class="col-md-4"><label class="form-label">Intent</label><input name="intent" id="intent" class="form-control"></div>
-            <div class="col-md-4"><label class="form-label">Language</label><input name="language" id="language" class="form-control" value="en"></div>
+            <div class="col-md-4"><label class="form-label">Topic *</label><input name="topic" id="topic" class="form-control" placeholder="e.g., Admissions" required></div>
+            <div class="col-md-4"><label class="form-label">Intent</label><input name="intent" id="intent" class="form-control" placeholder="e.g., enrollment"></div>
+            <div class="col-md-4"><label class="form-label">Language</label><input name="language" id="language" class="form-control" value="en" placeholder="e.g., en"></div>
           </div>
-          <div class="mb-2"><label class="form-label">Question *</label><textarea name="question" id="question" class="form-control" required rows="2"></textarea></div>
-          <div class="mb-2"><label class="form-label">Answer *</label><textarea name="answer" id="answer" class="form-control" required rows="4"></textarea></div>
+          <div class="mb-2"><label class="form-label">Question *</label><textarea name="question" id="question" class="form-control" placeholder="e.g., How do I apply for admission?" required rows="2"></textarea></div>
+          <div class="mb-2"><label class="form-label">Answer *</label><textarea name="answer" id="answer" class="form-control" placeholder="Enter the approved answer for this question." required rows="4"></textarea></div>
           <div class="row g-2 mt-2">
-            <div class="col-md-6"><label class="form-label">Keywords</label><input name="keywords" id="keywords" class="form-control"></div>
-            <div class="col-md-6"><label class="form-label">Related Questions</label><input name="related_questions" id="related_questions" class="form-control"></div>
-            <div class="col-md-4"><label class="form-label">Priority Score</label><input type="number" name="priority_score" id="priority_score" class="form-control" value="0" min="0" max="100"></div>
-            <div class="col-md-4"><label class="form-label">Image</label><input type="file" name="image" id="image" class="form-control" accept="image/*"></div>
-            <div class="col-md-4"><label class="form-label">Attachment URL</label><input name="attachment_url" id="attachment_url" class="form-control"></div>
+            <div class="col-md-6"><label class="form-label">Keywords</label><input name="keywords" id="keywords" class="form-control" placeholder="e.g., admission, requirements, application"></div>
+            <div class="col-md-6"><label class="form-label">Related Questions</label><input name="related_questions" id="related_questions" class="form-control" placeholder="Separate related questions with commas"></div>
+            <div class="col-md-4"><label class="form-label">Priority Score</label><input type="number" name="priority_score" id="priority_score" class="form-control" value="0" placeholder="0" min="0" max="100"></div>
+            <div class="col-md-4"><label class="form-label">Image</label><input type="file" name="image" id="image" class="form-control" accept="image/*"><small class="form-text">Linked only to this FAQ; shown for a strong match when a student asks to see an image.</small></div>
+            <div class="col-md-4"><label class="form-label">Attachment URL</label><input name="attachment_url" id="attachment_url" class="form-control" placeholder="https://example.com/document.pdf"></div>
           </div>
         </div>
         <div class="modal-footer">

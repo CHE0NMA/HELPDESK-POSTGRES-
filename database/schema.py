@@ -218,6 +218,7 @@ def ensure_core_tables():
                 embedding JSONB
             )
         """)
+        _ensure_faq_editor_columns(cur)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_faq_topic ON faq(topic)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_faq_priority_score ON faq(priority_score)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_faq_source ON faq(source)")
@@ -978,6 +979,24 @@ def migrate_add_uuid_to_faq():
             conn.close()
         except Exception:
             pass
+
+def _ensure_faq_editor_columns(cur):
+    """Add editor fields to an existing FAQ table before its indexes are built."""
+    for column_name, column_definition in (
+        ("intent", "VARCHAR(100) DEFAULT ''"),
+        ("image_path", "VARCHAR(255)"),
+        ("keywords", "TEXT"),
+        ("related_questions", "TEXT"),
+        ("language", "VARCHAR(20) DEFAULT 'en'"),
+        ("category", "VARCHAR(100)"),
+        ("priority_score", "INTEGER DEFAULT 0"),
+        ("attachment_url", "VARCHAR(255)"),
+    ):
+        cur.execute(
+            f"ALTER TABLE faq ADD COLUMN IF NOT EXISTS {column_name} "
+            f"{column_definition}"
+        )
+
 
 def ensure_faq_embedding_column():
     """Adds faq.embedding (JSONB) if it's not already there."""

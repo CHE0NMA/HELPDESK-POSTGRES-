@@ -191,6 +191,66 @@ class BisayaLanguageTests(unittest.TestCase):
         self.assertIn("from", year_range)
         self.assertIn("until", year_range)
 
+    def test_expanded_tagalog_and_bisaya_school_vocabulary(self):
+        examples = (
+            (
+                "unsaon pagbayad sa matrikula?",
+                "bisaya",
+                ("payment fee tuition cost", "tuition"),
+            ),
+            (
+                "kinsa ang in charge sa enrollment?",
+                "bisaya",
+                ("who person in charge contact", "enrollment admission registration"),
+            ),
+            (
+                "saan po magbabayad ng matrikula?",
+                "tagalog",
+                ("where location office", "payment fee tuition cost"),
+            ),
+            (
+                "ano ang mga papeles para makapag-enroll?",
+                "tagalog",
+                ("requirements documents needed", "enrollment admission registration"),
+            ),
+            (
+                "wala nakaeskwela kay walay klase",
+                "bisaya",
+                ("attend school", "absence attendance missed class"),
+            ),
+        )
+
+        for question, expected_language, expected_terms in examples:
+            with self.subTest(question=question):
+                self.assertIn(
+                    expected_language,
+                    _heuristic_language(question)[0],
+                )
+                expanded = expand_query(question).lower()
+                for term in expected_terms:
+                    self.assertIn(term, expanded)
+
+    def test_translated_payment_query_matches_english_faq(self):
+        faq_row = (
+            "Tuition payments are made at the Finance Office.",
+            "Where can I pay the tuition fee?",
+            31, "Finance", "tuition_payment", "tuition, payment, fee",
+            None, 0, None, None,
+        )
+
+        with patch.object(faq, "llm_expand_faq_query", return_value=[]):
+            candidates = faq._get_faq_candidates(
+                "asa ko magbayad sa matrikula?",
+                "bisaya",
+                [faq_row],
+            )
+
+        self.assertEqual(candidates[0]["faq"], faq_row)
+        self.assertGreaterEqual(
+            candidates[0]["combined"],
+            faq.engine.FUZZY_MIN_SCORE,
+        )
+
 
 class ExactSourceReplyTests(unittest.TestCase):
     def test_numbered_disambiguation_selection_resolves_click_choice(self):
