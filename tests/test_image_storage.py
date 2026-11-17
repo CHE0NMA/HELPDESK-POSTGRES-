@@ -146,7 +146,32 @@ class ImageStorageTests(unittest.TestCase):
                 ):
             with self.assertRaisesRegex(
                 ImageStorageError,
-                "Cloudinary could not store the image",
+                "Could not connect to Cloudinary \\(Timeout\\)",
+            ):
+                store_faq_image(upload, self.upload_dir.name)
+
+    def test_online_upload_exposes_cloudinary_rejection_reason(self):
+        upload = FileStorage(
+            stream=io.BytesIO(b"cloud-image"),
+            filename="Admissions.png",
+            content_type="image/png",
+        )
+        response = Mock()
+        response.status_code = 401
+        response.json.return_value = {
+            "error": {"message": "Invalid Signature abc-private-secret-value"},
+        }
+        response.raise_for_status.side_effect = requests.HTTPError(response=response)
+        with patch("services.image_storage.IS_ONLINE", True), \
+                patch.dict(os.environ, {
+                    "CLOUDINARY_CLOUD_NAME": "demo",
+                    "CLOUDINARY_API_KEY": "public-key",
+                    "CLOUDINARY_API_SECRET": "private-secret",
+                }), \
+                patch("services.image_storage.requests.post", return_value=response):
+            with self.assertRaisesRegex(
+                ImageStorageError,
+                r"Cloudinary rejected the upload \(HTTP 401\): Invalid Signature abc-\[redacted\]-value",
             ):
                 store_faq_image(upload, self.upload_dir.name)
 

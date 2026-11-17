@@ -1,5 +1,6 @@
 import hashlib
 import os
+import re
 import time
 import uuid
 from typing import Optional
@@ -75,13 +76,34 @@ def _cloudinary_upload(upload, filename: str) -> str:
             },
             timeout=(5, 30),
         )
-        response.raise_for_status()
-        payload = response.json()
     except requests.RequestException as exc:
         raise ImageStorageError(
-            "Cloudinary could not store the image. Check the Cloudinary "
-            "credentials and try again."
+            f"Could not connect to Cloudinary ({type(exc).__name__}). "
+            "Check the deployment's network access and try again."
         ) from exc
+
+    try:
+        response.raise_for_status()
+    except requests.HTTPError as exc:
+        try:
+            response_body = response.json()
+        except ValueError:
+            response_body = {}
+        error = response_body.get("error", {}) if isinstance(response_body, dict) else {}
+        message = error.get("message", "") if isinstance(error, dict) else ""
+        if not isinstance(message, str):
+            message = ""
+        message = re.sub(r"[\r\n\t]+", " ", message).strip()[:300]
+        for credential in (api_secret, api_key):
+            if credential:
+                message = message.replace(credential, "[redacted]")
+        detail = f": {message}" if message else ""
+        raise ImageStorageError(
+            f"Cloudinary rejected the upload (HTTP {response.status_code}){detail}"
+        ) from exc
+
+    try:
+        payload = response.json()
     except ValueError as exc:
         raise ImageStorageError(
             "Cloudinary returned an invalid response while storing the image."
