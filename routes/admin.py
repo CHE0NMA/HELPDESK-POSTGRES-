@@ -8,11 +8,11 @@ from services.tz import ph_now
 from services.handbook_ingest import parse_pasted_faqs, mass_insert_faqs
 from flask import Blueprint, abort, current_app, jsonify, redirect, render_template, request, session, make_response
 from werkzeug.security import check_password_hash, generate_password_hash
-from werkzeug.utils import secure_filename
 from threading import Thread
 from ai_providers import faq_cache
 from database import get_db
 from extensions import csrf
+from services.image_storage import store_faq_image
 from services.language import invalidate_response_tables
 from utils.security import (admin_required, attempts_left, clear_attempts, client_ip,
                              is_locked_out, record_failed_attempt)
@@ -40,21 +40,13 @@ def check_duplicate_faq(question, threshold=85):
 
 
 def _save_faq_image(upload):
-    if not upload or not upload.filename:
-        return None
-
-    safe_filename = secure_filename(upload.filename)
-    if not safe_filename:
-        raise ValueError("The uploaded image must have a valid filename.")
-
-    upload_folder = current_app.config.get(
-        'UPLOAD_FOLDER',
-        os.path.join(current_app.root_path, 'uploads'),
+    return store_faq_image(
+        upload,
+        current_app.config.get(
+            'UPLOAD_FOLDER',
+            os.path.join(current_app.root_path, 'uploads'),
+        ),
     )
-    os.makedirs(upload_folder, exist_ok=True)
-    stored_name = f"{uuid.uuid4().hex}_{safe_filename}"
-    upload.save(os.path.join(upload_folder, stored_name))
-    return stored_name
 
 
 @bp.route('/admin', methods=['GET', 'POST'])
@@ -324,7 +316,7 @@ def add_faq():
                               language, category, priority_score, attachment_url, public_uuid)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (d.get('topic', 'General'), d.get('intent', ''), question, d.get('answer', ''),
-              f"uploads/{stored_name}" if stored_name else None, d.get('keywords', ''),
+              stored_name, d.get('keywords', ''),
               d.get('related_questions', ''), d.get('language', 'en'), d.get('category', 'General'),
               int(d.get('priority_score', 0)), d.get('attachment_url'), public_uuid))
         conn.commit()
@@ -374,7 +366,7 @@ def update_faq():
                              priority_score=%s, attachment_url=%s
                 WHERE public_uuid=%s
             """, (d.get('topic', 'General'), d.get('intent', ''), d.get('question', ''), d.get('answer', ''),
-                  f"uploads/{stored_name}", d.get('keywords', ''), d.get('related_questions', ''),
+                  stored_name, d.get('keywords', ''), d.get('related_questions', ''),
                   d.get('language', 'en'), d.get('category', 'General'), int(d.get('priority_score', 0)),
                   d.get('attachment_url'), faq_uuid))
         else:

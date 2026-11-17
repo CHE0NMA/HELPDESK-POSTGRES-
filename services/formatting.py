@@ -4,12 +4,28 @@ Used by both the live /chat POST endpoint and the /chat/<uuid> page-load
 path, so a message renders identically whether it just arrived or is
 being restored from chat_history after a refresh.
 """
+import html
 import re
+from urllib.parse import quote, urlsplit
 
-_IMG_TAG = (
-    r'<img src="/\1" style="max-width:200px;border-radius:8px;'
-    r'margin:10px 0;display:block;" loading="lazy">'
-)
+
+def _image_tag(match: re.Match) -> str:
+    image_path = match.group(1).strip()
+    parsed = urlsplit(image_path)
+    if parsed.scheme or parsed.netloc:
+        if parsed.scheme != "https" or parsed.hostname != "res.cloudinary.com":
+            return ""
+        src = image_path
+    else:
+        local_path = image_path.lstrip("/")
+        if not local_path.startswith("uploads/") or ".." in local_path.split("/"):
+            return ""
+        src = f"/{quote(local_path, safe='/')}"
+    return (
+        f'<img src="{html.escape(src, quote=True)}" '
+        'style="max-width:200px;border-radius:8px;margin:10px 0;display:block;" '
+        'loading="lazy">'
+    )
 
 
 def format_bot_message(answer: str, show_images: bool = True) -> str:
@@ -21,7 +37,7 @@ def format_bot_message(answer: str, show_images: bool = True) -> str:
       - blank lines -> paragraph spacing
       - single newlines -> <br> (lists, steps, lyrics stay readable)
       - lines starting with - or • -> bullet marker
-      - [Image: path] -> <img>
+      - [Image: uploads/path or Cloudinary URL] -> <img>
     """
     if not answer:
         return ''
@@ -40,7 +56,7 @@ def format_bot_message(answer: str, show_images: bool = True) -> str:
     formatted = '<br><br>'.join(blocks)
 
     if show_images:
-        formatted = re.sub(r'\[Image: (.*?)\]', _IMG_TAG, formatted)
+        formatted = re.sub(r'\[Image: (.*?)\]', _image_tag, formatted)
     else:
         formatted = re.sub(r'\[Image: .*?\]', '', formatted)
 

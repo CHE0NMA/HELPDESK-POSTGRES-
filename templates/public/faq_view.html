@@ -55,7 +55,7 @@
         <div class="answer">{{ faq.answer|safe }}</div>
         {% if faq.image_path %}
             <div style="margin-top: 20px;">
-                <img src="/{{ faq.image_path }}" alt="FAQ Image" style="max-width: 100%; border-radius: 8px;">
+                <img src="{{ faq.image_path if faq.image_path.startswith('https://') else '/' + faq.image_path.lstrip('/') }}" alt="FAQ Image" style="max-width: 100%; border-radius: 8px;">
             </div>
         {% endif %}
         <div class="meta-info">

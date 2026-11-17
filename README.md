@@ -60,6 +60,8 @@ DB_SSLMODE=disable
 
 Additional keys can be configured as `GROQ_API_KEY_2` through `GROQ_API_KEY_8` and `GEMINI_API_KEY_2` through `GEMINI_API_KEY_8`. Model IDs can be overridden with `GROQ_MODEL`, `FAST_GROQ_MODEL`, and `GEMINI_MODEL`.
 
+FAQ image uploads in hosted/read-only deployments use Cloudinary. Configure either the Cloudinary-provided `CLOUDINARY_URL` in the format `cloudinary://API_KEY:API_SECRET@CLOUD_NAME`, or set `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` separately. A value of just `cloudinary` is not a valid URL. Local development continues to save images under `UPLOAD_FOLDER`.
+
 For hosted Postgres, set `DATABASE_URL` (or `POSTGRES_URL`) and `DB_TARGET=neon`, or run in a supported online environment where the app automatically prefers the URL. Hosted connections use SSL.
 
 Start the app after Postgres is reachable:
