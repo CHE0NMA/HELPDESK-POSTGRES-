@@ -6,8 +6,9 @@ import json
 from datetime import datetime, timezone
 from services.tz import ph_now  
 from services.handbook_ingest import parse_pasted_faqs, mass_insert_faqs
-from flask import Blueprint, abort, jsonify, redirect, render_template, request, session, make_response
+from flask import Blueprint, abort, current_app, jsonify, redirect, render_template, request, session, make_response
 from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename
 from threading import Thread
 from ai_providers import faq_cache
 from database import get_db
@@ -36,6 +37,25 @@ def check_duplicate_faq(question, threshold=85):
     from fuzzywuzzy import fuzz
     return [{'id': fid, 'question': eq, 'similarity': fuzz.token_set_ratio(norm_new, normalize_input(eq))}
             for fid, eq in existing if fuzz.token_set_ratio(norm_new, normalize_input(eq)) >= threshold]
+
+
+def _save_faq_image(upload):
+    if not upload or not upload.filename:
+        return None
+
+    safe_filename = secure_filename(upload.filename)
+    if not safe_filename:
+        raise ValueError("The uploaded image must have a valid filename.")
+
+    upload_folder = current_app.config.get(
+        'UPLOAD_FOLDER',
+        os.path.join(current_app.root_path, 'uploads'),
+    )
+    os.makedirs(upload_folder, exist_ok=True)
+    stored_name = f"{uuid.uuid4().hex}_{safe_filename}"
+    upload.save(os.path.join(upload_folder, stored_name))
+    return stored_name
+
 
 @bp.route('/admin', methods=['GET', 'POST'])
 def admin():
@@ -294,11 +314,7 @@ def add_faq():
         if dups:
             return jsonify({'error': f'Duplicate: "{dups[0]["question"]}" ({dups[0]["similarity"]}% similar)'}), 409
 
-        f = request.files.get('image')
-        stored_name = None
-        if f and f.filename:
-            stored_name = f"{uuid.uuid4().hex}_{f.filename}"
-            f.save(os.path.join(os.environ.get('UPLOAD_FOLDER', 'uploads'), stored_name))
+        stored_name = _save_faq_image(request.files.get('image'))
 
         public_uuid = str(uuid.uuid4())
         conn = get_db()
@@ -345,15 +361,12 @@ def update_faq():
     if not faq_uuid:
         return jsonify({'error': 'FAQ UUID missing'}), 400
 
-    f = request.files.get('image')
-    stored_name = None
-    if f and f.filename:
-        stored_name = f"{uuid.uuid4().hex}_{f.filename}"
-        f.save(os.path.join(os.environ.get('UPLOAD_FOLDER', 'uploads'), stored_name))
-
-    conn = get_db()
-    cur = conn.cursor()
+    conn = None
+    cur = None
     try:
+        stored_name = _save_faq_image(request.files.get('image'))
+        conn = get_db()
+        cur = conn.cursor()
         if stored_name:
             cur.execute("""
                 UPDATE faq SET topic=%s, intent=%s, question=%s, answer=%s, image_path=%s,
@@ -386,12 +399,15 @@ def update_faq():
 
         return jsonify({'success': True, 'message': 'FAQ updated successfully'})
     except Exception as e:
-        conn.rollback()
-        logger.error(f"Update FAQ error: {e}")
+        if conn is not None:
+            conn.rollback()
+        logger.exception(f"Update FAQ error: {e}")
         return jsonify({'error': str(e)}), 500
     finally:
-        cur.close()
-        conn.close()
+        if cur is not None:
+            cur.close()
+        if conn is not None:
+            conn.close()
 
 
 @bp.route('/delete_faq/<string:public_uuid>', methods=['GET', 'POST'])
