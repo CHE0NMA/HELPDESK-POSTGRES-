@@ -60,6 +60,8 @@ class ConversationContext:
         self.conversation_history: List[dict] = []
         self.last_faq_answer = None
         self.last_faq_question = None
+        self.last_faq_image = None
+        self.last_faq_image_question = None
         self.last_answer = None
         self.last_schedule_query = None
         self.last_detected_lang = None
@@ -70,7 +72,8 @@ class ConversationContext:
 
     def update(self, topic=None, intent=None, user_msg=None, bot_response=None,
                faq_answer=None, faq_question=None, detected_lang=None,
-               handbook_sections=None, clear_schedule_context=False):
+               handbook_sections=None, clear_schedule_context=False,
+               faq_image=None):
         if topic:
             self.last_topic = topic
         if intent:
@@ -79,6 +82,12 @@ class ConversationContext:
             self.last_faq_answer = faq_answer
         if faq_question:
             self.last_faq_question = faq_question
+        if faq_answer is not None or faq_question is not None:
+            self.last_faq_image = faq_image
+            self.last_faq_image_question = faq_question
+        elif user_msg and bot_response:
+            self.last_faq_image = None
+            self.last_faq_image_question = None
         if detected_lang:
             self.last_detected_lang = detected_lang
         if handbook_sections:
@@ -229,6 +238,8 @@ def _ctx_to_dict(ctx: 'ConversationContext') -> dict:
         'conversation_history': ctx.conversation_history,
         'last_faq_answer': ctx.last_faq_answer,
         'last_faq_question': ctx.last_faq_question,
+        'last_faq_image': ctx.last_faq_image,
+        'last_faq_image_question': ctx.last_faq_image_question,
         'last_answer': ctx.last_answer,
         'last_schedule_query': ctx.last_schedule_query,
         'last_detected_lang': ctx.last_detected_lang,
@@ -243,6 +254,8 @@ def _apply_dict_to_ctx(ctx: 'ConversationContext', data: dict) -> None:
     ctx.conversation_history = data.get('conversation_history') or []
     ctx.last_faq_answer = data.get('last_faq_answer')
     ctx.last_faq_question = data.get('last_faq_question')
+    ctx.last_faq_image = data.get('last_faq_image')
+    ctx.last_faq_image_question = data.get('last_faq_image_question')
     ctx.last_answer = data.get('last_answer')
     ctx.last_schedule_query = data.get('last_schedule_query')
     ctx.last_detected_lang = data.get('last_detected_lang')

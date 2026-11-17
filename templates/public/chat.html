@@ -784,7 +784,7 @@
     <div class="header-left">
       <div class="menu-btn" onclick="toggleSidebar()" aria-label="Open menu"><i class="bi bi-list"></i></div>
       <a href="/" class="logo-wrap">
-        <img src="/static/uploads/Screenshot%202026-02-05%20011106.png" class="logo-img" alt="PAC"
+        <img src="{{ url_for('static', filename='logo.png') }}" class="logo-img" alt="PAC"
              onerror="this.style.display='none';document.getElementById('logoOrb').style.display='flex'">
         <div class="logo-orb" id="logoOrb" style="display:none"><i class="bi bi-mortarboard-fill"></i></div>
         <span>PAC Help Desk</span>

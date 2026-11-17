@@ -314,11 +314,6 @@ def _lookup_faq_answer(question: str, detected_lang: str) -> Optional[Tuple[str,
     if best['combined'] < engine.FUZZY_MIN_SCORE:
         if best['fuzzy'] >= 0.60:
             row = best['faq']
-            if detected_lang != 'english':
-                return (
-                    lang_service.get_translation_unavailable_response(detected_lang),
-                    row[3], row[4],
-                )
             return (row[0] or '', row[3], row[4])
         return None
     if circuit_breaker.is_open():
@@ -450,7 +445,8 @@ def _try_resolve_pending_disambiguation(question: str, detected_lang: str, ctx):
         img = row[8] if len(row) > 8 else None
         answer_text = answer + (f"\n\n[Image: {img}]" if img else "")
         ctx.update(topic=topic, intent=intent, user_msg=question, bot_response=answer_text,
-                    faq_answer=answer_text, faq_question=original_q, clear_schedule_context=True)
+                    faq_answer=answer_text, faq_question=original_q,
+                    faq_image=img, clear_schedule_context=True)
         return (answer_text, topic, row[2] if len(row) > 2 else None, intent, lang)
 
     if disamb['type'] == 'date':
@@ -863,6 +859,7 @@ def find_answer(question: str, return_topic: bool = False,
     )
     if not ctx.last_disambiguation and not is_translation_followup:
         exact_answer = None
+        exact_image = None
         try:
             from services.corrections import get_exact_correction
             exact_correction = get_exact_correction(get_db, question)
@@ -878,6 +875,7 @@ def find_answer(question: str, return_topic: bool = False,
                 if exact_faq:
                     answer, _, faq_id, topic, intent = exact_faq[:5]
                     image = exact_faq[8] if len(exact_faq) > 8 else None
+                    exact_image = image
                     if image:
                         answer = f"{answer}\n\n[Image: {image}]"
                     exact_answer = (answer, topic, faq_id, intent)
@@ -893,6 +891,7 @@ def find_answer(question: str, return_topic: bool = False,
                 bot_response=answer,
                 faq_answer=answer,
                 faq_question=question,
+                faq_image=exact_image,
                 detected_lang=ctx.last_detected_lang or 'english',
                 clear_schedule_context=True,
             )
@@ -1458,6 +1457,7 @@ def find_answer(question: str, return_topic: bool = False,
                     bot_response=ai_ans,
                     faq_answer=answer,
                     faq_question=question_text,
+                    faq_image=img,
                     clear_schedule_context=True,
                 )
                 result_answer = ai_ans + (f"\n\n[Image: {img}]" if img else "")
@@ -1473,13 +1473,12 @@ def find_answer(question: str, return_topic: bool = False,
             answer, question_text, fid, topic, intent, _, _, _ = row[:8]
             img = _image_for_faq_candidate(best, candidates)
             answer_text = (answer or '') + (f"\n\n[Image: {img}]" if img else "")
-            if detected_lang != 'english':
-                answer_text = lang_service.get_translation_unavailable_response(detected_lang)
             ctx.update(
                 topic=topic,
                 intent=intent,
                 faq_answer=answer_text,
                 faq_question=question_text,
+                faq_image=img,
                 user_msg=question,
                 bot_response=answer_text,
                 clear_schedule_context=True,

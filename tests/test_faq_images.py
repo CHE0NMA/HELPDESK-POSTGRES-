@@ -1,9 +1,9 @@
 import unittest
 from unittest.mock import patch
 
-from routes.chat import _should_show_image
+from routes.chat import _is_image_followup, _should_show_image
 from services import faq
-from services.conversation import ConversationContext
+from services.conversation import ConversationContext, _apply_dict_to_ctx, _ctx_to_dict
 
 
 class FaqImageAssociationTests(unittest.TestCase):
@@ -101,6 +101,35 @@ class FaqImageAssociationTests(unittest.TestCase):
             "Can you show me the admissions office?",
             answer,
         ))
+
+    def test_chat_shows_contextual_faq_image_on_a_followup_request(self):
+        answer = "[Image: https://res.cloudinary.com/demo/image/upload/president.jpg]"
+
+        self.assertTrue(_is_image_followup("show me an image"))
+        self.assertTrue(_is_image_followup("Can you show me a picture, please?"))
+        self.assertTrue(_should_show_image("show me an image", answer, 3))
+        self.assertFalse(_is_image_followup("who is the college president?"))
+        self.assertFalse(_is_image_followup("show me an image of the campus"))
+
+    def test_contextual_faq_image_survives_reload_but_not_another_answer(self):
+        context = ConversationContext("faq-image-context")
+        context.update(
+            faq_answer="The president is Dr. Macias.",
+            faq_question="Who is the college president?",
+            faq_image="https://res.cloudinary.com/demo/image/upload/president.jpg",
+        )
+        restored = ConversationContext("faq-image-context")
+        _apply_dict_to_ctx(restored, _ctx_to_dict(context))
+
+        self.assertEqual(restored.last_faq_image_question, "Who is the college president?")
+        self.assertEqual(
+            restored.last_faq_image,
+            "https://res.cloudinary.com/demo/image/upload/president.jpg",
+        )
+
+        restored.update(user_msg="Thanks", bot_response="You're welcome.")
+        self.assertIsNone(restored.last_faq_image_question)
+        self.assertIsNone(restored.last_faq_image)
 
 
 if __name__ == "__main__":

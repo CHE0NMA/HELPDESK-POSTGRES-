@@ -975,6 +975,10 @@ def expand_query(text: str) -> str:
             'who person in charge contact',
         ),
         (
+            r'\b(president|presidente)\b',
+            'college president school president head of college',
+        ),
+        (
             r'\b(asa|diin|saan|san|nasaan|asa dapit|saan banda)\b',
             'where location office',
         ),

@@ -197,13 +197,27 @@ def _feedback_source(session_id: str, question: str, answer: str):
 
 
 def _should_show_image(question: str, answer: str, conversation_turn: int = 1) -> bool:
-    if conversation_turn > 1 or len(answer) < 100:
-        return False
     q = question.lower()
     visual_keywords = ['show', 'see', 'picture', 'image', 'photo', 'drawing', 'diagram',
                         'chart', 'graph', 'visual', 'look', 'view', 'example of', 'sample of',
-                        'want to see', 'wanna see']
-    return any(kw in q for kw in visual_keywords)
+                        'want to see', 'wanna see', 'pakita', 'ipakita', 'larawan', 'hulagway']
+    if not any(kw in q for kw in visual_keywords):
+        return False
+    if '[Image:' in answer:
+        return True
+    return conversation_turn <= 1 and len(answer) >= 100
+
+
+def _is_image_followup(question: str) -> bool:
+    q = re.sub(r'[?.!,]+', '', question.lower()).strip()
+    return bool(re.fullmatch(
+        r'(?:(?:can|could|would) you )?(?:please )?'
+        r'(?:show|see|send|display|pakita|ipakita|ihatag) '
+        r'(?:me )?(?:(?:an?|the|ang|og) )?'
+        r'(?:image|picture|photo|photograph|pic|larawan|hulagway|litrato)'
+        r'(?: please)?',
+        q,
+    ))
 
 
 def _touch_activity():
@@ -304,15 +318,29 @@ def chat():
                              'chat_uuid': session.get('current_chat_uuid'), 'new_chat': started_new_chat})
 
 
-        _t0 = time.perf_counter()
-        result = find_answer(user_msg, return_topic=True, session_id=session_id)
-        model_metrics.record_answer_timing((time.perf_counter() - _t0) * 1000)
-        if isinstance(result, tuple):
-            answer, topic = result[0], (result[1] if len(result) > 1 else 'Unknown')
-            faq_id = result[2] if len(result) > 2 else None
-            category = result[3] if len(result) > 3 else None
+        image_faq_question = ctx_for_lang.last_faq_image_question
+        if _is_image_followup(user_msg) and image_faq_question:
+            if ctx_for_lang.last_faq_image:
+                answer = (
+                    f"Here is the image for {image_faq_question}.\n\n"
+                    f"[Image: {ctx_for_lang.last_faq_image}]"
+                )
+            else:
+                answer = (
+                    f"I don't have an image attached to the FAQ about "
+                    f"{image_faq_question}."
+                )
+            topic, faq_id, category = 'Follow-up', None, 'faq_image_followup'
         else:
-            answer, topic, faq_id, category = result, 'Unknown', None, None
+            _t0 = time.perf_counter()
+            result = find_answer(user_msg, return_topic=True, session_id=session_id)
+            model_metrics.record_answer_timing((time.perf_counter() - _t0) * 1000)
+            if isinstance(result, tuple):
+                answer, topic = result[0], (result[1] if len(result) > 1 else 'Unknown')
+                faq_id = result[2] if len(result) > 2 else None
+                category = result[3] if len(result) > 3 else None
+            else:
+                answer, topic, faq_id, category = result, 'Unknown', None, None
         if topic == 'Disambiguation' and not category:
             category = topic
         warning = _flag_profanity(user_msg, detected_lang, flagged_terms)

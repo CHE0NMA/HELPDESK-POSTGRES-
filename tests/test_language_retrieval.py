@@ -191,6 +191,28 @@ class BisayaLanguageTests(unittest.TestCase):
         self.assertIn("from", year_range)
         self.assertIn("until", year_range)
 
+    def test_bisaya_president_query_expands_to_college_leadership_terms(self):
+        question = "kinsa and college president"
+
+        self.assertEqual(_heuristic_language(question)[0], "bisaya")
+        expanded = expand_query(question)
+        self.assertIn("who person in charge contact", expanded)
+        self.assertIn("head of college", expanded)
+
+    def test_bisaya_fuzzy_faq_fallback_keeps_the_grounded_answer(self):
+        question = "kinsa and college president"
+        answer = "The College President is Dr. Mariano Joaquin C. Macias Jr."
+        row = (
+            answer, "Who is the college president?", 21, "Administration",
+            "college_president", None, None, 10, None, None,
+        )
+        candidate = {"combined": 0.59, "fuzzy": 0.65, "faq": row}
+        with patch.object(faq, "_get_all_faqs", return_value=[row]), \
+                patch.object(faq, "_get_faq_candidates", return_value=[candidate]):
+            result = faq._lookup_faq_answer(question, "bisaya")
+
+        self.assertEqual(result[0], answer)
+
     def test_expanded_tagalog_and_bisaya_school_vocabulary(self):
         examples = (
             (
@@ -916,7 +938,7 @@ class NonEnglishFallbackTests(unittest.TestCase):
         )
         self.assertNotIn("Tuition varies", response)
 
-    def test_low_confidence_faq_does_not_return_english_source_in_bisaya(self):
+    def test_low_confidence_faq_preserves_grounded_english_source_in_bisaya(self):
         faq_row = (
             "Installment plans are available.",
             "Can I pay tuition by installment?",
@@ -930,7 +952,7 @@ class NonEnglishFallbackTests(unittest.TestCase):
 
         self.assertEqual(
             result[0],
-            language.get_translation_unavailable_response("bisaya"),
+            faq_row[0],
         )
 
     def test_followup_provider_failure_is_localized(self):

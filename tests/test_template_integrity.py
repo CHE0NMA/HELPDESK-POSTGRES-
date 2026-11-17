@@ -63,6 +63,14 @@ class TemplateIntegrityTests(unittest.TestCase):
         )
         self.assertTrue((TEMPLATE_ROOT / "errors" / "error.html").is_file())
 
+    def test_chat_logo_uses_tracked_static_asset(self):
+        logo_path = ROOT / "static" / "logo.png"
+        self.assertTrue(logo_path.is_file())
+        with self.app.test_request_context("/"):
+            html = render_template("public/chat.html")
+        self.assertIn('src="/static/logo.png"', html)
+        self.assertNotIn("/static/uploads/Screenshot", html)
+
     def test_error_page_renders_both_status_codes(self):
         with self.app.test_request_context("/"):
             for status_code, title in (
