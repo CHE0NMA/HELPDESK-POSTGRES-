@@ -29,7 +29,8 @@ HANDBOOK_KEYWORDS = [
     'handbook', 'manual', 'rule', 'rules', 'regulation', 'policy', 'policies',
     'code of conduct', 'behavioral code', 'discipline', 'disciplinary',
     'violation', 'penalty', 'sanction', 'offense', 'offence',
-    'dress code', 'uniform', 'attire', 'appearance', 'jewelry', 'jewellery',
+    'dress code', 'uniform', 'attire', 'appearance', 'sleeveless',
+    'sleeve-less', 'jewelry', 'jewellery',
     'earring', 'earrings',
     'attendance', 'absent', 'absence', 'tardiness', 'tardy',
     'suspension', 'expulsion', 'grounds for', 'prohibited', 'allowed',
@@ -62,6 +63,8 @@ _QUERY_EXPANSIONS = [
      r'unsa (ang )?(dapat )?(suoton|isuot uniform|suot uniform|suot)|'
      r'isuot uniform|suot uniform|suoton|sout)\b',
      'dress attire clothing appearance'),
+    (r'\b(sleeveless|sleeve-less|sleeve less|walay manggas)\b',
+     'dress and appearance sleeveless clothing not allowed'),
     (r'\b(light|minor)\s+offenses?\b', 'first degree offense demerit'),
     (r'\b(medium|moderate)\s+offenses?\b', 'second degree offense demerit'),
     (r'\b(how bad|how serious|what.?s a|what is a|tell me about).{0,25}second[ -]?degree\b',
@@ -270,6 +273,26 @@ def _forced_topic_for(question: str):
     each pattern needing its own spelling/framing variants hand-written in.
     """
     normalized_q = expand_query(question or '')
+    if re.search(
+        r'\b(sleeveless|sleeve-less|sleeve less|walay manggas)\b',
+        normalized_q,
+        re.I,
+    ):
+        return (
+            ['dress and appearance', 'school uniform'],
+            ['sleeveless'],
+        )
+    if re.search(
+        r'\b(unsa|unsay|unsaon).{0,45}\b(isuot|suot|suoton|souton|sul-ob|'
+        r'damit|sinina|bisti)\b|'
+        r'\b(dress code|proper attire|student attire)\b',
+        normalized_q,
+        re.I,
+    ):
+        return (
+            ['dress and appearance', 'school uniform'],
+            ['dress modestly', 'sleeveless', 'simple and appropriate attire'],
+        )
     try:
         from services.topic_aliases import forced_topic_for as _db_forced
         hit = _db_forced(normalized_q)
@@ -338,6 +361,12 @@ def is_handbook_question(question: str) -> bool:
     """
     q = normalize_vernacular_spelling(question.lower())
     if any(kw in q for kw in HANDBOOK_KEYWORDS):
+        return True
+    if re.search(
+        r'\b(sleeveless|sleeve-less|sleeve less|walay manggas)\b|'
+        r'\b(pwede|puwede).{0,35}\b(magsleeveless|mag sleeveless|wear sleeveless)\b',
+        q, re.I,
+    ):
         return True
     if re.search(
         r'\b(unsa|unsay|unsaon).{0,35}\b(suoton|isuot|suot|shorts?|damit|'
@@ -1173,9 +1202,8 @@ def get_relevant_chunks(question: str, candidates: List[Dict]) -> List[Dict]:
         return []
     ai_picked = [c for c in candidates if c.get('_ai_picked')]
     forced_title = [c for c in candidates if c.get('_forced')]
-    if forced_title and ai_picked:
-        merged = forced_title + [c for c in ai_picked if c not in forced_title]
-        return _trim_to_close_contenders(merged, max_n=3)
+    if forced_title:
+        return _trim_to_close_contenders(forced_title, max_n=3)
     if ai_picked:
         return _trim_to_close_contenders(ai_picked, max_n=3)
     if forced_title:

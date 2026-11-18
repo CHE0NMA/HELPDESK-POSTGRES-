@@ -73,6 +73,48 @@ class BisayaLanguageTests(unittest.TestCase):
         self.assertIn("year level", expanded)
         self.assertIn("tuition", normalize_vernacular_spelling("tagpila ang tuision"))
 
+    def test_bisaya_faq_topics_expand_to_their_matching_search_terms(self):
+        examples = (
+            ("pila ang bayranan sa BSCS", "how much tuition fee cost"),
+            (
+                "unsaon pagpa evaluate sa grado",
+                "evaluation of grades request registrar",
+            ),
+            (
+                "unsaon pagpirma sa clearance pinansyal",
+                "financial clearance signing finance office",
+            ),
+            ("unsaon pagkuha sa final passbook", "request final passbook"),
+            (
+                "unsa nga scholarship ang naa sa PAC",
+                "scholarship programs offered financial aid",
+            ),
+            (
+                "unsa ang requirements sa TES subsidy",
+                "tertiary education subsidy|tes requirements application claim",
+            ),
+            (
+                "unsa nga grado ang kinahanglan para sa Latin honors",
+                "grades required qualification academic recognition",
+            ),
+            ("unsaon pagbalhin gikan sa PAC", "transfer student requirements"),
+            (
+                "unsaon pagpalista ug pagkuha og COR",
+                "student enrollment process registration",
+            ),
+            ("unsaon pag request sa TOR", "request transcript of records"),
+            ("unsaon pag apply og diploma", "apply request diploma graduation"),
+        )
+
+        for question, expected_terms in examples:
+            with self.subTest(question=question):
+                expanded = expand_query(question).lower()
+                for expected_term in expected_terms.split("|"):
+                    self.assertIn(expected_term, expanded)
+
+        tes_expanded = expand_query("unsa ang requirements sa TES subsidy").lower()
+        self.assertNotIn("tuition fee", tes_expanded)
+
     def test_earring_questions_are_recognized_as_handbook_questions(self):
         for question in (
             "pwede ba mag sout og earings diri sa school",
@@ -103,6 +145,35 @@ class BisayaLanguageTests(unittest.TestCase):
                     forced = handbook._forced_topic_for(question)
                     self.assertIsNotNone(forced)
                     self.assertIn("dress and appearance", forced[0])
+
+    def test_sleeveless_question_routes_to_specific_handbook_content(self):
+        question = "pwede ba magsleeveless diri sa school"
+
+        self.assertEqual(_heuristic_language(question)[0], "mixed_tb")
+        self.assertTrue(handbook.is_handbook_question(question))
+        self.assertIn("sleeveless clothing", handbook.expand_query_for_retrieval(question))
+        forced = handbook._forced_topic_for(question)
+        self.assertEqual(forced[0], ["dress and appearance", "school uniform"])
+        self.assertEqual(forced[1], ["sleeveless"])
+
+    def test_forced_handbook_section_excludes_unrelated_ai_picked_sections(self):
+        forced_section = {
+            "section_title": "Dress and Appearance",
+            "score": 0.3,
+            "_forced": True,
+        }
+        unrelated_ai_section = {
+            "section_title": "Student's Behavioral Code",
+            "score": 0.95,
+            "_ai_picked": True,
+        }
+
+        relevant = handbook.get_relevant_chunks(
+            "unsa'y dapat souton diri sa school",
+            [unrelated_ai_section, forced_section],
+        )
+
+        self.assertEqual(relevant, [forced_section])
 
     def test_bare_campus_mention_does_not_force_campus_location_content(self):
         stale_campus_alias = {
@@ -199,7 +270,7 @@ class BisayaLanguageTests(unittest.TestCase):
         self.assertIn("who person in charge contact", expanded)
         self.assertIn("head of college", expanded)
 
-    def test_bisaya_fuzzy_faq_fallback_keeps_the_grounded_answer(self):
+    def test_non_english_fuzzy_faq_fallback_does_not_return_english_source(self):
         question = "kinsa and college president"
         answer = "The College President is Dr. Mariano Joaquin C. Macias Jr."
         row = (
@@ -211,7 +282,10 @@ class BisayaLanguageTests(unittest.TestCase):
                 patch.object(faq, "_get_faq_candidates", return_value=[candidate]):
             result = faq._lookup_faq_answer(question, "bisaya")
 
-        self.assertEqual(result[0], answer)
+        self.assertEqual(
+            result[0],
+            language.get_translation_unavailable_response("bisaya"),
+        )
 
     def test_expanded_tagalog_and_bisaya_school_vocabulary(self):
         examples = (
@@ -234,6 +308,62 @@ class BisayaLanguageTests(unittest.TestCase):
                 "ano ang mga papeles para makapag-enroll?",
                 "tagalog",
                 ("requirements documents needed", "enrollment admission registration"),
+            ),
+            (
+                "magkano ang tuition sa BSCS?",
+                "tagalog",
+                ("how much tuition fee cost",),
+            ),
+            (
+                "paano kumuha ng evaluation ng grades?",
+                "tagalog",
+                ("evaluation of grades request registrar academic records",),
+            ),
+            (
+                "paano pumirma sa financial clearance?",
+                "tagalog",
+                ("financial clearance signing finance office",),
+            ),
+            (
+                "paano kumuha ng final passbook?",
+                "tagalog",
+                ("request final passbook finance office",),
+            ),
+            (
+                "anong scholarship programs ang inaalok ng PAC?",
+                "tagalog",
+                ("scholarship programs offered financial aid",),
+            ),
+            (
+                "ano ang requirements para sa TES subsidy?",
+                "tagalog",
+                ("tertiary education subsidy", "requirements documents needed"),
+            ),
+            (
+                "anong grades ang kailangan para sa Latin honors?",
+                "tagalog",
+                ("grades required qualification academic recognition",),
+            ),
+            (
+                "paano lumipat sa PAC?",
+                "tagalog",
+                ("transfer student requirements process",),
+            ),
+            (
+                "paano mag-enroll at kumuha ng COR?",
+                "tagalog",
+                ("student enrollment process registration",
+                 "copy of cor certificate of registration enrollment"),
+            ),
+            (
+                "paano kumuha ng TOR?",
+                "tagalog",
+                ("request transcript of records registrar",),
+            ),
+            (
+                "paano mag-apply ng diploma?",
+                "tagalog",
+                ("apply request diploma graduation registrar",),
             ),
             (
                 "wala nakaeskwela kay walay klase",
@@ -322,6 +452,48 @@ class ExactSourceReplyTests(unittest.TestCase):
         self.assertEqual(ctx.last_answer, answer)
         classify.assert_not_called()
         generate.assert_not_called()
+
+    def test_exact_tagalog_question_gets_a_validated_tagalog_answer(self):
+        question = "Sino ang presidente ng kolehiyo?"
+        source_question = "Who is the College President?"
+        source_answer = "The College President is Dr. Mariano Joaquin C. Macias Jr."
+        translated = (
+            "Ang presidente ng kolehiyo ay si Dr. Mariano Joaquin C. Macias Jr."
+        )
+        faq_row = (
+            source_answer, source_question, 4, "Personnel",
+            "college_president", None, None, 10, None, None,
+        )
+        context = ConversationContext("exact-tagalog-faq-test")
+
+        with patch.object(faq, "get_conversation_context", return_value=context), \
+             patch("services.corrections.get_exact_correction", return_value=None), \
+             patch.object(faq, "_find_exact_faq", return_value=faq_row), \
+             patch.object(faq.lang_service, "detect_language", return_value="tagalog"), \
+             patch.object(
+                 faq, "_source_answer_in_language", return_value=translated
+             ) as localize:
+            result = faq.find_answer(question, return_topic=True)
+
+        self.assertEqual(result[0], translated)
+        self.assertEqual(result[4], "tagalog")
+        localize.assert_called_once_with(
+            question, source_question, source_answer, "tagalog", translate=True
+        )
+
+    def test_tagalog_translation_failure_returns_tagalog_notice_not_source(self):
+        response = faq._source_answer_in_language(
+            "Sino ang presidente ng kolehiyo?",
+            "Who is the College President?",
+            "The College President is Dr. Mariano Joaquin C. Macias Jr.",
+            "tagalog",
+        )
+
+        self.assertEqual(
+            response,
+            language.get_translation_unavailable_response("tagalog"),
+        )
+        self.assertTrue(language.verify_output_language(response, "tagalog"))
 
     def test_near_faq_question_is_not_an_exact_match(self):
         row = (
@@ -908,7 +1080,7 @@ class FaqRelevanceTests(unittest.TestCase):
 
 
 class NonEnglishFallbackTests(unittest.TestCase):
-    def test_bisaya_rephrase_failure_preserves_canonical_source_answer(self):
+    def test_bisaya_rephrase_failure_returns_bisaya_instead_of_english_source(self):
         english_source = "Tuition varies by program and year level."
         with patch.object(nlg.circuit_breaker, "is_open", return_value=True):
             response = nlg.speak_naturally(
@@ -917,9 +1089,12 @@ class NonEnglishFallbackTests(unittest.TestCase):
                 detected_lang="bisaya",
             )
 
-        self.assertEqual(response, english_source)
+        self.assertEqual(
+            response,
+            language.get_translation_unavailable_response("bisaya"),
+        )
 
-    def test_tagalog_rephrase_failure_preserves_canonical_source_answer(self):
+    def test_tagalog_rephrase_failure_returns_tagalog_instead_of_english_source(self):
         english_source = "Tuition varies by program and year level."
         with patch.object(nlg.circuit_breaker, "is_open", return_value=True):
             response = nlg.speak_naturally(
@@ -928,9 +1103,12 @@ class NonEnglishFallbackTests(unittest.TestCase):
                 detected_lang="tagalog",
             )
 
-        self.assertEqual(response, english_source)
+        self.assertEqual(
+            response,
+            language.get_translation_unavailable_response("tagalog"),
+        )
 
-    def test_low_confidence_faq_preserves_grounded_english_source_in_bisaya(self):
+    def test_low_confidence_faq_does_not_return_english_source_in_bisaya(self):
         faq_row = (
             "Installment plans are available.",
             "Can I pay tuition by installment?",
@@ -944,10 +1122,10 @@ class NonEnglishFallbackTests(unittest.TestCase):
 
         self.assertEqual(
             result[0],
-            faq_row[0],
+            language.get_translation_unavailable_response("bisaya"),
         )
 
-    def test_open_ai_circuit_preserves_matched_faq_answer_in_bisaya(self):
+    def test_open_ai_circuit_uses_bisaya_fallback_for_english_faq_answer(self):
         faq_row = (
             "The College President is Dr. Mariano Joaquin C. Macias Jr.",
             "Who is the college president?",
@@ -962,7 +1140,10 @@ class NonEnglishFallbackTests(unittest.TestCase):
                 "bisaya",
             )
 
-        self.assertEqual(result[0], faq_row[0])
+        self.assertEqual(
+            result[0],
+            language.get_translation_unavailable_response("bisaya"),
+        )
 
     def test_followup_provider_failure_is_localized(self):
         with patch.object(faq.circuit_breaker, "is_open", return_value=True):

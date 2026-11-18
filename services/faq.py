@@ -18,6 +18,7 @@ from services.conversation import (
 from services.disambiguation import FAQ_POLICY
 from services.embeddings import get_embedding
 from services.ai_retrieval import llm_expand_faq_query, llm_self_check
+from services.personnel_titles import personnel_titles
 from utils.text import normalize_input
 
 logger = logging.getLogger("pac_helpdesk.faq")
@@ -233,9 +234,18 @@ def answer_followup_with_ai(user_question: str, context_summary: str = "",
                              detected_lang: str = 'english',
                              last_faq_answer: Optional[str] = None,
                              last_faq_question: Optional[str] = None) -> Optional[str]:
-    source_fallback = last_faq_answer or (
-        None if detected_lang == 'english'
-        else lang_service.get_translation_unavailable_response(detected_lang)
+    source_fallback = (
+        _source_answer_in_language(
+            user_question,
+            last_faq_question,
+            last_faq_answer,
+            detected_lang,
+            translate=True,
+        )
+        if last_faq_answer else (
+            None if detected_lang == 'english'
+            else lang_service.get_translation_unavailable_response(detected_lang)
+        )
     )
     if circuit_breaker.is_open():
         return source_fallback
@@ -312,11 +322,21 @@ def _lookup_faq_answer(question: str, detected_lang: str) -> Optional[Tuple[str,
     if best['combined'] < engine.FUZZY_MIN_SCORE:
         if best['fuzzy'] >= 0.60:
             row = best['faq']
-            return (row[0] or '', row[3], row[4])
+            return (
+                _source_answer_in_language(
+                    question, row[1], row[0], detected_lang
+                ),
+                row[3],
+                row[4],
+            )
         return None
     if circuit_breaker.is_open():
         row = best['faq']
-        return (row[0] or '', row[3], row[4])
+        return (
+            _source_answer_in_language(question, row[1], row[0], detected_lang),
+            row[3],
+            row[4],
+        )
     ai_ans, matched = engine.smart_extract_answer(
         user_question=question,
         candidates=candidates,
@@ -326,9 +346,96 @@ def _lookup_faq_answer(question: str, detected_lang: str) -> Optional[Tuple[str,
     )
     if not ai_ans:
         row = best['faq']
-        return (row[0] or '', row[3], row[4])
+        return (
+            _source_answer_in_language(question, row[1], row[0], detected_lang),
+            row[3],
+            row[4],
+        )
     best_row = (matched or best)['faq']
     return (ai_ans, best_row[3], best_row[4])
+
+
+def _source_answer_in_language(
+    question: str,
+    source_question: Optional[str],
+    source_answer: Optional[str],
+    detected_lang: str,
+    translate: bool = False,
+) -> str:
+    """Return a source answer only if it already matches the requested language.
+
+    A failed translation must not silently expose the English source answer
+    to someone who asked in Tagalog or another supported language.
+    """
+    answer = (source_answer or '').strip()
+    if not answer or detected_lang == 'english':
+        return answer
+    if lang_service.verify_output_language(answer, detected_lang):
+        return answer
+    if translate and not circuit_breaker.is_open():
+        translated = engine._extract_from_answer(
+            question,
+            source_question or '',
+            answer,
+            llm_chat,
+            detected_lang=detected_lang,
+        )
+        if translated:
+            return translated
+    return lang_service.get_translation_unavailable_response(detected_lang)
+
+
+def _answer_personnel_faq(question: str, detected_lang: str, ctx):
+    """Prefer a FAQ for an explicitly named staff role over generic handbook hits."""
+    roles = personnel_titles(question)
+    if not roles:
+        return None
+
+    candidates = _get_faq_candidates(question, detected_lang, _get_all_faqs())
+    candidate = next(
+        (item for item in candidates if item.get('personnel_title_match')),
+        None,
+    )
+    if not candidate:
+        return None
+
+    row = candidate['faq']
+    answer = (row[0] or '').strip()
+    if not answer:
+        return None
+
+    response = None
+    if not circuit_breaker.is_open():
+        response, _ = engine.smart_extract_answer(
+            user_question=question,
+            candidates=[candidate],
+            detected_lang=detected_lang,
+            llm_chat_fn=llm_chat,
+            ai_cache=ai_cache,
+        )
+    if not response:
+        response = _source_answer_in_language(
+            question, row[1], answer, detected_lang
+        )
+
+    image = row[8] if len(row) > 8 else None
+    if image:
+        response = f"{response}\n\n[Image: {image}]"
+    topic = row[3] or 'Personnel'
+    intent = row[4] if len(row) > 4 else None
+    faq_id = row[2] if len(row) > 2 else None
+    ctx.update(
+        topic=topic,
+        intent=intent,
+        user_msg=question,
+        bot_response=response,
+        faq_answer=answer,
+        faq_question=row[1],
+        faq_image=image,
+        detected_lang=detected_lang,
+        clear_schedule_context=True,
+    )
+    return response, topic, faq_id, intent, detected_lang
 
 
 def _log_unanswered(
@@ -858,8 +965,12 @@ def find_answer(question: str, return_topic: bool = False,
         _is_translate_request(question) and bool(getattr(ctx, 'last_answer', None))
     )
     if not ctx.last_disambiguation and not is_translation_followup:
+        exact_language = lang_service.detect_language(
+            question, prior_lang=ctx.last_detected_lang
+        )
         exact_answer = None
         exact_image = None
+        exact_source_question = question
         try:
             from services.corrections import get_exact_correction
             exact_correction = get_exact_correction(get_db, question)
@@ -870,20 +981,29 @@ def find_answer(question: str, return_topic: bool = False,
                     exact_correction.get('faq_id'),
                     None,
                 )
+                exact_source_question = exact_correction.get('question') or question
             else:
                 exact_faq = _find_exact_faq(question)
                 if exact_faq:
                     answer, _, faq_id, topic, intent = exact_faq[:5]
+                    exact_source_question = exact_faq[1] or question
                     image = exact_faq[8] if len(exact_faq) > 8 else None
                     exact_image = image
-                    if image:
-                        answer = f"{answer}\n\n[Image: {image}]"
                     exact_answer = (answer, topic, faq_id, intent)
         except Exception as e:
             logger.warning("Exact knowledge lookup failed; using normal retrieval: %s", e)
 
         if exact_answer:
             answer, topic, faq_id, intent = exact_answer
+            answer = _source_answer_in_language(
+                question,
+                exact_source_question,
+                answer,
+                exact_language,
+                translate=True,
+            )
+            if exact_image:
+                answer = f"{answer}\n\n[Image: {exact_image}]"
             ctx.update(
                 topic=topic or 'FAQ',
                 intent=intent,
@@ -892,7 +1012,7 @@ def find_answer(question: str, return_topic: bool = False,
                 faq_answer=answer,
                 faq_question=question,
                 faq_image=exact_image,
-                detected_lang=ctx.last_detected_lang or 'english',
+                detected_lang=exact_language,
                 clear_schedule_context=True,
             )
             result = (
@@ -900,7 +1020,7 @@ def find_answer(question: str, return_topic: bool = False,
                 topic or 'FAQ',
                 faq_id,
                 intent,
-                ctx.last_detected_lang or 'english',
+                exact_language,
             )
             return result if return_topic else result[0]
 
@@ -987,6 +1107,10 @@ def find_answer(question: str, return_topic: bool = False,
             'Unknown', None, None, detected_lang,
         )
         return result if return_topic else result[0]
+
+    personnel_result = _answer_personnel_faq(question, detected_lang, ctx)
+    if personnel_result:
+        return personnel_result if return_topic else personnel_result[0]
 
     _looks_date = date_service.is_date_question(question, ctx=ctx)
     _looks_hb = handbook_service.is_handbook_question(question)
@@ -1471,6 +1595,9 @@ def find_answer(question: str, return_topic: bool = False,
         if best['combined'] >= engine.FUZZY_MIN_SCORE or best['fuzzy'] >= 0.60:
             row = best['faq']
             answer, question_text, fid, topic, intent, _, _, _ = row[:8]
+            answer = _source_answer_in_language(
+                question, question_text, answer, detected_lang
+            )
             img = _image_for_faq_candidate(best, candidates)
             answer_text = (answer or '') + (f"\n\n[Image: {img}]" if img else "")
             ctx.update(

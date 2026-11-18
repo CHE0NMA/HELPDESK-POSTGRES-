@@ -249,7 +249,8 @@ def _heuristic_language(text: str) -> Tuple[str, bool]:
         and re.search(r'\b(tuition|fee|bayad|gasto|cost|price)\b', t)
     )
     has_strong_tagalog = bool(re.search(
-        r'\b(ako|pwedeng|puwedeng|mag(?!suot\b|sout(?:on)?\b)[a-z]{2,}|nag[a-z]{2,}|magkano|paano|pano|bakit|bat|'
+        r'\b(ako|ano|anong|po|mga|kailangan|pwedeng|puwedeng|'
+        r'mag(?!suot\b|sout(?:on)?\b)[a-z]{2,}|nag[a-z]{2,}|magkano|paano|pano|bakit|bat|'
         r'anong|saan|san|kailan|kelan|sino|ilan|ilang|'
         r'naman|talaga|hindi|yung|iyon|opo|'
         r'paki|pakisuyo|nasaan|dahil|pero|namin|amin|niyo|nyo|'
@@ -854,6 +855,7 @@ _VERNACULAR_VARIANTS: Dict[str, str] = {
     'buwana': 'buwan', 'buwanan': 'buwan',
     'simana': 'semana', 'simanaha': 'semana', 'semanaha': 'semana',
     'simanahan': 'semana', 'semanahan': 'semana',
+    'magsleeveless': 'sleeveless', 'mag-sleeveless': 'sleeveless',
 
     'karung': 'karon', 'karun': 'karon',
 
@@ -958,6 +960,21 @@ def expand_query(text: str) -> str:
     language detection."""
     normalized = normalize_vernacular_spelling(text)
     normalized = expand_hypothetical(normalized)
+    if (
+        re.search(
+            r'\btes\b.{0,30}\b(subsidy|requirements?|claim|apply|application)\b',
+            normalized,
+            re.I,
+        )
+        or re.search(
+            r'\b(subsidy|requirements?|claim|apply|application)\b.{0,30}\btes\b',
+            normalized,
+            re.I,
+        )
+    ):
+        normalized = re.sub(
+            r'\btes\b', 'tertiary education subsidy', normalized, flags=re.I
+        )
     normalized = expand_abbreviations(normalized)
 
     aliases = []
@@ -975,8 +992,168 @@ def expand_query(text: str) -> str:
             'who person in charge contact',
         ),
         (
-            r'\b(president|presidente)\b',
-            'college president school president head of college',
+            r'(?<!bise )\b(president|presidente)\b',
+            'college president school president head of college presidente sa eskwelahan',
+        ),
+        (
+            r'\b(dean)\b.{0,35}\b(computer studies|college of computer studies)\b|'
+            r'\b(computer studies|college of computer studies)\b.{0,35}\b(dean)\b',
+            'dean computer studies dean of the college of computer studies',
+        ),
+        (
+            r'\b(bise presidente|vice president|vp)\b.{0,45}\b(finance|pinansya)\b|'
+            r'\b(finance|pinansya)\b.{0,45}\b(bise presidente|vice president|vp)\b',
+            'vice president for finance vp finance',
+        ),
+        (
+            r'\b(bise presidente|pangalawang pangulo)\b.{0,45}\b(pananalapi|finance)\b|'
+            r'\b(pananalapi|finance)\b.{0,45}\b(bise presidente|pangalawang pangulo)\b',
+            'vice president for finance vp finance',
+        ),
+        (
+            r'\b(bise presidente|vice president|vp)\b.{0,55}\b(academic affairs|'
+            r'akademikong kalihokan)\b|'
+            r'\b(academic affairs|akademikong kalihokan)\b.{0,55}\b'
+            r'(bise presidente|vice president|vp)\b',
+            'vice president for academic affairs vp academic affairs',
+        ),
+        (
+            r'\b(bise presidente|pangalawang pangulo)\b.{0,55}\b(akademikong gawain|'
+            r'academic affairs)\b|'
+            r'\b(akademikong gawain|academic affairs)\b.{0,55}\b'
+            r'(bise presidente|pangalawang pangulo)\b',
+            'vice president for academic affairs vp academic affairs',
+        ),
+        (
+            r'\b(bise presidente|vice president|vp)\b.{0,65}\b(student affairs|'
+            r'serbisyo sa estudyante|hrmo)\b|'
+            r'\b(student affairs|serbisyo sa estudyante|hrmo)\b.{0,65}\b'
+            r'(bise presidente|vice president|vp)\b',
+            'vice president for student affairs and services hrmo',
+        ),
+        (
+            r'\b(bise presidente|pangalawang pangulo)\b.{0,65}\b(ugnayang pang estudyante|'
+            r'student affairs|hrmo)\b|'
+            r'\b(ugnayang pang estudyante|student affairs|hrmo)\b.{0,65}\b'
+            r'(bise presidente|pangalawang pangulo)\b',
+            'vice president for student affairs and services hrmo',
+        ),
+        (
+            r'\b(bise presidente|vice president|vp)\b.{0,45}\b(development|kalamboan)\b|'
+            r'\b(development|kalamboan)\b.{0,45}\b(bise presidente|vice president|vp)\b',
+            'vice president for development vp development',
+        ),
+        (
+            r'\b(bise presidente|pangalawang pangulo)\b.{0,45}\b(pagpapaunlad|development)\b|'
+            r'\b(pagpapaunlad|development)\b.{0,45}\b(bise presidente|pangalawang pangulo)\b',
+            'vice president for development vp development',
+        ),
+        (
+            r'\b(ingat yaman|ingatyaman)\b.{0,35}\b(paaralan|kolehiyo|college)\b|'
+            r'\b(paaralan|kolehiyo|college)\b.{0,35}\b(ingat yaman|ingatyaman)\b',
+            'college treasurer school treasurer',
+        ),
+        (
+            r'\b(kuwentador|accountant)\b.{0,35}\b(paaralan|kolehiyo|college)\b|'
+            r'\b(paaralan|kolehiyo|college)\b.{0,35}\b(kuwentador|accountant)\b',
+            'college accountant school accountant',
+        ),
+        (
+            r'\b(tig tipig|tigtipig|tresurero)\b.{0,35}\b(kwarta|eskwelahan|college)\b|'
+            r'\b(kwarta|eskwelahan|college)\b.{0,35}\b(tig tipig|tigtipig|tresurero)\b',
+            'college treasurer school treasurer',
+        ),
+        (
+            r'\b(tig kwenta|tigkwenta|akawntant)\b.{0,35}\b(eskwelahan|school|college)\b|'
+            r'\b(eskwelahan|school|college)\b.{0,35}\b(tig kwenta|tigkwenta|akawntant)\b',
+            'college accountant school accountant',
+        ),
+        (
+            r'\b(direktor)\b.{0,50}\b(student finance|panalapi sa estudyante)\b|'
+            r'\b(student finance|panalapi sa estudyante)\b.{0,50}\b(direktor)\b',
+            'director of student finance',
+        ),
+        (
+            r'\b(coordinator|koordinator)\b.{0,40}\b(bscs|computer science)\b|'
+            r'\b(bscs|computer science)\b.{0,40}\b(coordinator|koordinator)\b|'
+            r'\b(coordinator)\b.{0,40}\b(ng bscs|ng computer science)\b',
+            'BSCS program coordinator computer science',
+        ),
+        (
+            r'\b(coordinator|koordinator)\b.{0,50}\b(bsit|information technology)\b|'
+            r'\b(bsit|information technology)\b.{0,50}\b(coordinator|koordinator)\b|'
+            r'\b(coordinator)\b.{0,50}\b(ng bsit|ng information technology)\b',
+            'BSIT program coordinator information technology',
+        ),
+        (
+            r'\b(pila|tagpila|pilay|magkano)\b.{0,45}\b(tuition|matrikula|bayad|bayranan)\b|'
+            r'\b(tuition|matrikula|bayad|bayranan)\b.{0,45}\b(pila|tagpila|pilay|magkano)\b',
+            'how much tuition fee cost',
+        ),
+        (
+            r'\b(evaluation of grades|evaluation sa grado|pagsusi sa grado|'
+            r'evaluation sa grades|pagsusi sa grades|pag evaluate sa grado|'
+            r'pagpa evaluate sa grado|pagpa evaluate sa grades|'
+            r'pagkuha sa evaluation sa grades|evaluation ng grades|'
+            r'pagsusuri ng grades|pagsusuri ng marka|'
+            r'pagkuha ng evaluation ng grades|pagpa evaluate ng grades)\b',
+            'evaluation of grades request registrar academic records',
+        ),
+        (
+            r'\b(financial clearance|clearance pinansyal|clearance sa finance|'
+            r'pagpirma sa clearance|pagpirma sa financial clearance|'
+            r'pagpirma ng financial clearance|pagpirma sa clearance pinansyal)\b',
+            'financial clearance signing finance office',
+        ),
+        (
+            r'\b(final passbook|passbook|pagkuha sa final passbook|'
+            r'pagkuha ng final passbook|paano kumuha ng passbook)\b',
+            'request final passbook finance office',
+        ),
+        (
+            r'\b(scholarship programs?|mga scholarship|iskolarship|'
+            r'scholarship nga gitanyag|scholarship ang naa|'
+            r'anong scholarship|mga scholarship na inaalok|'
+            r'scholarship programs na inaalok)\b',
+            'scholarship programs offered financial aid',
+        ),
+        (
+            r'\b(tes|tertiary education subsidy|tes subsidy|'
+            r'tertiary education subsidy program)\b',
+            'tertiary education subsidy TES requirements application claim',
+        ),
+        (
+            r'\b(latin honors?|special recognition|honors?|honours?|'
+            r'karangalan|parangal)\b',
+            'grades required qualification academic recognition latin honors',
+        ),
+        (
+            r'\b(transfer|pagbalhin|balhin gikan|balhin ngadto|'
+            r'lumipat|paglipat|paglilipat|mag transfer|mag-transfer)\b',
+            'transfer student requirements process transferring to from PAC',
+        ),
+        (
+            r'\b(enrollment|enrolment|pag enroll|paenroll|pagpalista|'
+            r'mag enroll|mag-enroll|pagpapatala|pagpapaenroll)\b',
+            'student enrollment process registration',
+        ),
+        (
+            r'\b(cor|certificate of registration|registration form|'
+            r'kopya ng cor|sertipiko ng rehistro)\b',
+            'copy of COR certificate of registration enrollment',
+        ),
+        (
+            r'\b(tor|transcript of records|transcript records|'
+            r'transcript of records ko)\b',
+            'request transcript of records registrar',
+        ),
+        (
+            r'\b(diploma|diplomas|diploma ko)\b',
+            'apply request diploma graduation registrar',
+        ),
+        (
+            r'\b(sleeveless|sleeve-less|sleeve less|walay manggas)\b',
+            'sleeveless clothing dress policy allowed prohibited',
         ),
         (
             r'\b(asa|diin|saan|san|nasaan|asa dapit|saan banda)\b',
