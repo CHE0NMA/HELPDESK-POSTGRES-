@@ -1,10 +1,17 @@
 import logging
 import re
 import time
+from contextvars import copy_context
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from ai_providers import ai_cache, circuit_breaker, faq_cache, llm_chat
+from ai_providers import (
+    ai_cache,
+    circuit_breaker,
+    faq_cache,
+    llm_chat,
+    provider_for_language,
+)
 from database import get_db
 from services import answer_engine as engine
 from services import dates as date_service
@@ -621,10 +628,14 @@ def _score_sources_parallel(question: str, detected_lang: str, query_embedding=N
     for any reason (never raises past this function).
     """
     try:
+        hb_context = copy_context()
+        faq_context = copy_context()
         hb_future = _SCORING_EXECUTOR.submit(
+            hb_context.run,
             _handbook_best_score, question, query_embedding, detected_lang
         )
         faq_future = _SCORING_EXECUTOR.submit(
+            faq_context.run,
             _faq_candidates_and_score, question, detected_lang, query_embedding
         )
         hb_score, hb_chunks = hb_future.result()
@@ -957,8 +968,8 @@ Translated answer:"""
         return prev
 
 
-def find_answer(question: str, return_topic: bool = False,
-                session_id: Optional[str] = None):
+def _find_answer(question: str, return_topic: bool = False,
+                 session_id: Optional[str] = None):
     ctx = get_conversation_context(session_id or 'default')
 
     is_translation_followup = (
@@ -1640,3 +1651,20 @@ def find_answer(question: str, return_topic: bool = False,
             'Unknown', None, None, fallback_lang,
         )
         return result if return_topic else result[0]
+
+
+def find_answer(question: str, return_topic: bool = False,
+                session_id: Optional[str] = None):
+    """Answer a question, routing all Bisaya/Cebuano AI work to Gemini only."""
+    context = get_conversation_context(session_id or 'default')
+    guessed_lang, _ = lang_service._heuristic_language(question)
+    if (
+        guessed_lang in {'bisaya', 'mixed_be', 'mixed_tb'}
+        or (
+            len((question or '').split()) <= 2
+            and context.last_detected_lang in {'bisaya', 'mixed_be', 'mixed_tb'}
+        )
+    ):
+        with provider_for_language('bisaya'):
+            return _find_answer(question, return_topic, session_id)
+    return _find_answer(question, return_topic, session_id)

@@ -133,6 +133,8 @@
   .hdr-btn:hover        { background: var(--brand); color: #fff; border-color: var(--brand); }
   .hdr-btn.solid        { background: var(--brand); color: #fff; border-color: var(--brand); }
   .hdr-btn.solid:hover  { background: var(--brand2); }
+  .hdr-btn.danger { color: #ff8a80; border-color: rgba(255,82,82,.35); }
+  .hdr-btn.danger:hover { background: #b71c1c; color: #fff; border-color: #b71c1c; }
 
   .body-row { flex: 1; display: flex; overflow: hidden; position: relative; }
 
@@ -330,9 +332,23 @@
     background:var(--card);border:1px solid var(--border);
     border-radius:4px 18px 18px 18px;
     padding:.75rem 1.05rem;color:var(--text);font-size:.9rem;
-    line-height:1.6;white-space:pre-wrap;word-wrap:break-word; overflow-wrap: anywhere;
+    line-height:1.6;white-space:normal;word-wrap:break-word; overflow-wrap: anywhere;
     backdrop-filter:blur(10px);box-shadow:0 4px 18px rgba(0,0,0,.25);
   }
+  .message.bot .text p { margin:0 0 .65rem; }
+  .message.bot .text p:last-child { margin-bottom:0; }
+  .message.bot .text h2,
+  .message.bot .text h3,
+  .message.bot .text h4 {
+    color:var(--accent2);font-family:'Sora',sans-serif;font-size:.95rem;
+    font-weight:700;margin:.75rem 0 .35rem;
+  }
+  .message.bot .text h2:first-child,
+  .message.bot .text h3:first-child,
+  .message.bot .text h4:first-child { margin-top:0; }
+  .message.bot .text ul,
+  .message.bot .text ol { margin:.25rem 0 .7rem;padding-left:1.4rem; }
+  .message.bot .text li { padding-left:.15rem;margin:.18rem 0; }
   .message.bot .text:empty { display:none !important; }
   /* Flatten any nested .text the server (or storage) still wraps — never a second bubble */
   .message.bot .text .text,
@@ -370,6 +386,22 @@
     box-shadow: 0 4px 20px rgba(0,0,0,.3);
     transition: all 0.3s ease;
   }
+  .bot-image-frame {
+    position:relative;display:inline-flex;align-items:center;justify-content:center;
+    min-width:180px;min-height:110px;margin:6px 0 4px;overflow:hidden;
+    border:1px solid var(--border);border-radius:12px;
+    background:rgba(14,32,64,.72);
+  }
+  .bot-image-frame img { position:relative;z-index:1; }
+  .bot-image-placeholder {
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    padding:.75rem;color:var(--text-dim);font-size:.8rem;text-align:center;
+  }
+  .bot-image-frame.is-loaded .bot-image-placeholder { display:none; }
+  .bot-image-frame.is-error {
+    min-height:64px;border-style:dashed;background:rgba(255,82,82,.06);
+  }
+  .bot-image-frame.is-error .bot-image-placeholder { color:#ff8a80; }
   .bot-image-container img:hover {
     transform: scale(1.02);
     box-shadow: 0 8px 30px rgba(0,0,0,.5);
@@ -798,6 +830,10 @@
         <span>/ 30</span>
       </div>
       <a href="/" class="hdr-btn"><i class="bi bi-house"></i><span>Home</span></a>
+      <button type="button" class="hdr-btn danger" onclick="deleteCurrentChat()"
+              title="Delete this conversation" aria-label="Delete this conversation">
+        <i class="bi bi-trash3"></i><span>Delete</span>
+      </button>
       <a href="/new_chat" class="hdr-btn solid"><i class="bi bi-plus-lg"></i><span>New</span></a>
     </div>
   </header>
@@ -1020,6 +1056,36 @@ function saveChatToHistory(uuid, title) {
   });
   list = list.slice(0, MAX_SAVED_CHATS);
   localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(list));
+}
+
+async function deleteCurrentChat() {
+  if (!window.confirm('Delete this conversation and its messages? This cannot be undone.')) return;
+  const button = document.querySelector('.hdr-btn.danger');
+  if (button) button.disabled = true;
+  try {
+    const response = await fetch('/api/delete_current_chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'Could not delete conversation.');
+    }
+
+    const currentMatch = window.location.pathname.match(/\/chat\/([0-9a-f-]{36})/i);
+    if (currentMatch) {
+      const deletedUuid = currentMatch[1];
+      localStorage.setItem(
+        CHAT_HISTORY_KEY,
+        JSON.stringify(getSavedChats().filter(chat => chat.uuid !== deletedUuid))
+      );
+    }
+    window.location.assign('/new_chat');
+  } catch (error) {
+    showToast(error.message || 'Could not delete conversation.', 'danger');
+    if (button) button.disabled = false;
+  }
 }
 
 async function loadSidebarHistory() {
@@ -1277,7 +1343,9 @@ function extractImagesFromHtml(html) {
       src: img.getAttribute('src'),
       alt: img.getAttribute('alt') || '',
     });
-    img.remove();
+    const frame = img.closest('.bot-image-frame');
+    if (frame) frame.remove();
+    else img.remove();
   });
   const textContent = tmp.innerHTML;
   const imagePattern = /\[Image:\s*([^\]]+)\]/g;
@@ -1395,16 +1463,44 @@ async function typeReply(container, html) {
     const imageContainer = document.createElement('div');
     imageContainer.className = 'bot-image-container';
     images.forEach(imgData => {
+      const frame = document.createElement('span');
+      frame.className = 'bot-image-frame';
+      const placeholder = document.createElement('span');
+      placeholder.className = 'bot-image-placeholder';
+      placeholder.setAttribute('role', 'status');
+      placeholder.textContent = 'Loading attached image…';
       const img = document.createElement('img');
       img.src = imgData.src;
       img.alt = imgData.alt || 'Image';
       img.loading = 'lazy';
-      img.onerror = function () { this.style.display = 'none'; };
-      imageContainer.appendChild(img);
+      frame.append(placeholder, img);
+      imageContainer.appendChild(frame);
     });
     container.parentNode.insertBefore(imageContainer, container.nextSibling);
+    initializeChatImages(imageContainer);
     scrollToBottom();
   }
+}
+
+function initializeChatImages(root = document) {
+  root.querySelectorAll('.bot-image-frame img').forEach(img => {
+    const frame = img.closest('.bot-image-frame');
+    const placeholder = frame?.querySelector('.bot-image-placeholder');
+    if (!frame || !placeholder) return;
+    const markLoaded = () => frame.classList.add('is-loaded');
+    const markFailed = () => {
+      frame.classList.remove('is-loaded');
+      frame.classList.add('is-error');
+      placeholder.textContent = 'This image could not be loaded.';
+      img.remove();
+    };
+    img.addEventListener('load', markLoaded, { once: true });
+    img.addEventListener('error', markFailed, { once: true });
+    if (img.complete) {
+      if (img.naturalWidth > 0) markLoaded();
+      else markFailed();
+    }
+  });
 }
 
 function addFeedbackRow(content, userMsg, botReply) {
@@ -2288,6 +2384,7 @@ function applyWelcomeGreeting() {
 /* ---------- events ---------- */
 window.addEventListener('DOMContentLoaded', () => {
   syncInputHeight();
+  initializeChatImages(chatArea);
   if (chatArea.children.length > 0) {
     // Flatten any nested .text from server-rendered history
     chatArea.querySelectorAll('.message.bot .text').forEach(flattenNestedText);

@@ -412,10 +412,25 @@ textarea.form-control { resize:vertical; min-height:80px; }
             <div class="col-md-4"><label class="form-label">Language</label><input name="language" id="language" class="form-control" value="en" placeholder="e.g., en"></div>
           </div>
           <div class="mb-2"><label class="form-label">Question *</label><textarea name="question" id="question" class="form-control" placeholder="e.g., How do I apply for admission?" required rows="2"></textarea></div>
-          <div class="mb-2"><label class="form-label">Answer *</label><textarea name="answer" id="answer" class="form-control" placeholder="Enter the approved answer for this question." required rows="4"></textarea></div>
+          <div class="mb-2">
+            <label class="form-label" for="answer">Answer *</label>
+            <div class="d-flex flex-wrap gap-1 mb-2" role="toolbar" aria-label="Answer formatting">
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-answer-format="bold" title="Bold selected text"><strong>B</strong></button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-answer-format="italic" title="Italic selected text"><em>I</em></button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-answer-format="heading">Section heading</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-answer-format="bullet">Bullet list</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-answer-format="numbered">Numbered steps</button>
+            </div>
+            <textarea name="answer" id="answer" class="form-control" placeholder="Write a short answer. Use blank lines for paragraphs, headings for sections, and lists for steps." required rows="5"></textarea>
+            <small class="form-text">Formatting is saved with the answer. Select text or lines, then use a button. The student preview updates as you type.</small>
+            <div class="mt-2">
+              <div class="small text-secondary mb-1">Student preview</div>
+              <div id="answerPreview" class="form-control" aria-live="polite" style="min-height:72px;height:auto;white-space:normal;"></div>
+            </div>
+          </div>
           <div class="row g-2 mt-2">
             <div class="col-md-6"><label class="form-label">Keywords</label><input name="keywords" id="keywords" class="form-control" placeholder="e.g., admission, requirements, application"></div>
-            <div class="col-md-6"><label class="form-label">Related Questions</label><input name="related_questions" id="related_questions" class="form-control" placeholder="Separate related questions with commas"></div>
+            <div class="col-md-6"><label class="form-label">Related Questions</label><input name="related_questions" id="related_questions" class="form-control" placeholder="Enter alternate phrasings separated by | (e.g., How do I enroll? | What is the enrollment process?)"></div>
             <div class="col-md-4"><label class="form-label">Priority Score</label><input type="number" name="priority_score" id="priority_score" class="form-control" value="0" placeholder="0" min="0" max="100"></div>
             <div class="col-md-4"><label class="form-label">Image</label><input type="file" name="image" id="image" class="form-control" accept="image/*"><small class="form-text">Linked only to this FAQ; shown for a strong match when a student asks to see an image.</small></div>
             <div class="col-md-4"><label class="form-label">Attachment URL</label><input name="attachment_url" id="attachment_url" class="form-control" placeholder="https://example.com/document.pdf"></div>
@@ -803,6 +818,7 @@ async function deleteManySequentially(uuids, csrf) {
 
 function openAddModal() {
   document.getElementById('faqForm')?.reset();
+  renderAnswerPreview();
   document.getElementById('faq_uuid').value = '';
   document.getElementById('faq_id').value = '';
   document.getElementById('duplicateWarning').style.display = 'none';
@@ -824,6 +840,7 @@ function openUpdateModal(faq) {
     document.getElementById('intent').value = faq[2] || '';
     document.getElementById('question').value = faq[3] || '';
     document.getElementById('answer').value = faq[4] || '';
+    renderAnswerPreview();
     document.getElementById('keywords').value = faq[6] || '';
     document.getElementById('related_questions').value = faq[7] || '';
     document.getElementById('language').value = faq[8] || 'en';
@@ -839,6 +856,102 @@ function openUpdateModal(faq) {
     showToast('Error opening edit: ' + err.message, 'danger');
   }
 }
+
+function escapeAnswerHtml(value) {
+  return value.replace(/[&<>"']/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[char]);
+}
+
+function formatAnswerInline(value) {
+  return escapeAnswerHtml(value)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
+}
+
+function renderAnswerPreview() {
+  const input = document.getElementById('answer');
+  const preview = document.getElementById('answerPreview');
+  if (!input || !preview) return;
+  const blocks = [];
+  let paragraph = [];
+  let listType = '';
+  let items = [];
+  const flushParagraph = () => {
+    if (paragraph.length) {
+      blocks.push(`<p>${paragraph.map(formatAnswerInline).join('<br>')}</p>`);
+      paragraph = [];
+    }
+  };
+  const flushList = () => {
+    if (items.length) {
+      const tag = listType === 'bullet' ? 'ul' : 'ol';
+      blocks.push(`<${tag}>${items.map(item => `<li>${formatAnswerInline(item)}</li>`).join('')}</${tag}>`);
+    }
+    listType = '';
+    items = [];
+  };
+  for (const line of input.value.replace(/\r\n?/g, '\n').split('\n')) {
+    if (!line.trim()) {
+      flushParagraph();
+      flushList();
+      continue;
+    }
+    const heading = line.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) {
+      flushParagraph();
+      flushList();
+      const tag = `h${heading[1].length + 1}`;
+      blocks.push(`<${tag}>${formatAnswerInline(heading[2])}</${tag}>`);
+      continue;
+    }
+    const bullet = line.match(/^\s*[-*•]\s+(.+)$/);
+    const numbered = line.match(/^\s*\d+[.)]\s+(.+)$/);
+    const nextType = bullet ? 'bullet' : numbered ? 'numbered' : '';
+    if (nextType) {
+      flushParagraph();
+      if (listType && listType !== nextType) flushList();
+      listType = nextType;
+      items.push((bullet || numbered)[1].trim());
+      continue;
+    }
+    flushList();
+    paragraph.push(line);
+  }
+  flushParagraph();
+  flushList();
+  preview.innerHTML = blocks.join('') || '<span class="text-secondary">Your answer preview will appear here.</span>';
+}
+
+document.getElementById('answer')?.addEventListener('input', renderAnswerPreview);
+document.querySelectorAll('[data-answer-format]').forEach(button => {
+  button.addEventListener('click', () => {
+    const input = document.getElementById('answer');
+    const format = button.dataset.answerFormat;
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    const selected = input.value.slice(start, end);
+    if (format === 'bold' || format === 'italic') {
+      const marker = format === 'bold' ? '**' : '*';
+      const replacement = selected ? `${marker}${selected}${marker}` : `${marker}${marker}`;
+      input.setRangeText(replacement, start, end, 'select');
+      if (!selected) input.setSelectionRange(start + marker.length, start + marker.length);
+    } else {
+      const prefix = format === 'heading' ? '## ' : format === 'bullet' ? '- ' : '1. ';
+      const lineStart = start === 0 ? 0 : input.value.lastIndexOf('\n', start - 1) + 1;
+      const lineEndIndex = input.value.indexOf('\n', end);
+      const lineEnd = lineEndIndex < 0 ? input.value.length : lineEndIndex;
+      const selectedLines = input.value.slice(lineStart, lineEnd);
+      const formattedLines = selectedLines
+        ? selectedLines.split('\n').map(line => `${prefix}${line}`).join('\n')
+        : prefix;
+      input.setRangeText(formattedLines, lineStart, lineEnd, 'select');
+      input.setSelectionRange(lineStart + formattedLines.length, lineStart + formattedLines.length);
+    }
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.focus();
+  });
+});
 
 // Unsaved-changes guard, scoped to the FAQ add/edit form only — warns
 // before losing typed content on tab close or modal dismiss, but never

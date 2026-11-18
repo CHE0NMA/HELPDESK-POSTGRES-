@@ -11,12 +11,19 @@ from ai_providers import ai_cache, circuit_breaker
 # PERF: cheap classification calls (language id, gibberish/on-topic check)
 # route through the small/fast model instead of the main answer-generation
 # model -- see ai_providers/providers.py's llm_chat_fast() docstring.
-from ai_providers.providers import llm_chat_fast
+from ai_providers.providers import llm_chat_fast, llm_chat_fast_gemini
 from database import get_db
 from services.config import bot_identity_line
 from services.personnel_titles import has_personnel_title
 
 logger = logging.getLogger("pac_helpdesk.language")
+_BISAYA_PROVIDER_LANGUAGES = {"bisaya", "mixed_be", "mixed_tb"}
+
+
+def _fast_language_model(prompt: str, language: str, max_tokens: int) -> str:
+    if language in _BISAYA_PROVIDER_LANGUAGES:
+        return llm_chat_fast_gemini(prompt, max_tokens=max_tokens)
+    return llm_chat_fast(prompt, max_tokens=max_tokens)
 
 LANGUAGE_CONFIG = {
     'english': {
@@ -356,7 +363,7 @@ def detect_language(text: str, prior_lang: Optional[str] = None) -> str:
     try:
         # PERF: was llm_chat() (main/slow model) for a single-word label --
         # llm_chat_fast() gives the same answer at a fraction of the latency.
-        raw = llm_chat_fast(prompt, max_tokens=8).strip().lower()
+        raw = _fast_language_model(prompt, guess, max_tokens=8).strip().lower()
         label_map = {
             'english': 'english', 'tagalog': 'tagalog',
             'bisaya': 'bisaya', 'cebuano': 'bisaya',
@@ -659,7 +666,8 @@ GIBBERISH: yes/no
 SCHOOL: yes/no"""
         try:
             # PERF: small yes/no classification -- fast model, not the main one.
-            response = llm_chat_fast(prompt, max_tokens=20)
+            guess, _ = _heuristic_language(q)
+            response = _fast_language_model(prompt, guess, max_tokens=20)
             if response:
                 r = response.strip().lower()
                 gibberish_match = re.search(r'gibberish:\s*(yes|no)', r)
@@ -760,7 +768,9 @@ SCHOOL: yes/no  (plausibly related to the school -- enrollment, tuition, grades,
   e.g. celebrities, general trivia, other companies, unrelated math homework)"""
 
     try:
-        response = llm_chat_fast(prompt, max_tokens=30)
+        response = _fast_language_model(
+            prompt, lang_guess, max_tokens=30
+        )
         if response:
             r = response.strip().lower()
             lang_match = re.search(r'language:\s*(\w+)', r)

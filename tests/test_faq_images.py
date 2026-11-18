@@ -90,7 +90,7 @@ class FaqImageAssociationTests(unittest.TestCase):
         self.assertIsNotNone(match)
         self.assertIsNone(match[8])
 
-    def test_chat_only_displays_faq_image_when_user_requests_a_visual(self):
+    def test_chat_displays_an_associated_faq_image_without_an_extra_request(self):
         answer = "The admissions office is in the main building. " * 3
 
         self.assertFalse(_should_show_image(
@@ -100,6 +100,10 @@ class FaqImageAssociationTests(unittest.TestCase):
         self.assertTrue(_should_show_image(
             "Can you show me the admissions office?",
             answer,
+        ))
+        self.assertTrue(_should_show_image(
+            "Where is the admissions office?",
+            f"{answer}\n\n[Image: uploads/admissions-map.png]",
         ))
 
     def test_chat_shows_contextual_faq_image_on_a_followup_request(self):

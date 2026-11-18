@@ -30,6 +30,11 @@
             line-height: 1.8;
             font-size: 16px;
         }
+        .answer p { margin: 0 0 12px; }
+        .answer p:last-child { margin-bottom: 0; }
+        .answer h2, .answer h3, .answer h4 { margin: 18px 0 8px; color: #1a3a6a; }
+        .answer ul, .answer ol { padding-left: 24px; }
+        .answer li { margin: 4px 0; }
         .back-link {
             display: inline-block;
             margin-top: 20px;
@@ -52,7 +57,7 @@
 <body>
     <div class="faq-container">
         <h1 class="question">{{ faq.question }}</h1>
-        <div class="answer">{{ faq.answer|safe }}</div>
+        <div class="answer">{{ formatted_answer|safe }}</div>
         {% if faq.image_path %}
             <div style="margin-top: 20px;">
                 <img src="{{ faq.image_path if faq.image_path.startswith('https://') else '/' + faq.image_path.lstrip('/') }}" alt="FAQ Image" style="max-width: 100%; border-radius: 8px;">

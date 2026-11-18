@@ -70,6 +70,8 @@ class TemplateIntegrityTests(unittest.TestCase):
             html = render_template("public/chat.html")
         self.assertIn('src="/static/logo.png"', html)
         self.assertNotIn("/static/uploads/Screenshot", html)
+        self.assertIn("deleteCurrentChat()", html)
+        self.assertIn("/api/delete_current_chat", html)
 
     def test_error_page_renders_both_status_codes(self):
         with self.app.test_request_context("/"):

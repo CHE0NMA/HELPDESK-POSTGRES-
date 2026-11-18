@@ -6,6 +6,7 @@ import json
 from datetime import datetime, timezone
 from services.tz import ph_now  
 from services.handbook_ingest import parse_pasted_faqs, mass_insert_faqs
+from services.formatting import format_bot_message
 from flask import Blueprint, abort, current_app, jsonify, redirect, render_template, request, session, make_response
 from werkzeug.security import check_password_hash, generate_password_hash
 from threading import Thread
@@ -445,7 +446,11 @@ def view_faq_by_uuid(public_uuid):
             conn.commit()
         except Exception as e:
             logger.error(f"Failed to log FAQ view: {e}")
-        return render_template('public/faq_view.html', faq=faq)
+        return render_template(
+            'public/faq_view.html',
+            faq=faq,
+            formatted_answer=format_bot_message(faq['answer'] or '', show_images=False),
+        )
     finally:
         cur.close()
         conn.close()

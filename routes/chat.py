@@ -197,14 +197,14 @@ def _feedback_source(session_id: str, question: str, answer: str):
 
 
 def _should_show_image(question: str, answer: str, conversation_turn: int = 1) -> bool:
+    if '[Image:' in answer:
+        return True
     q = question.lower()
     visual_keywords = ['show', 'see', 'picture', 'image', 'photo', 'drawing', 'diagram',
                         'chart', 'graph', 'visual', 'look', 'view', 'example of', 'sample of',
                         'want to see', 'wanna see', 'pakita', 'ipakita', 'larawan', 'hulagway']
     if not any(kw in q for kw in visual_keywords):
         return False
-    if '[Image:' in answer:
-        return True
     return conversation_turn <= 1 and len(answer) >= 100
 
 
@@ -270,6 +270,58 @@ def _start_new_chat_session():
     session['current_chat_uuid'] = chat_uuid
     session.permanent = True
     return chat_uuid
+
+
+@bp.route('/api/delete_current_chat', methods=['POST'])
+@csrf.exempt
+def delete_current_chat():
+    """Delete only the conversation currently bound to this browser session."""
+    session_id = session.get('persistent_session_id')
+    chat_uuid = session.get('current_chat_uuid')
+    if not session_id or not chat_uuid:
+        return jsonify({'success': False, 'error': 'No active conversation'}), 404
+
+    conn = None
+    cur = None
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT session_id FROM chat_sessions WHERE public_uuid = %s",
+            (chat_uuid,),
+        )
+        row = cur.fetchone()
+        if not row or row[0] != session_id:
+            return jsonify({'success': False, 'error': 'Conversation not found'}), 404
+
+        cur.execute("DELETE FROM chat_history WHERE session_id = %s", (session_id,))
+        cur.execute(
+            "DELETE FROM chat_sessions WHERE session_id = %s AND public_uuid = %s",
+            (session_id, chat_uuid),
+        )
+        conn.commit()
+        from services.conversation import delete_ctx
+        delete_ctx(session_id)
+        for key in (
+            'persistent_session_id', 'chat_session', 'current_chat_uuid',
+            'last_activity', 'last_topic', 'last_intent', 'last_category',
+            'conversation_turn',
+        ):
+            session.pop(key, None)
+        return jsonify({'success': True})
+    except Exception:
+        if conn is not None:
+            try:
+                conn.rollback()
+            except Exception:
+                logger.exception("Could not rollback chat deletion")
+        logger.exception("Could not delete current chat")
+        return jsonify({'success': False, 'error': 'Could not delete conversation'}), 500
+    finally:
+        if cur is not None:
+            cur.close()
+        if conn is not None:
+            conn.close()
 
 
 @bp.route('/chat', methods=['POST'])

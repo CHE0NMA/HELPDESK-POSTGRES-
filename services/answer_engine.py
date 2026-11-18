@@ -46,6 +46,30 @@ def normalize_text(text: str) -> str:
     return text
 
 
+def _metadata_values(value: Any, *, comma_separated: bool = True) -> List[str]:
+    if not value:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        values = value
+    else:
+        text = str(value).strip()
+        try:
+            import json
+            parsed = json.loads(text)
+        except (TypeError, ValueError):
+            parsed = None
+        if isinstance(parsed, list):
+            values = parsed
+        else:
+            separator = r"[,;\n|]+" if comma_separated else r"[;\n|]+"
+            values = re.split(separator, text)
+    return [
+        normalize_text(str(item))
+        for item in values
+        if item and normalize_text(str(item))
+    ]
+
+
 def get_top_faq_candidates(user_question: str, expanded_question: str,
                             all_faqs: Sequence[Sequence[Any]],
                             detected_lang: str = 'english', max_candidates: int = 5,
@@ -86,6 +110,8 @@ def get_top_faq_candidates(user_question: str, expanded_question: str,
             continue
 
         q_norm = normalize_text(question)
+        topic_norm = normalize_text(str(faq[3] or "")) if len(faq) > 3 else ""
+        intent_norm = normalize_text(str(faq[4] or "")) if len(faq) > 4 else ""
 
         def _query_score(query_norm: str, target_norm: str) -> Tuple[float, float, float, float]:
             token = fuzz.token_set_ratio(query_norm, target_norm) / 100.0
@@ -103,11 +129,9 @@ def get_top_faq_candidates(user_question: str, expanded_question: str,
             user_norm, q_norm
         )
         expanded_ratio = fuzz.token_set_ratio(expanded_norm, q_norm) / 100.0
-        aliases = [
-            normalize_text(alias.strip())
-            for alias in re.split(r"[,;\n|]+", str(faq[6] or ""))
-            if alias.strip()
-        ] if len(faq) > 6 and faq[6] else []
+        aliases = _metadata_values(
+            faq[6] if len(faq) > 6 else None
+        )
         alias_scores = [
             _query_score(user_norm, alias_norm)
             for alias_norm in aliases if alias_norm
@@ -144,13 +168,29 @@ def get_top_faq_candidates(user_question: str, expanded_question: str,
         if personnel_match:
             combined = max(combined, 0.80)
 
-        if kw and user_norm:
-            kw_list = kw.lower().split(',')
-            keyword_boost = sum(
-                1 for k in kw_list
-                if any(k.strip() in query_norm for query_norm in query_norms)
-            ) / max(1, len(kw_list))
-            combined = min(1.0, combined + keyword_boost * 0.1)
+        query_tokens = {
+            token for query in query_norms
+            for token in re.findall(r"[a-z0-9']{2,}", query)
+        }
+
+        def _metadata_coverage(values: Sequence[str]) -> float:
+            tokens = {
+                token for value in values
+                for token in re.findall(r"[a-z0-9']{2,}", value)
+            }
+            if not tokens or not query_tokens:
+                return 0.0
+            return len(tokens & query_tokens) / len(tokens)
+
+        keyword_values = _metadata_values(kw if len(faq) > 5 else None)
+        keyword_coverage = _metadata_coverage(keyword_values)
+        label_values = [value for value in (topic_norm, intent_norm) if value]
+        label_coverage = _metadata_coverage(label_values)
+        metadata_boost = min(
+            0.10,
+            keyword_coverage * 0.07 + label_coverage * 0.03,
+        )
+        combined = min(1.0, combined + metadata_boost)
 
         priority_boost = min(0.05, max(0.0, float(score_val or 0)) / 2000.0)
         combined = min(1.0, combined + priority_boost)
@@ -172,6 +212,9 @@ def get_top_faq_candidates(user_question: str, expanded_question: str,
             'full_ratio': full_ratio, 'expanded_ratio': expanded_ratio,
             'alternate_match': trusted_alias_match or ai_alternate_match,
             'personnel_title_match': personnel_match,
+            'related_question_score': alias_ratio,
+            'keyword_coverage': keyword_coverage,
+            'topic_intent_coverage': label_coverage,
             'semantic_score': semantic_score,
             'combined': combined, 'fuzzy': max(token_ratio, partial_ratio, full_ratio),
             'best_q_text': question,

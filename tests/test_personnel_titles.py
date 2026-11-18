@@ -110,15 +110,34 @@ class PersonnelTitleTests(unittest.TestCase):
             2, "History", "college_history", None, None, 100, None, None,
         )
 
-        results = get_top_faq_candidates(
-            "kinsa ang college president sa school",
-            "kinsa ang college president sa school who person in charge contact",
-            [history_faq, president_faq],
-            detected_lang="bisaya",
+        questions = (
+            (
+                "kinsa ang college president",
+                "kinsa ang college president who person in charge college president",
+                "bisaya",
+            ),
+            (
+                "kinsa ang college president sa school",
+                "kinsa ang college president sa school who person in charge contact",
+                "bisaya",
+            ),
+            (
+                "who is the college president",
+                "who is the college president",
+                "english",
+            ),
         )
+        for question, expanded, language in questions:
+            with self.subTest(question=question):
+                results = get_top_faq_candidates(
+                    question,
+                    expanded,
+                    [history_faq, president_faq],
+                    detected_lang=language,
+                )
 
-        self.assertEqual(results[0]["faq"][2], 1)
-        self.assertTrue(results[0]["personnel_title_match"])
+                self.assertEqual(results[0]["faq"][2], 1)
+                self.assertTrue(results[0]["personnel_title_match"])
 
     def test_bisaya_dean_query_uses_matching_personnel_faq_not_handbook(self):
         answer = (

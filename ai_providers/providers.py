@@ -9,9 +9,11 @@ import logging
 import os
 import threading
 import time
+from contextlib import contextmanager
+from contextvars import ContextVar
 from collections import defaultdict
 from datetime import datetime, timedelta, date
-from typing import Optional
+from typing import Iterator, Optional
 
 from groq.types.chat import ChatCompletionUserMessageParam
 
@@ -27,6 +29,24 @@ from .circuit_breaker import circuit_breaker
 from .metrics import model_metrics
 
 logger = logging.getLogger("pac_helpdesk.ai_providers")
+_PROVIDER_OVERRIDE: ContextVar[Optional[str]] = ContextVar(
+    "ai_provider_override", default=None
+)
+
+
+@contextmanager
+def provider_for_language(language: str) -> Iterator[None]:
+    """Pin Bisaya/Cebuano requests to Gemini for the duration of a request."""
+    provider = (
+        "gemini"
+        if language in {"bisaya", "mixed_be", "mixed_tb"}
+        else None
+    )
+    token = _PROVIDER_OVERRIDE.set(provider)
+    try:
+        yield
+    finally:
+        _PROVIDER_OVERRIDE.reset(token)
 
 # ---------------------------------------------------------------------
 # Groq keys
@@ -387,6 +407,10 @@ def _run_provider_chain(prompt: str, max_tokens: int, order, provider_funcs, lab
     """Shared body for call_with_fallback / call_gemini_then_groq /
     call_fast_with_fallback.
     """
+    forced_provider = _PROVIDER_OVERRIDE.get()
+    if forced_provider:
+        order = (forced_provider,)
+
     tried = []
     for provider in order:
         if not _PROVIDER_READY.get(provider, lambda: False)():
@@ -468,6 +492,16 @@ def call_fast_with_fallback(prompt: str, max_tokens: int = 60) -> str:
     )
 
 
+def call_gemini_fast_only(prompt: str, max_tokens: int = 60) -> str:
+    """Call Gemini's fast path without falling back to another provider."""
+    if circuit_breaker.is_open():
+        return ""
+    return _run_provider_chain(
+        prompt, max_tokens, ("gemini",), _FAST_PROVIDER_FUNCS,
+        "call_gemini_fast_only",
+    )
+
+
 def llm_chat(prompt: str, max_tokens: int = 400) -> str:
     """Main entry point used by the rest of the app."""
     if circuit_breaker.is_open():
@@ -480,3 +514,8 @@ def llm_chat_fast(prompt: str, max_tokens: int = 60) -> str:
     if circuit_breaker.is_open():
         return ""
     return call_fast_with_fallback(prompt, max_tokens)
+
+
+def llm_chat_fast_gemini(prompt: str, max_tokens: int = 60) -> str:
+    """Fast-model entry point pinned exclusively to Gemini."""
+    return call_gemini_fast_only(prompt, max_tokens)

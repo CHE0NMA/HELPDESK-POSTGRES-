@@ -223,6 +223,53 @@ class ChatFeedbackTests(unittest.TestCase):
         self.assertEqual(record_feedback.call_args.kwargs["detected_lang"], "tagalog")
         self.assertEqual(record_feedback.call_args.kwargs["faq_id"], 7)
 
+    def test_student_can_delete_only_their_current_chat(self):
+        connection = FakeConnection(row=("server-session",))
+        with self.client.session_transaction() as browser_session:
+            browser_session["persistent_session_id"] = "server-session"
+            browser_session["current_chat_uuid"] = "chat-uuid"
+        with patch("routes.chat.get_db", return_value=connection), \
+             patch("services.conversation.delete_ctx") as delete_context:
+            response = self.client.post("/api/delete_current_chat", json={})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.get_json()["success"])
+        self.assertIn(
+            ("DELETE FROM chat_history WHERE session_id = %s", ("server-session",)),
+            connection.cur.executions,
+        )
+        self.assertIn(
+            (
+                "DELETE FROM chat_sessions WHERE session_id = %s AND public_uuid = %s",
+                ("server-session", "chat-uuid"),
+            ),
+            connection.cur.executions,
+        )
+        self.assertTrue(connection.committed)
+        delete_context.assert_called_once_with("server-session")
+        with self.client.session_transaction() as browser_session:
+            self.assertNotIn("persistent_session_id", browser_session)
+            self.assertNotIn("current_chat_uuid", browser_session)
+
+    def test_student_cannot_delete_a_chat_not_bound_to_their_session(self):
+        connection = FakeConnection(row=("another-session",))
+        with self.client.session_transaction() as browser_session:
+            browser_session["persistent_session_id"] = "server-session"
+            browser_session["current_chat_uuid"] = "chat-uuid"
+        with patch("routes.chat.get_db", return_value=connection):
+            response = self.client.post("/api/delete_current_chat", json={})
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(len(connection.cur.executions), 1)
+        self.assertFalse(connection.committed)
+
+    def test_delete_chat_requires_active_session(self):
+        with patch("routes.chat.get_db") as get_db:
+            response = self.client.post("/api/delete_current_chat", json={})
+
+        self.assertEqual(response.status_code, 404)
+        get_db.assert_not_called()
+
     def test_thumbs_down_feedback_does_not_accept_student_corrections(self):
         connection = FakeConnection()
         suggestion = "Students are not allowed to wear earrings at school."
