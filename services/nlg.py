@@ -23,10 +23,7 @@ from ai_providers import ai_cache, circuit_breaker
 
 from ai_providers.providers import llm_chat_fast
 from services.grounding import answer_is_grounded
-from services.language import (
-    get_translation_unavailable_response,
-    verify_output_language,
-)
+from services.language import verify_output_language
 
 logger = logging.getLogger("pac_helpdesk.nlg")
 
@@ -168,10 +165,7 @@ def speak_naturally(canonical_text: str, question: str, detected_lang: str = 'en
     if not canonical_text:
         return canonical_text
 
-    fallback_text = (
-        canonical_text if detected_lang == 'english'
-        else get_translation_unavailable_response(detected_lang)
-    )
+    fallback_text = canonical_text
     if circuit_breaker.is_open():
         return fallback_text
 
@@ -244,8 +238,10 @@ def speak_naturally(canonical_text: str, question: str, detected_lang: str = 'en
                     and verify_output_language(retry_response.strip(), detected_lang)):
                 response = retry_response.strip()
             else:
-                logger.info("speak_naturally: retry still didn't land in the right language, "
-                            "using localized translation-unavailable response.")
+                logger.info(
+                    "speak_naturally: retry still didn't land in the right language; "
+                    "using the verified canonical answer."
+                )
                 return fallback_text
 
         ai_cache.set(cache_key, response)

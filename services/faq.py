@@ -233,11 +233,12 @@ def answer_followup_with_ai(user_question: str, context_summary: str = "",
                              detected_lang: str = 'english',
                              last_faq_answer: Optional[str] = None,
                              last_faq_question: Optional[str] = None) -> Optional[str]:
+    source_fallback = last_faq_answer or (
+        None if detected_lang == 'english'
+        else lang_service.get_translation_unavailable_response(detected_lang)
+    )
     if circuit_breaker.is_open():
-        return (
-            None if detected_lang == 'english'
-            else lang_service.get_translation_unavailable_response(detected_lang)
-        )
+        return source_fallback
 
     lang_config = lang_service.LANGUAGE_CONFIG.get(
         detected_lang, lang_service.LANGUAGE_CONFIG['english']
@@ -287,14 +288,11 @@ Answer:"""
             if response and response[-1] not in '.!?':
                 response += '.'
             if response and not lang_service.verify_output_language(response, detected_lang):
-                return lang_service.get_translation_unavailable_response(detected_lang)
+                return source_fallback
             return response
     except Exception as e:
         logger.error(f"Follow-up AI error: {e}")
-    return (
-        None if detected_lang == 'english'
-        else lang_service.get_translation_unavailable_response(detected_lang)
-    )
+    return source_fallback
 
 
 def _lookup_faq_answer(question: str, detected_lang: str) -> Optional[Tuple[str, str, str]]:
@@ -317,7 +315,8 @@ def _lookup_faq_answer(question: str, detected_lang: str) -> Optional[Tuple[str,
             return (row[0] or '', row[3], row[4])
         return None
     if circuit_breaker.is_open():
-        return None
+        row = best['faq']
+        return (row[0] or '', row[3], row[4])
     ai_ans, matched = engine.smart_extract_answer(
         user_question=question,
         candidates=candidates,
@@ -326,7 +325,8 @@ def _lookup_faq_answer(question: str, detected_lang: str) -> Optional[Tuple[str,
         ai_cache=ai_cache,
     )
     if not ai_ans:
-        return None
+        row = best['faq']
+        return (row[0] or '', row[3], row[4])
     best_row = (matched or best)['faq']
     return (ai_ans, best_row[3], best_row[4])
 
@@ -817,7 +817,7 @@ def _translate_previous_answer(question: str, ctx, detected_lang: str) -> Option
         target = detected_lang if detected_lang != 'english' else 'bisaya'
 
     if circuit_breaker.is_open():
-        return lang_service.get_translation_unavailable_response(target)
+        return prev
 
     from services.config import bot_identity_line
     from services.grounding import answer_is_grounded
@@ -837,17 +837,17 @@ Translated answer:"""
     try:
         response = llm_chat(prompt, max_tokens=500)
         if not response or not response.strip():
-            return lang_service.get_translation_unavailable_response(target)
+            return prev
         response = response.strip()
         if not answer_is_grounded(response, prev, min_overlap=0.30):
             logger.info("translate_previous: grounding failed")
-            return lang_service.get_translation_unavailable_response(target)
+            return prev
         if not lang_service.verify_output_language(response, target):
-            return lang_service.get_translation_unavailable_response(target)
+            return prev
         return response
     except Exception as e:
         logger.error(f"_translate_previous_answer error: {e}")
-        return lang_service.get_translation_unavailable_response(target)
+        return prev
 
 
 def find_answer(question: str, return_topic: bool = False,

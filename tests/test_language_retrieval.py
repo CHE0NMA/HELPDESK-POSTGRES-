@@ -908,7 +908,7 @@ class FaqRelevanceTests(unittest.TestCase):
 
 
 class NonEnglishFallbackTests(unittest.TestCase):
-    def test_bisaya_rephrase_failure_does_not_return_english_source(self):
+    def test_bisaya_rephrase_failure_preserves_canonical_source_answer(self):
         english_source = "Tuition varies by program and year level."
         with patch.object(nlg.circuit_breaker, "is_open", return_value=True):
             response = nlg.speak_naturally(
@@ -917,13 +917,9 @@ class NonEnglishFallbackTests(unittest.TestCase):
                 detected_lang="bisaya",
             )
 
-        self.assertEqual(
-            response,
-            language.get_translation_unavailable_response("bisaya"),
-        )
-        self.assertNotIn("Tuition varies", response)
+        self.assertEqual(response, english_source)
 
-    def test_tagalog_rephrase_failure_does_not_return_english_source(self):
+    def test_tagalog_rephrase_failure_preserves_canonical_source_answer(self):
         english_source = "Tuition varies by program and year level."
         with patch.object(nlg.circuit_breaker, "is_open", return_value=True):
             response = nlg.speak_naturally(
@@ -932,11 +928,7 @@ class NonEnglishFallbackTests(unittest.TestCase):
                 detected_lang="tagalog",
             )
 
-        self.assertEqual(
-            response,
-            language.get_translation_unavailable_response("tagalog"),
-        )
-        self.assertNotIn("Tuition varies", response)
+        self.assertEqual(response, english_source)
 
     def test_low_confidence_faq_preserves_grounded_english_source_in_bisaya(self):
         faq_row = (
@@ -954,6 +946,23 @@ class NonEnglishFallbackTests(unittest.TestCase):
             result[0],
             faq_row[0],
         )
+
+    def test_open_ai_circuit_preserves_matched_faq_answer_in_bisaya(self):
+        faq_row = (
+            "The College President is Dr. Mariano Joaquin C. Macias Jr.",
+            "Who is the college president?",
+            1, "Administration", "college_president", None, None, 91, None, None,
+        )
+        candidate = {"combined": 0.75, "fuzzy": 0.72, "faq": faq_row}
+        with patch.object(faq, "_get_all_faqs", return_value=[faq_row]), \
+             patch.object(faq, "_get_faq_candidates", return_value=[candidate]), \
+             patch.object(faq.circuit_breaker, "is_open", return_value=True):
+            result = faq._lookup_faq_answer(
+                "kinsa and college president",
+                "bisaya",
+            )
+
+        self.assertEqual(result[0], faq_row[0])
 
     def test_followup_provider_failure_is_localized(self):
         with patch.object(faq.circuit_breaker, "is_open", return_value=True):
