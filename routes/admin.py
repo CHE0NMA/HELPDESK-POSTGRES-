@@ -344,6 +344,32 @@ def add_faq():
             conn.close()
 
 
+@bp.route('/api/admin/generate_faq_draft', methods=['POST'])
+@csrf.exempt
+def api_generate_faq_draft():
+    if not admin_required():
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Expected a JSON object with an answer.'}), 400
+    answer = data.get('answer')
+    if not isinstance(answer, str):
+        return jsonify({'error': 'Enter an answer before generating FAQ fields.'}), 400
+    answer = answer.strip()
+    if not answer:
+        return jsonify({'error': 'Enter an answer before generating FAQ fields.'}), 400
+    try:
+        from services.handbook_ingest import generate_faq_metadata
+        return jsonify({'success': True, 'draft': generate_faq_metadata(answer)})
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 422
+    except RuntimeError as e:
+        return jsonify({'error': str(e)}), 503
+    except Exception as e:
+        logger.exception("FAQ draft generation failed: %s", e)
+        return jsonify({'error': 'Could not generate FAQ fields. Please try again.'}), 502
+
+
 @bp.route('/update_faq', methods=['POST'])
 @csrf.exempt
 def update_faq():
@@ -1117,6 +1143,110 @@ def api_handbook_chunks():
     finally:
         cur.close()
         conn.close()
+
+
+@bp.route('/api/admin/handbook_chunks/<int:chunk_id>/generate_faqs', methods=['POST'])
+@csrf.exempt
+def api_generate_handbook_faqs(chunk_id):
+    if not admin_required():
+        return jsonify({'error': 'Unauthorized'}), 403
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT chapter, section_title, page_start, page_end, content
+            FROM handbook_chunks
+            WHERE id = %s
+        """, (chunk_id,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({'error': 'Handbook section not found.'}), 404
+        section = {
+            'chapter': row[0],
+            'section_title': row[1],
+            'page_start': row[2],
+            'page_end': row[3],
+            'content': row[4] or '',
+        }
+    except Exception as e:
+        logger.exception("Handbook FAQ source lookup failed: %s", e)
+        return jsonify({'error': 'Could not load the handbook section.'}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+    try:
+        from services.handbook_ingest import section_to_faqs
+        faqs = section_to_faqs(section)
+    except Exception as e:
+        logger.exception("Handbook FAQ generation failed: %s", e)
+        return jsonify({'error': 'Could not generate FAQs for this section.'}), 502
+    if not faqs:
+        return jsonify({
+            'error': 'No FAQ drafts were generated. This section may be too short or contain little usable information.',
+        }), 422
+    return jsonify({
+        'success': True,
+        'section': section['section_title'],
+        'faqs': faqs,
+    })
+
+
+@bp.route('/api/admin/handbook_faqs', methods=['POST'])
+@csrf.exempt
+def api_insert_reviewed_handbook_faqs():
+    if not admin_required():
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Expected a JSON object containing reviewed FAQs.'}), 400
+    faqs = data.get('faqs')
+    if not isinstance(faqs, list) or not faqs or len(faqs) > 40:
+        return jsonify({'error': 'Select between 1 and 40 reviewed FAQs to insert.'}), 400
+    reviewed = []
+    for item in faqs:
+        if not isinstance(item, dict):
+            continue
+        question = str(item.get('question') or '').strip()
+        answer = str(item.get('answer') or '').strip()
+        if not question or not answer:
+            return jsonify({'error': 'Every selected FAQ needs both a question and an answer.'}), 400
+        try:
+            priority = int(item.get('priority') or 5)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'FAQ priority must be a whole number.'}), 400
+        reviewed.append({
+            'question': question[:500],
+            'answer': answer[:4000],
+            'topic': str(item.get('topic') or 'Handbook')[:100],
+            'intent': str(item.get('intent') or '')[:100],
+            'keywords': str(item.get('keywords') or '')[:500],
+            'related_questions': str(item.get('related_questions') or '')[:2000],
+            'language': str(item.get('language') or 'en')[:20],
+            'category': str(item.get('category') or 'Handbook')[:100],
+            'priority': max(1, min(10, priority)),
+        })
+    if not reviewed:
+        return jsonify({'error': 'No valid FAQs were selected.'}), 400
+    try:
+        inserted = mass_insert_faqs(
+            get_db, reviewed, retire_previous=False
+        )
+        if not inserted:
+            return jsonify({'error': 'No FAQs could be inserted.'}), 500
+        faq_cache.invalidate()
+        invalidate_response_tables()
+        invalidate_dashboard_cache()
+        return jsonify({
+            'success': True,
+            'inserted': inserted,
+            'message': f'Inserted {inserted} reviewed handbook FAQs.',
+        })
+    except (TypeError, ValueError) as e:
+        return jsonify({'error': f'Invalid FAQ data: {e}'}), 400
+    except Exception as e:
+        logger.exception("Reviewed handbook FAQ insertion failed: %s", e)
+        return jsonify({'error': 'Could not insert the reviewed FAQs.'}), 500
 
 
 @bp.route('/api/admin/handbook_chunks/<int:chunk_id>', methods=['PUT'])

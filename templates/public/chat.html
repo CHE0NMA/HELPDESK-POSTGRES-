@@ -194,6 +194,28 @@
     font-size:.82rem;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   }
   .sidebar-item:hover span { color:var(--text); }
+  .sidebar-chat-row {
+    margin:.2rem .55rem;display:flex;align-items:center;gap:.2rem;
+    border:1px solid transparent;border-radius:10px;transition:all .18s;
+  }
+  .sidebar-chat-row:hover { background:rgba(21,101,192,.2);border-color:rgba(66,165,245,.15); }
+  .sidebar-chat-row.active { background:rgba(21,101,192,.25);border-color:rgba(66,165,245,.3); }
+  .sidebar-chat-row .sidebar-item {
+    margin:0;padding:.6rem .5rem .6rem .7rem;flex:1;min-width:0;border:0;
+  }
+  .sidebar-chat-actions { display:flex;align-items:center;gap:.1rem;padding-right:.3rem; }
+  .sidebar-chat-action {
+    width:29px;height:29px;display:inline-flex;align-items:center;justify-content:center;
+    border:0;border-radius:7px;background:transparent;color:var(--text-muted);
+    cursor:pointer;flex-shrink:0;transition:all .18s;
+  }
+  .sidebar-chat-action:hover { background:rgba(66,165,245,.15);color:var(--accent2); }
+  .sidebar-chat-action.bookmarked { color:#ffca28; }
+  .sidebar-chat-action.delete:hover { background:rgba(255,82,82,.16);color:#ff8a80; }
+  .sidebar-section-label {
+    padding:.65rem 1rem .25rem;font-size:.68rem;color:var(--text-muted);
+    letter-spacing:.06em;text-transform:uppercase;
+  }
 
   .sidebar-foot {
     flex-shrink: 0; padding: .75rem 1.1rem; border-top: 1px solid var(--border);
@@ -850,18 +872,10 @@
         <i class="bi bi-plus-circle"></i>New Conversation
       </a>
       <div class="sidebar-list" id="sidebarList">
-        {% for c in chats %}
-        <div class="sidebar-item" onclick="useQuestion({{ c.user|tojson|safe }})">
-          <i class="bi bi-chat-dots"></i>
-          <span>{{ c.user[:40] }}{% if c.user|length > 40 %}…{% endif %}</span>
-        </div>
-        {% endfor %}
-        {% if not chats %}
         <div style="padding:2rem 1rem;text-align:center;color:var(--text-muted);font-size:.8rem">
           <i class="bi bi-chat-square-dots" style="font-size:1.6rem;display:block;margin-bottom:.5rem;opacity:.35"></i>
-          No messages yet
+          No conversations yet
         </div>
-        {% endif %}
       </div>
       <div class="sidebar-foot">
         <a href="/">Home</a>
@@ -1042,20 +1056,32 @@ const CHAT_HISTORY_KEY = 'pac_chat_history_v1';
 const MAX_SAVED_CHATS = 25;
 
 function getSavedChats() {
-  try { return JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || '[]'); }
+  try {
+    const saved = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || '[]');
+    return Array.isArray(saved) ? saved : [];
+  }
   catch { return []; }
 }
 
 function saveChatToHistory(uuid, title) {
   if (!uuid) return;
+  const existing = getSavedChats().find(c => c.uuid === uuid);
   let list = getSavedChats().filter(c => c.uuid !== uuid);
   list.unshift({
     uuid,
     title: (title || 'Conversation').slice(0, 80),
     updated: Date.now(),
+    bookmarked: Boolean(existing && existing.bookmarked),
   });
   list = list.slice(0, MAX_SAVED_CHATS);
   localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(list));
+}
+
+function removeSavedChat(uuid) {
+  localStorage.setItem(
+    CHAT_HISTORY_KEY,
+    JSON.stringify(getSavedChats().filter(chat => chat.uuid !== uuid))
+  );
 }
 
 async function deleteCurrentChat() {
@@ -1075,11 +1101,7 @@ async function deleteCurrentChat() {
 
     const currentMatch = window.location.pathname.match(/\/chat\/([0-9a-f-]{36})/i);
     if (currentMatch) {
-      const deletedUuid = currentMatch[1];
-      localStorage.setItem(
-        CHAT_HISTORY_KEY,
-        JSON.stringify(getSavedChats().filter(chat => chat.uuid !== deletedUuid))
-      );
+      removeSavedChat(currentMatch[1]);
     }
     window.location.assign('/new_chat');
   } catch (error) {
@@ -1088,48 +1110,132 @@ async function deleteCurrentChat() {
   }
 }
 
+async function deleteSavedChat(uuid, button) {
+  const chat = getSavedChats().find(item => item.uuid === uuid);
+  const title = chat && chat.title ? `“${chat.title}”` : 'this conversation';
+  if (!window.confirm(`Delete ${title} and its messages? This cannot be undone.`)) return;
+  button.disabled = true;
+  try {
+    const response = await fetch(`/api/delete_chat/${encodeURIComponent(uuid)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'Could not delete conversation.');
+    }
+    removeSavedChat(uuid);
+    if (uuid === getCurrentChatUuid()) {
+      window.location.assign('/new_chat');
+      return;
+    }
+    loadSidebarHistory();
+    showToast('Conversation deleted', 'success');
+  } catch (error) {
+    showToast(error.message || 'Could not delete conversation.', 'danger');
+    button.disabled = false;
+  }
+}
+
+function getCurrentChatUuid() {
+  const match = window.location.pathname.match(/\/chat\/([0-9a-f-]{36})/i);
+  return match ? match[1] : null;
+}
+
+function toggleChatBookmark(uuid) {
+  const list = getSavedChats();
+  const chat = list.find(item => item.uuid === uuid);
+  if (!chat) return;
+  chat.bookmarked = !chat.bookmarked;
+  localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(list));
+  loadSidebarHistory();
+  showToast(chat.bookmarked ? 'Conversation bookmarked' : 'Bookmark removed', 'success');
+}
+
 async function loadSidebarHistory() {
   const listEl = document.getElementById('sidebarList');
   if (!listEl) return;
 
-  const saved = getSavedChats();
-  const currentMatch = window.location.pathname.match(/\/chat\/([0-9a-f-]{36})/i);
-  const currentUuid = currentMatch ? currentMatch[1] : null;
-  if (!saved.length) return;
+  let saved = getSavedChats().filter(c => c && typeof c.uuid === 'string');
+  const currentUuid = getCurrentChatUuid();
 
-  let enriched = saved;
-  try {
-    const r = await fetch('/api/my_chats?uuids=' + encodeURIComponent(saved.map(c => c.uuid).join(',')));
-    if (r.ok) {
-      const d = await r.json();
-      const byUuid = {};
-      (d.chats || []).forEach(c => { byUuid[c.uuid] = c; });
-      enriched = saved.map(c => ({
-        ...c,
-        title: (byUuid[c.uuid] && byUuid[c.uuid].title) || c.title,
-      }));
+  if (saved.length) {
+    try {
+      const r = await fetch('/api/my_chats?uuids=' + encodeURIComponent(saved.map(c => c.uuid).join(',')));
+      if (r.ok) {
+        const d = await r.json();
+        const byUuid = {};
+        (d.chats || []).forEach(c => { byUuid[c.uuid] = c; });
+        saved = saved.map(c => ({
+          ...c,
+          title: (byUuid[c.uuid] && byUuid[c.uuid].title) || c.title,
+        }));
+        localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(saved));
+      }
+    } catch (e) {
+      console.warn('Could not refresh saved conversations:', e);
     }
-  } catch (e) {}
+  }
 
-  let historyHtml = '<div style="padding:.55rem 1rem .25rem;font-size:.68rem;color:var(--text-muted);letter-spacing:.06em;text-transform:uppercase">Recent chats</div>';
-  enriched.forEach(c => {
-    const active = c.uuid === currentUuid
-      ? ' style="background:rgba(21,101,192,.25);border-color:rgba(66,165,245,.3)"'
-      : '';
-    const label = String(c.title || 'Conversation')
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    historyHtml += `
-      <a class="sidebar-item" href="/chat/${c.uuid}"${active}
-         style="text-decoration:none;color:inherit">
-        <i class="bi bi-clock-history"></i>
-        <span>${label}</span>
-      </a>`;
-  });
+  saved.sort((a, b) => Number(Boolean(b.bookmarked)) - Number(Boolean(a.bookmarked))
+    || (b.updated || 0) - (a.updated || 0));
+  listEl.replaceChildren();
+  const bookmarked = saved.filter(chat => chat.bookmarked);
+  const recent = saved.filter(chat => !chat.bookmarked);
+  const appendGroup = (label, chats) => {
+    if (!chats.length) return;
+    const heading = document.createElement('div');
+    heading.className = 'sidebar-section-label';
+    heading.textContent = label;
+    listEl.appendChild(heading);
+    chats.forEach(chat => {
+      const row = document.createElement('div');
+      row.className = 'sidebar-chat-row';
+      if (chat.uuid === currentUuid) row.classList.add('active');
 
-  const wrap = document.createElement('div');
-  wrap.id = 'sidebarHistory';
-  wrap.innerHTML = historyHtml;
-  listEl.insertBefore(wrap, listEl.firstChild);
+      const link = document.createElement('a');
+      link.className = 'sidebar-item';
+      link.href = `/chat/${encodeURIComponent(chat.uuid)}`;
+      link.style.textDecoration = 'none';
+      link.style.color = 'inherit';
+      const icon = document.createElement('i');
+      icon.className = chat.bookmarked ? 'bi bi-chat-square-text' : 'bi bi-clock-history';
+      const title = document.createElement('span');
+      title.textContent = String(chat.title || 'Conversation');
+      link.append(icon, title);
+
+      const actions = document.createElement('div');
+      actions.className = 'sidebar-chat-actions';
+      const bookmark = document.createElement('button');
+      bookmark.type = 'button';
+      bookmark.className = `sidebar-chat-action${chat.bookmarked ? ' bookmarked' : ''}`;
+      bookmark.title = chat.bookmarked ? 'Remove bookmark' : 'Bookmark conversation';
+      bookmark.setAttribute('aria-label', bookmark.title);
+      bookmark.innerHTML = `<i class="bi ${chat.bookmarked ? 'bi-bookmark-star-fill' : 'bi-bookmark'}"></i>`;
+      bookmark.addEventListener('click', () => toggleChatBookmark(chat.uuid));
+
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'sidebar-chat-action delete';
+      remove.title = 'Delete conversation';
+      remove.setAttribute('aria-label', 'Delete conversation');
+      remove.innerHTML = '<i class="bi bi-trash3"></i>';
+      remove.addEventListener('click', () => deleteSavedChat(chat.uuid, remove));
+
+      actions.append(bookmark, remove);
+      row.append(link, actions);
+      listEl.appendChild(row);
+    });
+  };
+  appendGroup('Bookmarked', bookmarked);
+  appendGroup('Recent chats', recent);
+  if (!saved.length) {
+    const empty = document.createElement('div');
+    empty.style.cssText = 'padding:2rem 1rem;text-align:center;color:var(--text-muted);font-size:.8rem';
+    empty.innerHTML = '<i class="bi bi-chat-square-dots" style="font-size:1.6rem;display:block;margin-bottom:.5rem;opacity:.35"></i>No conversations yet';
+    listEl.appendChild(empty);
+  }
 }
 
 
@@ -1607,7 +1713,10 @@ async function send(retryMessage = null, retryUserDiv = null, retryBotRow = null
     {
       const uuid = data.chat_uuid
         || (window.location.pathname.match(/\/chat\/([0-9a-f-]{36})/i) || [])[1];
-      if (uuid) saveChatToHistory(uuid, msg);
+      if (uuid) {
+        saveChatToHistory(uuid, msg);
+        loadSidebarHistory();
+      }
     }
     const rawReply = data.reply || 'Sorry, I could not process that.';
     const category = data.category || null;
@@ -2394,7 +2503,6 @@ window.addEventListener('DOMContentLoaded', () => {
     applyWelcomeGreeting();
   }
   loadTopSuggestions();
-  loadSidebarHistory();
 
 
   // Seed current chat into history if page loaded with messages
@@ -2404,6 +2512,7 @@ window.addEventListener('DOMContentLoaded', () => {
     {{ (chats[0].user if chats else 'Conversation')|tojson }}
   );
   {% endif %}
+  loadSidebarHistory();
 
   // Prefill: server (Jinja) first, then URL ?q=
   let prefill = {{ (prefill|tojson if prefill is defined else '""')|safe }};

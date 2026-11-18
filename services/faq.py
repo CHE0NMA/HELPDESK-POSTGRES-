@@ -38,6 +38,41 @@ _FAQ_ROWS_TS = 0.0
 _FAQ_CACHE_TTL = 45.0
 FAQ_IMAGE_MIN_SCORE = 0.85
 
+_TUITION_QUERY_RE = re.compile(
+    r'\b(tuition|tuition fee|school fees?|matrikula|bayranan|bayad sa school)\b',
+    re.I,
+)
+_TUITION_PROGRAMS = (
+    (re.compile(r'\b(?:bsit|information technology)\b', re.I),
+     ('BSIT', 'Information Technology')),
+    (re.compile(r'\b(?:bsn|nursing)\b', re.I),
+     ('BSN', 'Nursing')),
+    (re.compile(r'\b(?:bsba|business administration)\b', re.I),
+     ('BSBA', 'Business Administration')),
+    (re.compile(r'\b(?:bpa|public administration)\b', re.I),
+     ('BPA', 'Public Administration')),
+    (re.compile(r'\b(?:bscs|computer science)\b', re.I),
+     ('BSCS', 'Computer Science')),
+    (re.compile(r'\b(?:beed|elementary education)\b', re.I),
+     ('BEED', 'Elementary Education')),
+    (re.compile(r'\b(?:bsed|secondary education)\b', re.I),
+     ('BSED', 'Secondary Education')),
+    (re.compile(r'\b(?:beced|early childhood education)\b', re.I),
+     ('BECED', 'Early Childhood Education')),
+    (re.compile(r'\b(?:bped|physical education)\b', re.I),
+     ('BPED', 'Physical Education')),
+)
+_TUITION_YEAR = re.compile(
+    r'\b(?:first|second|third|fourth|1st|2nd|3rd|4th)\s+year\b|'
+    r'\byear\s*(?:1|2|3|4)\b',
+    re.I,
+)
+_TUITION_SEMESTER = re.compile(
+    r'\b(?:first|second|1st|2nd)\s+sem(?:ester)?\b|'
+    r'\bsem(?:ester)?\s*(?:1|2)\b',
+    re.I,
+)
+
 
 def _image_for_faq_candidate(
     candidate: Optional[Dict],
@@ -63,6 +98,75 @@ def _image_for_faq_candidate(
                 and abs(score - other_score) <= FAQ_POLICY.max_gap):
             return None
     return image_path
+
+
+def _tuition_requirements(question: str) -> List[Tuple[str, ...]]:
+    if not _TUITION_QUERY_RE.search(question or ''):
+        return []
+    requirements = [
+        aliases for pattern, aliases in _TUITION_PROGRAMS
+        if pattern.search(question or '')
+    ]
+    year = _TUITION_YEAR.search(question or '')
+    if year:
+        year_number = re.search(r'first|1st|year\s*1', year.group(0), re.I)
+        if year_number:
+            requirements.append(('first year', '1st year', 'year 1', 'year one'))
+        elif re.search(r'second|2nd|year\s*2', year.group(0), re.I):
+            requirements.append(('second year', '2nd year', 'year 2', 'year two'))
+        elif re.search(r'third|3rd|year\s*3', year.group(0), re.I):
+            requirements.append(('third year', '3rd year', 'year 3', 'year three'))
+        else:
+            requirements.append(('fourth year', '4th year', 'year 4', 'year four'))
+    semester = _TUITION_SEMESTER.search(question or '')
+    if semester:
+        if re.search(r'first|1st|sem(?:ester)?\s*1', semester.group(0), re.I):
+            requirements.append(('first semester', '1st semester', 'first sem', '1st sem', 'semester 1', 'sem 1'))
+        else:
+            requirements.append(('second semester', '2nd semester', 'second sem', '2nd sem', 'semester 2', 'sem 2'))
+    return requirements
+
+
+def _matches_tuition_requirements(text: str, requirements: Sequence[Tuple[str, ...]]) -> bool:
+    normalized_text = re.sub(r'\s+', ' ', (text or '').lower())
+    return all(
+        any(re.search(rf'\b{re.escape(alias.lower())}\b', normalized_text) for alias in aliases)
+        for aliases in requirements
+    )
+
+
+def _generic_tuition_faq(all_faqs: Sequence[Sequence[Any]]) -> Optional[Sequence[Any]]:
+    for row in all_faqs:
+        if (
+            len(row) > 1
+            and row[1]
+            and re.search(r'\bhow much is the tuition fee\b', row[1], re.I)
+        ):
+            return row
+    return None
+
+
+def _return_generic_tuition_answer(question: str, detected_lang: str, ctx,
+                                   all_faqs: Sequence[Sequence[Any]],
+                                   return_topic: bool):
+    row = _generic_tuition_faq(all_faqs)
+    if not row or not row[0]:
+        return None
+    answer = _source_answer_in_language(question, row[1], row[0], detected_lang)
+    topic = row[3] or 'Tuition'
+    intent = row[4] if len(row) > 4 else None
+    faq_id = row[2] if len(row) > 2 else None
+    ctx.update(
+        topic=topic,
+        intent=intent,
+        user_msg=question,
+        bot_response=answer,
+        faq_answer=answer,
+        faq_question=row[1],
+        clear_schedule_context=True,
+    )
+    result = (answer, topic, faq_id, intent, detected_lang)
+    return result if return_topic else result[0]
 
 
 def _get_all_faqs():
@@ -779,65 +883,88 @@ def _chunk_is_schedule_related(chunk: dict) -> bool:
 
 
 def _ai_pick_best_source(question: str, hb_chunks: list, faq_candidates: list,
-                          llm_chat_fn) -> str:
+                         llm_chat_fn, date_excerpt: Optional[str] = None) -> str:
     if llm_chat_fn is None:
-        return 'both'
+        return 'date' if date_excerpt else 'both'
 
-    hb_excerpt = ''
-    if hb_chunks:
-        top = hb_chunks[0]
-        title = (top.get('section_title') or '').strip()
-        body = (top.get('content') or '')[:400].strip()
-        hb_excerpt = f"{title}: {body}" if title else body
+    handbook_excerpts = []
+    for chunk in hb_chunks[:3]:
+        title = (chunk.get('section_title') or '').strip()
+        body = (chunk.get('content') or '')[:700].strip()
+        if body:
+            handbook_excerpts.append(f"{title}: {body}" if title else body)
 
-    faq_excerpt = ''
-    if faq_candidates:
-        faq_row = faq_candidates[0].get('faq') or ()
-        faq_q = faq_row[1] if len(faq_row) > 1 else ''
-        faq_a = (faq_row[0] if faq_row else '') or ''
-        faq_excerpt = f"Q: {faq_q}\nA: {(faq_a or '')[:400]}"
+    faq_excerpts = []
+    for candidate in faq_candidates[:3]:
+        row = candidate.get('faq') or ()
+        faq_question = row[1] if len(row) > 1 else ''
+        faq_answer = (row[0] if row else '') or ''
+        if faq_question or faq_answer:
+            faq_excerpts.append(
+                f"Q: {faq_question}\nA: {faq_answer[:500]}"
+            )
 
-    if not hb_excerpt and not faq_excerpt:
+    available_sources = []
+    source_blocks = []
+    if handbook_excerpts:
+        available_sources.append('HANDBOOK')
+        source_blocks.append(
+            "--- HANDBOOK EXCERPTS ---\n" + "\n\n".join(handbook_excerpts)
+        )
+    if faq_excerpts:
+        available_sources.append('FAQ')
+        source_blocks.append("--- FAQ EXCERPTS ---\n" + "\n\n".join(faq_excerpts))
+    if date_excerpt:
+        available_sources.append('DATES')
+        source_blocks.append(f"--- DYNAMIC DATE/SCHEDULE ANSWER ---\n{date_excerpt[:900]}")
+
+    if not available_sources:
         return 'neither'
-    if not hb_excerpt:
+    if available_sources == ['faq']:
         return 'faq'
-    if not faq_excerpt:
+    if available_sources == ['handbook']:
         return 'handbook'
+    if available_sources == ['DATES']:
+        return 'date'
+
+    choices = "\n".join(
+        f"{source} - this source directly answers the question"
+        for source in available_sources
+    )
+    choices += "\nBOTH - two or more sources directly answer different parts"
+    choices += "\nNEITHER - none of the excerpts actually answers the question"
 
     prompt = f"""A student asked: "{question}"
 
-Two candidate sources were retrieved for this question. Some retrieved
-excerpts only SHARE A FEW WORDS with the question without actually
-answering it. Decide which source(s), if any, genuinely
-answer what the student asked — not just resemble it.
+Compare all available sources below. Some excerpts may share words with the
+question without actually answering it. Choose a source only when it states
+the requested fact, policy, or detail. Do not infer missing course, year,
+semester, date, or policy details from a loosely related excerpt.
 
---- HANDBOOK EXCERPT ---
-{hb_excerpt}
+{chr(10).join(source_blocks)}
 
---- FAQ EXCERPT ---
-{faq_excerpt}
-
-Reply with EXACTLY ONE WORD, nothing else:
-HANDBOOK - only the handbook excerpt actually answers this question
-FAQ - only the FAQ excerpt actually answers this question
-BOTH - both genuinely answer part of the question
-NEITHER - neither excerpt actually answers this question
+Reply with EXACTLY ONE label, nothing else:
+{choices}
 
 Answer:"""
 
     try:
         raw = (llm_chat_fn(prompt, max_tokens=5) or '').strip().upper()
     except Exception as e:
-        logger.debug(f"_ai_pick_best_source call failed, defaulting to both: {e}")
-        return 'both'
+        logger.debug(f"_ai_pick_best_source call failed: {e}")
+        return 'date' if date_excerpt else 'both'
 
     if raw.startswith('HANDBOOK'):
         return 'handbook'
     if raw.startswith('FAQ'):
         return 'faq'
+    if raw.startswith('DATE'):
+        return 'date'
     if raw.startswith('NEITHER'):
         return 'neither'
-    return 'both'
+    if raw.startswith('BOTH'):
+        return 'both'
+    return 'date' if date_excerpt else 'both'
 
 
 def _merge_with_handbook(base_answer: str, question: str, hb_chunks: list,
@@ -1182,8 +1309,47 @@ def _find_answer(question: str, return_topic: bool = False,
                 'faq_candidates': locals().get('_faq_cands_early') or [],
                 'faq_score': _faq_score_early,
             }
+            source_pick = _ai_pick_best_source(
+                question,
+                signals['hb_chunks'],
+                signals['faq_candidates'],
+                llm_chat,
+                date_excerpt=date_ans,
+            )
+            if source_pick == 'faq' and signals['faq_candidates']:
+                row = signals['faq_candidates'][0]['faq']
+                answer = _source_answer_in_language(
+                    question, row[1], row[0], detected_lang
+                )
+                ctx.update(
+                    topic=row[3] or 'FAQ',
+                    intent=row[4] if len(row) > 4 else None,
+                    user_msg=question,
+                    bot_response=answer,
+                    faq_answer=answer,
+                    faq_question=row[1],
+                    clear_schedule_context=True,
+                )
+                result = (
+                    answer, row[3] or 'FAQ', row[2],
+                    row[4] if len(row) > 4 else None, detected_lang,
+                )
+                return result if return_topic else result[0]
+            if source_pick == 'handbook' and signals['hb_chunks']:
+                handbook_answer = handbook_service.answer_handbook_question(
+                    question, detected_lang, ctx=ctx
+                )
+                if handbook_answer:
+                    result = (
+                        handbook_answer, 'Handbook', None, 'handbook_query',
+                        detected_lang,
+                    )
+                    return result if return_topic else result[0]
+
             final_ans = date_ans
             hb_ok = (
+                source_pick == 'both'
+                and
                 signals['hb_score'] >= 0.70
                 and signals['hb_chunks']
                 and _chunk_is_schedule_related(signals['hb_chunks'][0])
@@ -1207,10 +1373,6 @@ def _find_answer(question: str, return_topic: bool = False,
             question, last_ex.get('user', ''), last_ex.get('bot', '')
         )
         word_count = len(question.split())
-
-        if (not is_followup and word_count <= 5 and last_ex.get('bot')
-                and not handbook_service.is_handbook_question(question)):
-            is_followup = True
 
         if is_followup:
             search_ans, search_topic, search_intent = _answer_followup_via_search(
@@ -1394,6 +1556,38 @@ def _find_answer(question: str, return_topic: bool = False,
                 candidates = []
                 faq_best_score = 0.0
 
+        tuition_requirements = _tuition_requirements(question)
+        if tuition_requirements:
+            candidates = [
+                candidate for candidate in candidates
+                if _matches_tuition_requirements(
+                    " ".join(
+                        str(candidate['faq'][index] or "")
+                        for index in range(min(len(candidate['faq']), 7))
+                    ),
+                    tuition_requirements,
+                )
+            ]
+            faq_best_score = candidates[0]['combined'] if candidates else 0.0
+            hb_chunks = [
+                chunk for chunk in hb_chunks
+                if _matches_tuition_requirements(
+                    f"{chunk.get('section_title', '')} {chunk.get('content', '')}",
+                    tuition_requirements,
+                )
+            ]
+            hb_score = hb_chunks[0].get('score', 0.0) if hb_chunks else 0.0
+            if not candidates and not hb_chunks:
+                generic_answer = _return_generic_tuition_answer(
+                    question,
+                    detected_lang,
+                    ctx,
+                    _get_all_faqs(),
+                    return_topic,
+                )
+                if generic_answer:
+                    return generic_answer
+
         faq_margin = 0.28 if is_hb else 0.10
         faq_clearly_better = (
             (not is_hb)
@@ -1429,8 +1623,7 @@ def _find_answer(question: str, return_topic: bool = False,
             r'pda|public display|curfew|worship absences|miss worship|'
             r'macias|founders?|something about 1975|campuses|main campus|'
             r'incomplete grades?|residency|drug test|sibling|family scholar|'
-            r'dormitory fees?|tesda|computer science|information technology|'
-            r'business administration|week of spiritual|morphe|2025 edition|'
+            r'dormitory fees?|tesda|week of spiritual|morphe|2025 edition|'
             r'social media|ellen white|'
             r'unsay (dapat )?suoton|unsaon pagbisti|pananamit|bisti)\b',
             question, re.I,
@@ -1453,27 +1646,33 @@ def _find_answer(question: str, return_topic: bool = False,
             faq_clearly_better = False
             handbook_should_lead = bool(hb_chunks) or True
 
-        combine_gap = 0.12
-
-        both_solid = (
-            (not is_hb)
-            and (not pure_handbook_topics)
-            and hb_chunks and hb_score >= 0.48
-            and candidates and faq_best_score >= engine.FUZZY_MIN_SCORE + 0.10
-            and abs(hb_score - faq_best_score) < combine_gap
-        )
-        if both_solid and not circuit_breaker.is_open():
-            source_pick = _ai_pick_best_source(question, hb_chunks, candidates, llm_chat)
+        both_solid = False
+        if (
+            not pure_handbook_topics
+            and hb_chunks
+            and hb_score >= 0.35
+            and candidates
+            and faq_best_score >= engine.FUZZY_MIN_SCORE
+        ):
+            source_pick = _ai_pick_best_source(
+                question, hb_chunks, candidates, llm_chat
+            ) if not circuit_breaker.is_open() else 'both'
             if source_pick == 'handbook':
-                both_solid = False
                 handbook_should_lead = True
             elif source_pick == 'faq':
-                both_solid = False
+                is_hb = False
                 handbook_should_lead = False
+                faq_clearly_better = True
             elif source_pick == 'neither':
-                both_solid = False
-                handbook_should_lead = False
                 candidates = []
+                hb_chunks = []
+                faq_best_score = 0.0
+                hb_score = 0.0
+                handbook_should_lead = False
+                faq_clearly_better = False
+            elif source_pick == 'both':
+                both_solid = True
+
         if both_solid and not circuit_breaker.is_open():
             combined = _combine_handbook_and_faq(
                 question, candidates, hb_chunks, detected_lang

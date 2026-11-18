@@ -274,6 +274,21 @@ def _forced_topic_for(question: str):
     """
     normalized_q = expand_query(question or '')
     if re.search(
+        r'\b(religion|religious|faith|denomination|christian school|'
+        r'seventh.day adventist|adventist school)\b',
+        normalized_q,
+        re.I,
+    ):
+        return (
+            ['multifaith services'],
+            ['seventh-day adventist', 'religious diversity', 'christian values'],
+        )
+    if re.search(r'\b(shorts?|short pants|city shorts)\b', normalized_q, re.I):
+        return (
+            ['dress and appearance', 'first-degree offense', 'first degree offense'],
+            ['short pants', 'city shorts'],
+        )
+    if re.search(
         r'\b(sleeveless|sleeve-less|sleeve less|walay manggas)\b',
         normalized_q,
         re.I,
@@ -360,7 +375,19 @@ def is_handbook_question(question: str) -> bool:
     student manual covers, not particular years/names/numbers.
     """
     q = normalize_vernacular_spelling(question.lower())
+    if (
+        re.search(r'\b(tuition|matrikula|bayranan|bayad sa school)\b', q, re.I)
+        and not re.search(r'\b(handbook|manual|policy|policies|rule|rules)\b', q, re.I)
+    ):
+        return False
     if any(kw in q for kw in HANDBOOK_KEYWORDS):
+        return True
+    if re.search(
+        r'\b(religion|religious|faith|denomination|christian school|'
+        r'seventh.day adventist|adventist school)\b',
+        q,
+        re.I,
+    ):
         return True
     if re.search(
         r'\b(sleeveless|sleeve-less|sleeve less|walay manggas)\b|'

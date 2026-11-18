@@ -72,6 +72,8 @@ class TemplateIntegrityTests(unittest.TestCase):
         self.assertNotIn("/static/uploads/Screenshot", html)
         self.assertIn("deleteCurrentChat()", html)
         self.assertIn("/api/delete_current_chat", html)
+        self.assertIn("deleteSavedChat", html)
+        self.assertIn("Bookmark conversation", html)
 
     def test_error_page_renders_both_status_codes(self):
         with self.app.test_request_context("/"):

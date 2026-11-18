@@ -324,6 +324,70 @@ def delete_current_chat():
             conn.close()
 
 
+@bp.route('/api/delete_chat/<string:chat_uuid>', methods=['POST'])
+@csrf.exempt
+def delete_chat(chat_uuid):
+    """Delete a saved chat after verifying its originating browser identity."""
+    conn = None
+    cur = None
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT session_id, ip_address, user_agent
+            FROM chat_sessions
+            WHERE public_uuid = %s
+            """,
+            (chat_uuid,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return jsonify({'success': False, 'error': 'Conversation not found'}), 404
+
+        session_id, stored_ip, stored_agent = row
+        is_current_chat = (
+            session.get('current_chat_uuid') == chat_uuid
+            and session.get('persistent_session_id') == session_id
+        )
+        same_browser = (
+            stored_ip == request.remote_addr
+            and (stored_agent or '') == (request.headers.get('User-Agent') or '')[:500]
+        )
+        if not is_current_chat and not same_browser:
+            return jsonify({'success': False, 'error': 'Conversation not found'}), 404
+
+        cur.execute("DELETE FROM chat_history WHERE session_id = %s", (session_id,))
+        cur.execute(
+            "DELETE FROM chat_sessions WHERE session_id = %s AND public_uuid = %s",
+            (session_id, chat_uuid),
+        )
+        conn.commit()
+        from services.conversation import delete_ctx
+        delete_ctx(session_id)
+        if is_current_chat:
+            for key in (
+                'persistent_session_id', 'chat_session', 'current_chat_uuid',
+                'last_activity', 'last_topic', 'last_intent', 'last_category',
+                'conversation_turn',
+            ):
+                session.pop(key, None)
+        return jsonify({'success': True})
+    except Exception:
+        if conn is not None:
+            try:
+                conn.rollback()
+            except Exception:
+                logger.exception("Could not rollback saved chat deletion")
+        logger.exception("Could not delete saved chat")
+        return jsonify({'success': False, 'error': 'Could not delete conversation'}), 500
+    finally:
+        if cur is not None:
+            cur.close()
+        if conn is not None:
+            conn.close()
+
+
 @bp.route('/chat', methods=['POST'])
 @csrf.exempt
 def chat():

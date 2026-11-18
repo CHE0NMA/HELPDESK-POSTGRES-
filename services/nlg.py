@@ -278,8 +278,6 @@ def classify_followup(question: str, last_question: str, last_answer: str) -> bo
         return False
 
     words = q.lower().split()
-    if len(words) <= 2:
-        return True
     followup_phrases = [
         'and the', 'and if', 'also', 'how about', 'what about', 'then what',
         'after that', 'what if', 'so that means', 'so do i', 'so can i',
@@ -292,6 +290,32 @@ def classify_followup(question: str, last_question: str, last_answer: str) -> bo
     ql = q.lower()
     if any(ql.startswith(p) or f' {p} ' in ql for p in followup_phrases):
         return True
+    if re.match(
+        r'^(?:pila(?:\s+pud)?\s+(?:ang\s+)?sa\s+)?'
+        r'(?:(?:the\s+)?(?:first|second|third|fourth|1st|2nd|3rd|4th)\s+year|'
+        r'(?:first|second|1st|2nd)\s+sem(?:ester)?)\b',
+        ql,
+    ):
+        return True
+
+    standalone_question = re.match(
+        r'^(?:what(?:\'s| is| are)?|how(?: much| many| do| can| does| is| are)?|'
+        r'who|where|when|why|which|is|are|can|could|does|do|'
+        r'unsa|unsay|kinsa|asa|ngano|pila|naa bay|sino|ano|paano|'
+        r'magkano|ilan|mayroon bang)\b',
+        ql,
+    )
+    specific_topic = re.search(
+        r'\b(tuition|fee|fees|enroll(?:ment)?|requirements?|religion|faith|'
+        r'christian|adventist|shorts?|short pants|campus|school|pac|'
+        r'bsit|bsn|bsba|bpa|beed|bsed|bscs|nursing|education|'
+        r'registrar|scholarship|dress|class|office)\b',
+        ql,
+    )
+    if standalone_question and specific_topic:
+        return False
+    if len(words) <= 2:
+        return False
 
     if not circuit_breaker.is_open():
         prompt = f"""Previous exchange:

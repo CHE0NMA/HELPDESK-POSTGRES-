@@ -652,6 +652,31 @@ Section text:
   </div>
 </div>
 
+<div class="modal fade" id="handbookFaqReviewModal" tabindex="-1" aria-labelledby="handbookFaqReviewTitle" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title" id="handbookFaqReviewTitle">Review generated FAQs</h5>
+          <div class="small text-secondary" id="handbookFaqSectionName"></div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-info py-2">Generated drafts are not saved yet. Edit the questions and answers, uncheck anything you do not want, then insert the selected FAQs.</div>
+        <div id="handbookFaqDraftList" class="d-grid gap-3"></div>
+        <div id="handbookFaqReviewStatus" class="small mt-3" role="status" aria-live="polite"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-outline" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn-primary" id="insertReviewedHandbookFaqs">
+          <i class="bi bi-check2-circle"></i> Insert selected FAQs
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 const FAQ_PROMPT = document.getElementById('faqPromptBox')?.textContent || '';
@@ -1039,6 +1064,7 @@ function renderChunks() {
       <td style="white-space:nowrap">${pageLabel}</td>
       <td class="preview-cell" title="${escHtml(c.preview || '')}">${escHtml(c.preview || '')}</td>
       <td>
+        <button class="act-btn" onclick="generateFaqsForSection(${c.id})" title="Generate FAQs from this section" aria-label="Generate FAQs from this section"><i class="bi bi-magic"></i></button>
         <button class="act-btn" onclick="openEdit(${c.id})" title="Edit"><i class="bi bi-pencil"></i></button>
         <button class="act-btn" onclick="copySectionForPrompt(${c.id})" title="Copy for prompt"><i class="bi bi-clipboard"></i></button>
         <button class="act-btn del" onclick="deleteChunk(${c.id})" title="Delete"><i class="bi bi-trash"></i></button>
@@ -1046,6 +1072,110 @@ function renderChunks() {
     </tr>`;
   }).join('');
 }
+async function generateFaqsForSection(id) {
+  const section = allChunks.find(chunk => chunk.id === id);
+  if (!section) return;
+  const status = document.getElementById('handbookFaqReviewStatus');
+  document.getElementById('handbookFaqSectionName').textContent =
+    `${section.section_title || 'Untitled section'} · ${section.chapter || 'No chapter'}`;
+  document.getElementById('handbookFaqDraftList').innerHTML =
+    '<div class="text-center p-4"><span class="spinner-border spinner-border-sm"></span> Generating drafts from this section…</div>';
+  status.textContent = '';
+  bootstrap.Modal.getOrCreateInstance(
+    document.getElementById('handbookFaqReviewModal')
+  ).show();
+  try {
+    const response = await fetch(`/api/admin/handbook_chunks/${id}/generate_faqs`, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': getCsrf() },
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.error || 'FAQ generation failed.');
+    renderGeneratedHandbookFaqs(data.faqs || []);
+  } catch (error) {
+    document.getElementById('handbookFaqDraftList').innerHTML = '';
+    status.textContent = error.message || 'Could not generate FAQs.';
+    status.className = 'small mt-3 text-danger';
+  }
+}
+function renderGeneratedHandbookFaqs(faqs) {
+  const list = document.getElementById('handbookFaqDraftList');
+  if (!faqs.length) {
+    list.innerHTML = '<div class="alert alert-warning">No FAQ drafts were returned for this section.</div>';
+    return;
+  }
+  list.innerHTML = faqs.map((faq, index) => `
+    <div class="card" data-generated-faq="${index}">
+      <div class="card-header d-flex align-items-center gap-2">
+        <input type="checkbox" class="form-check-input m-0 generated-faq-selected" checked aria-label="Select FAQ ${index + 1}">
+        <strong>Draft ${index + 1}</strong>
+      </div>
+      <div class="card-body">
+        <label class="form-label">Question</label>
+        <textarea class="form-control generated-question" rows="2">${escHtml(faq.question || '')}</textarea>
+        <label class="form-label mt-2">Answer</label>
+        <textarea class="form-control generated-answer" rows="4">${escHtml(faq.answer || '')}</textarea>
+        <div class="row g-2 mt-1">
+          <div class="col-md-3"><label class="form-label">Topic</label><input class="form-control generated-topic" value="${escHtml(faq.topic || 'Handbook')}"></div>
+          <div class="col-md-3"><label class="form-label">Intent</label><input class="form-control generated-intent" value="${escHtml(faq.intent || '')}"></div>
+          <div class="col-md-3"><label class="form-label">Language</label><input class="form-control generated-language" value="${escHtml(faq.language || 'en')}"></div>
+          <div class="col-md-3"><label class="form-label">Priority</label><input type="number" min="1" max="10" class="form-control generated-priority" value="${escHtml(faq.priority || 5)}"></div>
+          <div class="col-md-6"><label class="form-label">Keywords</label><input class="form-control generated-keywords" value="${escHtml(faq.keywords || '')}"></div>
+          <div class="col-md-6"><label class="form-label">Related questions (separate with |)</label><textarea class="form-control generated-related" rows="2">${escHtml(faq.related_questions || '')}</textarea></div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+function getReviewedHandbookFaqs() {
+  return Array.from(document.querySelectorAll('[data-generated-faq]'))
+    .filter(card => card.querySelector('.generated-faq-selected').checked)
+    .map(card => ({
+      question: card.querySelector('.generated-question').value.trim(),
+      answer: card.querySelector('.generated-answer').value.trim(),
+      topic: card.querySelector('.generated-topic').value.trim(),
+      intent: card.querySelector('.generated-intent').value.trim(),
+      language: card.querySelector('.generated-language').value.trim(),
+      priority: card.querySelector('.generated-priority').value,
+      keywords: card.querySelector('.generated-keywords').value.trim(),
+      related_questions: card.querySelector('.generated-related').value.trim(),
+      category: 'Handbook',
+    }));
+}
+document.getElementById('insertReviewedHandbookFaqs')?.addEventListener('click', async function() {
+  const faqs = getReviewedHandbookFaqs();
+  const status = document.getElementById('handbookFaqReviewStatus');
+  if (!faqs.length) {
+    status.textContent = 'Select at least one FAQ to insert.';
+    status.className = 'small mt-3 text-warning';
+    return;
+  }
+  if (faqs.some(faq => !faq.question || !faq.answer)) {
+    status.textContent = 'Every selected FAQ needs a question and an answer.';
+    status.className = 'small mt-3 text-danger';
+    return;
+  }
+  const button = this;
+  button.disabled = true;
+  button.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Inserting…';
+  try {
+    const response = await fetch('/api/admin/handbook_faqs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      body: JSON.stringify({ faqs }),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.error || 'FAQ insert failed.');
+    showToast(data.message || `Inserted ${data.inserted} FAQs`, 'success');
+    bootstrap.Modal.getInstance(document.getElementById('handbookFaqReviewModal'))?.hide();
+  } catch (error) {
+    status.textContent = error.message || 'Could not insert reviewed FAQs.';
+    status.className = 'small mt-3 text-danger';
+  } finally {
+    button.disabled = false;
+    button.innerHTML = '<i class="bi bi-check2-circle"></i> Insert selected FAQs';
+  }
+});
 function copySectionForPrompt(id) {
   const c = allChunks.find(x => x.id === id);
   if (!c) return;

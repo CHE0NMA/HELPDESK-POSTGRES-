@@ -270,6 +270,48 @@ class ChatFeedbackTests(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
         get_db.assert_not_called()
 
+    def test_student_can_delete_saved_chat_from_sidebar(self):
+        connection = FakeConnection(
+            row=("older-server-session", "127.0.0.1", "PAC test browser")
+        )
+        with patch("routes.chat.get_db", return_value=connection), patch(
+            "services.conversation.delete_ctx"
+        ) as delete_context:
+            response = self.client.post(
+                "/api/delete_chat/older-chat-uuid",
+                json={},
+                headers={"User-Agent": "PAC test browser"},
+                environ_base={"REMOTE_ADDR": "127.0.0.1"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.get_json()["success"])
+        self.assertIn(
+            (
+                "DELETE FROM chat_history WHERE session_id = %s",
+                ("older-server-session",),
+            ),
+            connection.cur.executions,
+        )
+        self.assertTrue(connection.committed)
+        delete_context.assert_called_once_with("older-server-session")
+
+    def test_student_cannot_delete_saved_chat_from_another_browser(self):
+        connection = FakeConnection(
+            row=("other-session", "192.0.2.5", "Different browser")
+        )
+        with patch("routes.chat.get_db", return_value=connection):
+            response = self.client.post(
+                "/api/delete_chat/other-chat-uuid",
+                json={},
+                headers={"User-Agent": "PAC test browser"},
+                environ_base={"REMOTE_ADDR": "127.0.0.1"},
+            )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(len(connection.cur.executions), 1)
+        self.assertFalse(connection.committed)
+
     def test_thumbs_down_feedback_does_not_accept_student_corrections(self):
         connection = FakeConnection()
         suggestion = "Students are not allowed to wear earrings at school."

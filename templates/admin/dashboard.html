@@ -407,9 +407,10 @@ textarea.form-control { resize:vertical; min-height:80px; }
           <input type="hidden" name="faq_uuid" id="faq_uuid">
           <input type="hidden" name="faq_id" id="faq_id">
           <div class="row g-2 mb-3">
-            <div class="col-md-4"><label class="form-label">Topic *</label><input name="topic" id="topic" class="form-control" placeholder="e.g., Admissions" required></div>
-            <div class="col-md-4"><label class="form-label">Intent</label><input name="intent" id="intent" class="form-control" placeholder="e.g., enrollment"></div>
-            <div class="col-md-4"><label class="form-label">Language</label><input name="language" id="language" class="form-control" value="en" placeholder="e.g., en"></div>
+            <div class="col-md-3"><label class="form-label">Topic *</label><input name="topic" id="topic" class="form-control" placeholder="e.g., Admissions" required></div>
+            <div class="col-md-3"><label class="form-label">Intent</label><input name="intent" id="intent" class="form-control" placeholder="e.g., enrollment"></div>
+            <div class="col-md-3"><label class="form-label">Language</label><input name="language" id="language" class="form-control" value="en" placeholder="e.g., en"></div>
+            <div class="col-md-3"><label class="form-label">Category</label><input name="category" id="category" class="form-control" value="General" placeholder="e.g., Admissions"></div>
           </div>
           <div class="mb-2"><label class="form-label">Question *</label><textarea name="question" id="question" class="form-control" placeholder="e.g., How do I apply for admission?" required rows="2"></textarea></div>
           <div class="mb-2">
@@ -423,6 +424,13 @@ textarea.form-control { resize:vertical; min-height:80px; }
             </div>
             <textarea name="answer" id="answer" class="form-control" placeholder="Write a short answer. Use blank lines for paragraphs, headings for sections, and lists for steps." required rows="5"></textarea>
             <small class="form-text">Formatting is saved with the answer. Select text or lines, then use a button. The student preview updates as you type.</small>
+            <div class="mt-2 d-flex align-items-center gap-2 flex-wrap">
+              <button type="button" class="btn btn-sm btn-outline-primary" id="btnGenerateFaq">
+                <i class="bi bi-magic"></i> Generate FAQ fields with AI
+              </button>
+              <small class="form-text">Uses the answer to suggest a question, topic, intent, keywords, language, and related questions. Review and edit before saving. Images stay attached to this FAQ but are not analyzed.</small>
+            </div>
+            <div id="faqGenerateStatus" class="small mt-1" role="status" aria-live="polite"></div>
             <div class="mt-2">
               <div class="small text-secondary mb-1">Student preview</div>
               <div id="answerPreview" class="form-control" aria-live="polite" style="min-height:72px;height:auto;white-space:normal;"></div>
@@ -819,6 +827,8 @@ async function deleteManySequentially(uuids, csrf) {
 function openAddModal() {
   document.getElementById('faqForm')?.reset();
   renderAnswerPreview();
+  document.getElementById('faqGenerateStatus').textContent = '';
+  document.getElementById('btnGenerateFaq').style.display = '';
   document.getElementById('faq_uuid').value = '';
   document.getElementById('faq_id').value = '';
   document.getElementById('duplicateWarning').style.display = 'none';
@@ -838,6 +848,7 @@ function openUpdateModal(faq) {
     document.getElementById('faq_id').value = faq[0] || '';
     document.getElementById('topic').value = faq[1] || '';
     document.getElementById('intent').value = faq[2] || '';
+    document.getElementById('category').value = faq[9] || 'General';
     document.getElementById('question').value = faq[3] || '';
     document.getElementById('answer').value = faq[4] || '';
     renderAnswerPreview();
@@ -847,6 +858,8 @@ function openUpdateModal(faq) {
     document.getElementById('priority_score').value = faq[10] ?? 0;
     document.getElementById('attachment_url').value = faq[11] || '';
     document.getElementById('duplicateWarning').style.display = 'none';
+    document.getElementById('faqGenerateStatus').textContent = '';
+    document.getElementById('btnGenerateFaq').style.display = 'none';
     document.getElementById('faqModalLabel').innerHTML = '<i class="bi bi-pencil"></i> Edit FAQ';
     const btn = document.getElementById('btnSaveFaq');
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg"></i> Save FAQ'; }
@@ -856,6 +869,54 @@ function openUpdateModal(faq) {
     showToast('Error opening edit: ' + err.message, 'danger');
   }
 }
+
+document.getElementById('btnGenerateFaq')?.addEventListener('click', async function() {
+  const answer = document.getElementById('answer').value.trim();
+  const status = document.getElementById('faqGenerateStatus');
+  if (!answer) {
+    status.textContent = 'Enter the answer first; AI will use it as its only source.';
+    status.className = 'small mt-1 text-warning';
+    return;
+  }
+  const btn = this;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Generating…';
+  status.textContent = '';
+  try {
+    const response = await fetch('/api/admin/generate_faq_draft', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+      body: JSON.stringify({ answer }),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.error || 'FAQ generation failed.');
+    const draft = data.draft || {};
+    const values = {
+      question: draft.question,
+      related_questions: draft.related_questions,
+      topic: draft.topic,
+      intent: draft.intent,
+      keywords: draft.keywords,
+      language: draft.language,
+      category: draft.category,
+    };
+    for (const [id, value] of Object.entries(values)) {
+      const field = document.getElementById(id);
+      if (field && value !== undefined) {
+        field.value = value;
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }
+    status.textContent = 'AI draft generated. Review or edit all fields before saving.';
+    status.className = 'small mt-1 text-success';
+  } catch (error) {
+    status.textContent = error.message || 'Could not generate FAQ fields.';
+    status.className = 'small mt-1 text-danger';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-magic"></i> Generate FAQ fields with AI';
+  }
+});
 
 function escapeAnswerHtml(value) {
   return value.replace(/[&<>"']/g, char => ({

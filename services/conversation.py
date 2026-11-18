@@ -134,8 +134,6 @@ class ConversationContext:
         words = q.split()
         if not words:
             return False
-        if len(words) <= 2:
-            return True
         followup_phrases = [
             'and the', 'and if', 'also', 'how about', 'what about', 'then what',
             'after that', 'what if', 'so that means', 'so do i', 'so can i',
@@ -148,6 +146,20 @@ class ConversationContext:
         for phrase in followup_phrases:
             if q.startswith(phrase) or f' {phrase} ' in q:
                 return True
+        if re.match(
+            r'^(?:what(?:\'s| is| are)?|how(?: much| many| do| can| does| is| are)?|'
+            r'who|where|when|why|which|is|are|can|could|does|do|'
+            r'unsa|unsay|kinsa|asa|ngano|pila|sino|ano|paano|magkano)\b',
+            q,
+        ) and re.search(
+            r'\b(tuition|fee|fees|enroll(?:ment)?|requirements?|religion|faith|'
+            r'christian|adventist|shorts?|campus|school|pac|bsit|bsn|bsba|'
+            r'bpa|beed|bsed|bscs|nursing|education|registrar|class|office)\b',
+            q,
+        ):
+            return False
+        if len(words) <= 2:
+            return False
         return False
 
     def set_disambiguation(self, dtype: str, options: List[dict], original_question: str,

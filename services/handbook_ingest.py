@@ -428,8 +428,12 @@ Output format:
   "faqs": [
     {{
       "question": "natural student question (can be vague or short)",
+      "related_questions": ["alternate phrasing 1", "alternate phrasing 2"],
       "answer": "clear self-contained answer drawn only from the section",
+      "topic": "short topic label",
+      "intent": "short_snake_case_intent",
       "keywords": "comma,separated,keywords",
+      "language": "en, tl, or ceb",
       "priority": 1-10
     }}
   ]
@@ -546,20 +550,90 @@ def section_to_faqs(ch: Dict) -> List[Dict]:
     faqs = parsed.get('faqs') or []
     out = []
     for f in faqs:
-        q = (f.get('question') or '').strip()
-        a = (f.get('answer') or '').strip()
+        if not isinstance(f, dict):
+            continue
+        q = str(f.get('question') or '').strip()
+        a = str(f.get('answer') or '').strip()
         if not q or not a or len(a) < 20:
             continue
+        related = f.get('related_questions') or []
+        if isinstance(related, str):
+            related = re.split(r'[|\n]', related)
+        if not isinstance(related, list):
+            related = []
+        related = [str(item).strip()[:500] for item in related if str(item).strip()]
+        try:
+            priority = int(f.get('priority') or 5)
+        except (TypeError, ValueError):
+            priority = 5
         out.append({
             'question': q[:500],
             'answer': a[:4000],
             'keywords': (f.get('keywords') or '')[:500],
-            'priority': max(1, min(10, int(f.get('priority') or 5))),
-            'topic': 'Handbook',
+            'related_questions': '|'.join(related[:8]),
+            'topic': (f.get('topic') or title or 'Handbook')[:100],
+            'intent': (f.get('intent') or '')[:100],
+            'language': (f.get('language') or 'en')[:20],
+            'category': 'Handbook',
+            'priority': max(1, min(10, priority)),
             'source': 'handbook',
         })
     time.sleep(PER_CALL_PAUSE)
     return out
+
+
+def generate_faq_metadata(answer: str) -> Dict[str, str]:
+    """Generate editable FAQ metadata using only the supplied answer as evidence."""
+    answer = (answer or '').strip()
+    if not answer:
+        raise ValueError("An answer is required to generate FAQ fields.")
+    if not HAS_AI or not call_for_ingest:
+        raise RuntimeError("AI FAQ generation is not configured.")
+
+    prompt = f"""Create metadata for one school-helpdesk FAQ using only the answer below.
+Do not add facts that are not stated in the answer. Return ONLY valid JSON.
+
+Return this shape:
+{{
+  "question": "one clear, natural student question answered by the text",
+  "related_questions": ["up to 5 short alternate phrasings"],
+  "topic": "short topic label",
+  "intent": "short_snake_case_intent",
+  "keywords": "comma-separated search terms",
+  "language": "en, tl, or ceb",
+  "category": "short category label"
+}}
+
+Answer:
+{answer[:6000]}"""
+    parsed = _parse_llm_json(call_for_ingest(prompt, max_tokens=900))
+    if not isinstance(parsed, dict):
+        raise ValueError("AI did not return valid FAQ metadata. Please try again.")
+
+    question = str(parsed.get('question') or '').strip()
+    topic = str(parsed.get('topic') or '').strip()
+    intent = str(parsed.get('intent') or '').strip()
+    keywords = str(parsed.get('keywords') or '').strip()
+    related = parsed.get('related_questions') or []
+    if isinstance(related, str):
+        related = re.split(r'[|\n]', related)
+    if not isinstance(related, list):
+        related = []
+    related_questions = [
+        str(item).strip()[:500] for item in related if str(item).strip()
+    ][:8]
+    if not question or not topic or not keywords:
+        raise ValueError("AI returned incomplete FAQ metadata. Please try again.")
+
+    return {
+        'question': question[:500],
+        'related_questions': '|'.join(related_questions),
+        'topic': topic[:100],
+        'intent': intent[:100],
+        'keywords': keywords[:500],
+        'language': str(parsed.get('language') or 'en')[:20],
+        'category': str(parsed.get('category') or topic)[:100],
+    }
 
 
 def generate_faqs_from_chunks(chunks: List[Dict], max_sections: int = 80) -> List[Dict]:
@@ -624,10 +698,18 @@ def mass_insert_faqs(get_db_fn: Callable, faqs: List[Dict], retire_previous: boo
             priority = int(f.get('priority') or 5)
             try:
                 cur.execute("""
-                    INSERT INTO faq (question, answer, topic, keywords, priority_score, source)
-                    VALUES (%s, %s, %s, %s, %s, 'handbook')
+                    INSERT INTO faq (
+                        question, answer, topic, intent, keywords, related_questions,
+                        language, category, priority_score, source
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'handbook')
                     RETURNING id
-                """, (q[:500], a[:4000], topic, kw, priority))
+                """, (
+                    q[:500], a[:4000], topic, (f.get('intent') or '')[:100],
+                    kw, (f.get('related_questions') or '')[:2000],
+                    (f.get('language') or 'en')[:20],
+                    (f.get('category') or 'Handbook')[:100], priority,
+                ))
                 row = cur.fetchone()
                 if row:
                     inserted_ids.append(row[0])
@@ -678,15 +760,26 @@ def parse_pasted_faqs(text: str) -> List[Dict]:
         if isinstance(data, list):
             out = []
             for f in data:
+                if not isinstance(f, dict):
+                    continue
                 q = (f.get('question') or f.get('q') or '').strip()
                 a = (f.get('answer') or f.get('a') or '').strip()
                 if q and a:
+                    related = f.get('related_questions') or ''
+                    if isinstance(related, list):
+                        related = '|'.join(
+                            str(item).strip() for item in related if str(item).strip()
+                        )
                     out.append({
                         'question': q,
                         'answer': a,
                         'keywords': f.get('keywords') or '',
+                        'related_questions': related,
+                        'intent': f.get('intent') or '',
+                        'language': f.get('language') or 'en',
+                        'category': f.get('category') or 'Handbook',
                         'priority': int(f.get('priority') or 5),
-                        'topic': 'Handbook',
+                        'topic': f.get('topic') or 'Handbook',
                         'source': 'handbook',
                     })
             return out
