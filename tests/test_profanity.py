@@ -42,7 +42,11 @@ class ProfanityDetectionTests(unittest.TestCase):
             browser_session["persistent_session_id"] = "test-session"
             browser_session["last_activity"] = "2026-11-18T04:00:00"
 
-        context = SimpleNamespace(last_detected_lang=None)
+        context = SimpleNamespace(
+            last_detected_lang=None,
+            last_faq_image=None,
+            last_faq_image_question=None,
+        )
         with patch("routes.chat._session_expired", return_value=False), \
                 patch("routes.chat.check_session_rate_limit", return_value=(True, 1)), \
                 patch("routes.chat.get_conversation_context", return_value=context), \
