@@ -322,4 +322,5 @@ def health():
         finally:
             conn.close()
     except Exception as e:
-        return {"status": "error", "db": str(e)}, 503
+        logger.error(f"Health-check database probe failed: {e}")
+        return {"status": "error", "db": "unavailable"}, 503

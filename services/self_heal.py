@@ -308,7 +308,7 @@ def _try_faq_answer(question: str, detected_lang: str = "english"):
     if not all_faqs:
         return None, None
 
-    q_embedding = get_embedding(question)
+    q_embedding = get_embedding(question, task_type="RETRIEVAL_QUERY")
     candidates = _get_faq_candidates(
         question,
         detected_lang,

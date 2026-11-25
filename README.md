@@ -13,7 +13,7 @@ Flask-based student helpdesk for Philippine Advent College (PAC). It serves a pu
 
 ## Answering Flow
 
-The chat pipeline classifies the question, handles schedule/date requests and follow-ups, and searches handbook sections and FAQs. Search-time language normalization expands supported vernacular spellings and hypothetical wording; for Tagalog, Bisaya/Cebuano, and mixed-language FAQ questions, AI also interprets likely intent and creates cached paraphrase/search terms before lexical matching. FAQ and handbook matching use lexical scores; semantic matching uses Gemini embeddings when the required Gemini key and stored content embeddings are available. An AI section router helps select handbook topics. Generated answers are checked against their sources and question relevance; when the AI check is unavailable, the generated answer is rejected in favor of a source-based fallback where available.
+The chat pipeline classifies the question, handles schedule/date requests and follow-ups, and searches handbook sections and FAQs. For school-related questions, a cached model-driven interpretation identifies the intended meaning, requested answer focus, constraints, and alternative search queries; it is not a source of facts and does not rely on topic-specific question rules. Those search queries join the original wording in FAQ and handbook retrieval. FAQ and handbook matching use lexical scores; semantic matching uses Gemini embeddings when the required Gemini key and stored content embeddings are available. Handbook retrieval asks an AI section router to choose from the current database section titles before running targeted section lookup, then merges lexical and semantic candidates. Topic-specific rules are emergency fallbacks only when the router is unavailable; selected sections receive a ranking boost, with a separate boost for strong semantic matches. Generated answers and their self-checks receive the interpretation so they can distinguish the requested fact from related content. Newly retrieved FAQ answers, including exact-question hits, and handbook answers must pass language, grounding, and direct-intent checks; if validation is unavailable, ambiguous, or unsuccessful, the system withholds the answer instead of returning unvalidated source text. An unrecognized source-routing verdict also abstains. If interpretation is unavailable, retrieval continues, but candidate answers still must pass validation.
 
 Dates and closures are looked up from Postgres rather than inferred by the language model. The public API returns JSON; browser 404 and 500 errors use the shared PAC error page, while API errors remain JSON.
 
@@ -84,7 +84,35 @@ It sends the mixed question set to `/chat`, checks required/forbidden answer det
 
 ### Retrieval Readiness
 
-Authenticated admins can request `GET /api/admin/retrieval_status` to see FAQ and active-handbook embedding coverage, whether each corpus currently has semantic matches available, Gemini embedding call/cache/failure counters, cached Filipino FAQ/handbook query-expansion call, cache, failure, and average-latency counters, and separate Groq/Gemini chat-provider success/failure counts. Coverage is read from Postgres; provider, embedding, and query-expansion call counters are process-local and reset when a worker restarts. The endpoint does not return API keys or raw provider responses. Unanswered questions also record the detected language and broad topic to help admins prioritize recurring gaps; approving one as an FAQ keeps the original student phrasing as a related question for later retrieval.
+Authenticated admins can request `GET /api/admin/retrieval_status` to see FAQ and active-handbook embedding coverage, whether each corpus has complete semantic coverage, whether the optional pgvector/FTS/trigram indexes are enabled and available, Gemini embedding call/cache/failure counters, retrieval-expansion and question-interpretation call/cache/failure/latency counters, and separate Groq/Gemini chat-provider success/failure counts. `semantic_ready` now means every row in that corpus has an embedding; partial coverage remains visible in `coverage_percent`. Coverage is read from Postgres; provider, embedding, and retrieval/interpretation counters are process-local and reset when a worker restarts. The endpoint does not return API keys or raw provider responses. Unanswered questions also record the detected language and broad topic to help admins prioritize recurring gaps; approving one as an FAQ keeps the original student phrasing as a related question for later retrieval.
+
+### Retrieval Evaluation and Multilingual FAQ Data
+
+Measure FAQ retrieval separately from answer quality with a reviewed case file:
+
+```json
+[
+  {
+    "question": "Unsaon pag-enroll sa PAC?",
+    "expected_faq_id": 1,
+    "language": "bisaya"
+  }
+]
+```
+
+Run the cases against the configured database and embedding service with:
+
+```powershell
+python .\evaluate_faq_retrieval.py .\retrieval_cases.json
+```
+
+The report includes Recall@1, Recall@3, and MRR overall and by language. The offline unit suite also checks the canonical English questions in the checked-in FAQ backup; that backup contains 15 unique question texts repeated across 45 rows, so it is only a smoke baseline, not a 100+ multilingual gold set. Do not treat generated translations as verified test data: use real student phrasings, map each to the correct FAQ ID, and have a bilingual reviewer approve them. Answer correctness still needs its own fact-level checks.
+
+The existing FAQ `related_questions` field is enough for the current corpus; a separate variants table is not needed yet. Add reviewed English, Bisaya, and Tagalog phrasings in the admin FAQ editor, separated by `|`. They are fuzzy-matched and included in the FAQ embedding. A dedicated table becomes useful if variant-level approval, source, language, or usage analytics are needed.
+
+For larger FAQ/handbook corpora, optional indexed hybrid retrieval is available through `database/migrations/20261122_hybrid_pgvector.sql`. Back up the database and verify that the Postgres provider supports pgvector 0.7+ before running it manually; it uses 3072-dimension half-precision vectors, matching the current Gemini embedding model default. The migration adds FAQ full-text/trigram indexes and HNSW indexes for FAQ and handbook vectors. After applying it, set `PGVECTOR_HYBRID_SEARCH=1`; until then the app stays on the JSONB/Python path and makes no extra database calls. Check embedding coverage and run `python .\services\backfill_embeddings.py` for missing vectors. Use `--refresh` to recompute existing vectors after changing embedded text or handbook key facts; this makes additional Gemini calls and should be run as a deliberate maintenance job.
+
+Question interpretation is general rather than tied to a catalog of question types: it should distinguish requests such as a creator's name from a request for a song's contents, or a submission location from enrollment requirements. This model-generated focus guides retrieval and answer validation; the FAQ or handbook remains the factual authority. If the source has context but omits the specific fact requested, the system declines to guess instead of substituting a nearby fact. An unanswered phrasing can then be reviewed by an admin, who can add the missing authoritative content without adding new question-form rules.
 
 ## CI/CD
 
@@ -99,3 +127,10 @@ After checks pass, pushes to `main` are eligible for a Vercel production deploy.
 Without these secrets, the workflow reports that deployment was skipped. The app's database URL and AI provider keys belong in Vercel environment variables, not GitHub Actions.
 
 If the Vercel project is already connected to GitHub for automatic deployments, disable its automatic Git deployments before enabling the workflow secrets; otherwise the same commit can deploy twice. Vercel project metadata under `.vercel/` is ignored and should not be committed.
+
+## Production security configuration
+
+- Set `ADMIN_PASSWORD` to a strong secret before the first database bootstrap. It is only used to create the initial `admin212004` account; rotate an existing account's password through the admin profile.
+- Set `CRON_SECRET`; cron requests must send `Authorization: Bearer <secret>`. URL query-string secrets are not accepted.
+- Set `RATELIMIT_STORAGE_URI` to a shared Redis-compatible storage URI (for example `rediss://<host>:<port>/0`) in production. The in-memory fallback is per-instance and the app logs a warning when it is used in production.
+- `TRUSTED_PROXY_HOPS` controls trusted forwarding hops outside Vercel. Leave it at `0` unless the app is behind a known, trusted proxy.

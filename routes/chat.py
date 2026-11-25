@@ -577,7 +577,7 @@ def satisfaction_feedback():
         except Exception:
             pass
         logger.error(f"Satisfaction feedback error: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
     finally:
         try:
             cur.close()
@@ -632,7 +632,7 @@ def submit_chat_rating():
         return jsonify({'status': 'success'})
     except Exception as e:
         logger.error(f"Chat rating error: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
     finally:
         cur.close()
         conn.close()
@@ -757,4 +757,5 @@ def health():
         finally:
             conn.close()
     except Exception as e:
-        return {"status": "error", "db": str(e)}, 503
+        logger.error(f"Health-check database probe failed: {e}")
+        return {"status": "error", "db": "unavailable"}, 503

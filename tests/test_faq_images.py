@@ -36,6 +36,9 @@ class FaqImageAssociationTests(unittest.TestCase):
                     return_value=None,
                 ), \
                 patch.object(
+                    faq, "_validated_faq_source_answer", return_value=answer
+                ), \
+                patch.object(
                     faq.lang_service,
                     "classify_and_detect_language",
                 ):

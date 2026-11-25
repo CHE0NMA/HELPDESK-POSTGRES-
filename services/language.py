@@ -8,6 +8,7 @@ from threading import Lock
 from typing import Dict, Optional, Tuple
 
 from ai_providers import ai_cache, circuit_breaker
+from ai_providers.cache import stable_digest
 # PERF: cheap classification calls (language id, gibberish/on-topic check)
 # route through the small/fast model instead of the main answer-generation
 # model -- see ai_providers/providers.py's llm_chat_fast() docstring.
@@ -638,7 +639,7 @@ def classify_question_ai(question: str) -> dict:
     if _obviously_not_gibberish_and_school_related(q):
         return {'is_gibberish': False, 'is_school_related': True}
 
-    cache_key = f"classify_q_{hash(q.lower())}"
+    cache_key = f"classify_q_{stable_digest(q.lower())}"
     cached = ai_cache.get(cache_key)
     if cached:
         return cached
@@ -730,7 +731,7 @@ def classify_and_detect_language(question: str, prior_lang: Optional[str] = None
     if _obviously_not_gibberish_and_school_related(q):
         class_result = {'is_gibberish': False, 'is_school_related': True}
     else:
-        class_cache_key = f"classify_q_{hash(q.lower())}"
+        class_cache_key = f"classify_q_{stable_digest(q.lower())}"
         cached_class = ai_cache.get(class_cache_key)
         if cached_class:
             class_result = cached_class
@@ -790,7 +791,9 @@ SCHOOL: yes/no  (plausibly related to the school -- enrollment, tuition, grades,
                     'is_school_related': school_match.group(1) == 'yes',
                 }
                 _cache_lang(_lang_cache_key(q), resolved_lang)
-                ai_cache.set(f"classify_q_{hash(q.lower())}", resolved_class)
+                ai_cache.set(
+                    f"classify_q_{stable_digest(q.lower())}", resolved_class
+                )
                 return {'language': resolved_lang, **resolved_class}
     except Exception as e:
         logger.warning(f"classify_and_detect_language merged call failed, "

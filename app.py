@@ -33,6 +33,13 @@ def _is_vercel() -> bool:
     return bool(os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"))
 
 
+def _is_production() -> bool:
+    return (
+        os.environ.get("FLASK_ENV", "").lower() == "production"
+        or os.environ.get("VERCEL_ENV", "").lower() == "production"
+    )
+
+
 def create_app():
     if not os.environ.get("FLASK_SECRET_KEY"):
         raise EnvironmentError(
@@ -98,12 +105,15 @@ def create_app():
         except Exception:
             pass
 
-    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+    proxy_hops = 1 if _is_vercel() else int(os.environ.get("TRUSTED_PROXY_HOPS", "0"))
+    app.wsgi_app = ProxyFix(
+        app.wsgi_app, x_for=proxy_hops, x_proto=1, x_host=1
+    )
 
     app.config.update(
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
-        SESSION_COOKIE_SECURE=os.environ.get("FLASK_ENV") == "production",
+        SESSION_COOKIE_SECURE=_is_production(),
         PERMANENT_SESSION_LIFETIME=timedelta(
             hours=int(os.environ.get("SESSION_TIMEOUT_HOURS", 168))
         ),
@@ -111,7 +121,7 @@ def create_app():
         UPLOAD_FOLDER=UPLOAD_FOLDER,
         BACKUP_FOLDER=os.path.join(os.path.dirname(__file__), "backups"),
         PREFERRED_URL_SCHEME=(
-            "https" if os.environ.get("FLASK_ENV") == "production" else "http"
+            "https" if _is_production() else "http"
         ),
         SEND_FILE_MAX_AGE_DEFAULT=86400,
     )
@@ -122,13 +132,19 @@ def create_app():
 
     csrf.init_app(app)
 
+    rate_limit_storage = os.environ.get("RATELIMIT_STORAGE_URI", "memory://")
+    if _is_production() and rate_limit_storage == "memory://":
+        app.logger.warning(
+            "RATELIMIT_STORAGE_URI is memory://; rate limits are not shared "
+            "between production instances"
+        )
     Limiter(
         get_remote_address,
         app=app,
         default_limits=[
             os.environ.get("RATE_LIMIT_DEFAULT", "200 per day;50 per hour")
         ],
-        storage_uri="memory://",
+        storage_uri=rate_limit_storage,
     )
 
     # CORS for the Flutter app. Native Android/iOS builds aren't subject to
@@ -153,6 +169,10 @@ def create_app():
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        if _is_production() and request.is_secure:
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains"
+            )
 
         if _cors_origins:
             from flask import request as _req
@@ -207,17 +227,6 @@ def create_app():
             title="We hit a snag.",
             message="The help desk could not complete that request. Please try again in a moment.",
         ), 500
-
-    @app.route("/__debug_path")
-    def __debug_path():
-        from flask import request
-        return {
-            "path": request.path,
-            "url": request.url,
-            "environ_PATH_INFO": request.environ.get("PATH_INFO"),
-            "environ_QUERY_STRING": request.environ.get("QUERY_STRING"),
-            "rules": [str(r) for r in app.url_map.iter_rules()][:40],
-        }
 
     try:
         init_pool()

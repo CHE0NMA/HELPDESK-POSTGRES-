@@ -26,6 +26,9 @@ DEBUG_FIRST_N = 3                      # print full status/body for first N call
 TEST_CASES: list[dict[str, Any]] = [
     # ========== 1. Identity / History ==========
     {"cat": "Handbook-Identity", "q": "What is the full official name of the school and its campuses?"},
+    {"cat": "Bisaya-Retrieval", "q": "Pila ka demerit ang first-degree offense?", "must_contain": ["5", "demerit"]},
+    {"cat": "Bisaya-Retrieval", "q": "Pila ka adlaw para moapelar sa desisyon sa Student Disciplinary Committee?", "must_contain": ["15"], "must_contain_any": ["adlaw", "days"]},
+    {"cat": "Tagalog-Retrieval", "q": "Ano ang Safe Spaces Act at ano ang Republic Act number nito?", "must_contain": ["11313"]},
     {"cat": "Handbook-Identity", "q": "What was PAC originally called before it became a college?", "must_contain": ["hillside view", "elementary school"]},
     {"cat": "Handbook-Identity", "q": "When was Philippine Advent College founded and who were the founders?", "must_contain": ["1975", "mariano", "margie"]},
     {"cat": "Handbook-Identity", "q": "Who is the school's founder?", "must_contain": ["mariano", "margie"]},
@@ -231,6 +234,10 @@ def classify_answer_outcome(answer: str, question: str = "",
     return "unverified"
 
 
+def is_failed_outcome(outcome: str) -> bool:
+    return outcome in {"fallback", "incorrect", "request_error"}
+
+
 def _extract_answer(data) -> str | None:
     """Pull the bot text out of the many shapes the endpoint can return."""
     if data is None:
@@ -353,7 +360,7 @@ def main():
             answer, q, item.get("must_contain"), item.get("must_contain_any"),
             item.get("must_not_contain"),
         )
-        failed = outcome in {"fallback", "incorrect", "request_error"}
+        failed = is_failed_outcome(outcome)
         status = "❌ FAILED" if failed else "✅ PASSED"
         print(f" → {status}")
         print(f" → OUTCOME: {outcome}")

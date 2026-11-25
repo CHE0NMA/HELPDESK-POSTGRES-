@@ -23,8 +23,7 @@ SESSION_WINDOW_SECONDS = 300
 
 
 def client_ip() -> str:
-    return (request.headers.get('X-Forwarded-For', '').split(',')[0].strip()
-            or request.remote_addr or 'unknown')
+    return request.remote_addr or 'unknown'
 
 
 def is_locked_out(ip: str) -> Tuple[bool, int]:
@@ -61,12 +60,7 @@ def fingerprint() -> str:
 
 
 def admin_required() -> bool:
-    if not session.get('admin'):
-        return False
-    if session.get('admin_ip') and session['admin_ip'] != client_ip():
-        session.clear()
-        return False
-    return True
+    return bool(session.get('admin'))
 
 
 def check_session_rate_limit(session_id: str, max_messages: int) -> Tuple[bool, int]:

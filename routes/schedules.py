@@ -5,7 +5,6 @@ from flask import Blueprint, jsonify, request, session
 
 from ai_providers import ai_cache, faq_cache
 from database import get_db
-from extensions import csrf
 from utils.security import admin_required
 
 logger = logging.getLogger("pac_helpdesk.routes.schedules")
@@ -56,14 +55,13 @@ def api_get_schedules():
         } for r in cur.fetchall()]})
     except Exception as e:
         logger.error(f"API get schedules error: {e}")
-        return jsonify({'error': str(e), 'schedules': []}), 500
+        return jsonify({'error': 'Internal server error', 'schedules': []}), 500
     finally:
         cur.close()
         conn.close()
 
 
 @bp.route('/api/dynamic_schedules', methods=['POST'])
-@csrf.exempt
 def api_create_schedule():
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
@@ -101,14 +99,13 @@ def api_create_schedule():
     except Exception as e:
         conn.rollback()
         logger.error(f"API create schedule error: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal server error'}), 500
     finally:
         cur.close()
         conn.close()
 
 
 @bp.route('/api/dynamic_schedules/<int:schedule_id>', methods=['PUT'])
-@csrf.exempt
 def api_update_schedule(schedule_id):
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
@@ -142,14 +139,13 @@ def api_update_schedule(schedule_id):
     except Exception as e:
         conn.rollback()
         logger.error(f"API update schedule error: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal server error'}), 500
     finally:
         cur.close()
         conn.close()
 
 
 @bp.route('/api/dynamic_schedules/<int:schedule_id>', methods=['DELETE'])
-@csrf.exempt
 def api_delete_schedule(schedule_id):
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
@@ -162,7 +158,8 @@ def api_delete_schedule(schedule_id):
         return jsonify({'success': True})
     except Exception as e:
         conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Schedule deletion failed: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
     finally:
         cur.close()
         conn.close()
@@ -199,7 +196,6 @@ def api_get_emergency_closures():
 
 
 @bp.route('/api/emergency_closures', methods=['POST'])
-@csrf.exempt
 def api_create_emergency_closure():
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
@@ -228,14 +224,13 @@ def api_create_emergency_closure():
     except Exception as e:
         conn.rollback()
         logger.error(f"API create emergency closure error: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal server error'}), 500
     finally:
         cur.close()
         conn.close()
 
 
 @bp.route('/api/emergency_closures/<int:closure_id>', methods=['DELETE'])
-@csrf.exempt
 def api_delete_emergency_closure(closure_id):
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
@@ -248,7 +243,8 @@ def api_delete_emergency_closure(closure_id):
         return jsonify({'success': True})
     except Exception as e:
         conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Emergency closure update failed: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
     finally:
         cur.close()
         conn.close()
@@ -290,4 +286,5 @@ def health():
         finally:
             conn.close()
     except Exception as e:
-        return {"status": "error", "db": str(e)}, 503
+        logger.error(f"Health-check database probe failed: {e}")
+        return {"status": "error", "db": "unavailable"}, 503

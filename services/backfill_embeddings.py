@@ -18,7 +18,7 @@ Once a row has an embedding, it gets matched by MEANING, not just
 keywords — this is what lets the bot answer a hypothetical or paraphrased
 question about any topic (not just ones with a hand-written alias) without
 anyone hand-tuning a pattern for it. See services/answer_engine.py's
-SEMANTIC_BLEND and services/handbook.py's get_top_handbook_chunks() for
+semantic scoring and services/handbook.py's get_top_handbook_chunks() for
 where these embeddings actually get used.
 
 REQUIREMENTS
@@ -60,6 +60,11 @@ def main():
     parser.add_argument("--chunks-only", action="store_true", help="Only backfill handbook_chunks")
     parser.add_argument("--limit", type=int, default=None,
                          help="Max rows per table this run (omit for all)")
+    parser.add_argument(
+        "--refresh",
+        action="store_true",
+        help="Recompute existing vectors as well as missing vectors",
+    )
     args = parser.parse_args()
 
     try:
@@ -83,11 +88,11 @@ def main():
 
     total = 0
     if not args.chunks_only:
-        n = backfill_faq_embeddings(get_db, limit=args.limit)
+        n = backfill_faq_embeddings(get_db, limit=args.limit, refresh=args.refresh)
         logger.info(f"FAQ rows embedded this run: {n}")
         total += n
     if not args.faqs_only:
-        n = backfill_chunk_embeddings(get_db, limit=args.limit)
+        n = backfill_chunk_embeddings(get_db, limit=args.limit, refresh=args.refresh)
         logger.info(f"Handbook chunk rows embedded this run: {n}")
         total += n
     if not args.faqs_only and not args.chunks_only:

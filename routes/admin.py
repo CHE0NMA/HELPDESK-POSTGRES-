@@ -71,7 +71,6 @@ def admin():
             clear_attempts(ip)
             session['admin'] = True
             session.permanent = True
-            session['admin_ip'] = ip
             session['admin_user'] = u
             session['login_time'] = datetime.now(timezone.utc).isoformat()
             logger.info(f"Admin login successful from {ip}")
@@ -155,13 +154,11 @@ def profile():
         'updated_at': row[3].strftime('%b %d, %Y %I:%M %p') if row[3] else None,
         'last_password_change': row[4].strftime('%b %d, %Y %I:%M %p') if row[4] else None,
         'login_time': session.get('login_time'),
-        'admin_ip': session.get('admin_ip'),
     }
     return render_template('admin/profile.html', admin_info=admin_info)
 
 
 @bp.route('/api/admin/profile', methods=['POST'])
-@csrf.exempt
 def api_update_profile():
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
@@ -191,14 +188,13 @@ def api_update_profile():
     except Exception as e:
         conn.rollback()
         logger.error(f"api_update_profile error: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal server error'}), 500
     finally:
         cur.close()
         conn.close()
 
 
 @bp.route('/api/admin/profile/password', methods=['POST'])
-@csrf.exempt
 def api_change_admin_password():
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
@@ -240,7 +236,7 @@ def api_change_admin_password():
     except Exception as e:
         conn.rollback()
         logger.error(f"api_change_admin_password error: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal server error'}), 500
     finally:
         cur.close()
         conn.close()
@@ -292,7 +288,6 @@ def dashboard():
 
 
 @bp.route('/add_faq', methods=['POST'])
-@csrf.exempt
 def add_faq():
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
@@ -327,7 +322,16 @@ def add_faq():
 
         try:
             from services.embeddings import store_embedding_for_faq
-            store_embedding_for_faq(get_db, question, d.get('keywords', ''), public_uuid=public_uuid)
+            store_embedding_for_faq(
+                get_db,
+                question,
+                d.get('keywords', ''),
+                public_uuid=public_uuid,
+                related_questions=d.get('related_questions', ''),
+                answer=d.get('answer', ''),
+                topic=d.get('topic', ''),
+                intent=d.get('intent', ''),
+            )
         except Exception as e:
             logger.debug(f"add_faq embedding backfill skipped: {e}")
 
@@ -336,7 +340,7 @@ def add_faq():
         if conn is not None:
             conn.rollback()
         logger.exception(f"Add FAQ error: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal server error'}), 500
     finally:
         if cur is not None:
             cur.close()
@@ -345,7 +349,6 @@ def add_faq():
 
 
 @bp.route('/api/admin/generate_faq_draft', methods=['POST'])
-@csrf.exempt
 def api_generate_faq_draft():
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
@@ -362,16 +365,17 @@ def api_generate_faq_draft():
         from services.handbook_ingest import generate_faq_metadata
         return jsonify({'success': True, 'draft': generate_faq_metadata(answer)})
     except ValueError as e:
-        return jsonify({'error': str(e)}), 422
+        logger.info(f"FAQ draft input rejected: {e}")
+        return jsonify({'error': 'Could not generate FAQ fields from this answer.'}), 422
     except RuntimeError as e:
-        return jsonify({'error': str(e)}), 503
+        logger.error(f"FAQ draft generation unavailable: {e}")
+        return jsonify({'error': 'FAQ draft generation is temporarily unavailable.'}), 503
     except Exception as e:
         logger.exception("FAQ draft generation failed: %s", e)
         return jsonify({'error': 'Could not generate FAQ fields. Please try again.'}), 502
 
 
 @bp.route('/update_faq', methods=['POST'])
-@csrf.exempt
 def update_faq():
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
@@ -412,7 +416,16 @@ def update_faq():
 
         try:
             from services.embeddings import store_embedding_for_faq
-            store_embedding_for_faq(get_db, d.get('question', ''), d.get('keywords', ''), public_uuid=faq_uuid)
+            store_embedding_for_faq(
+                get_db,
+                d.get('question', ''),
+                d.get('keywords', ''),
+                public_uuid=faq_uuid,
+                related_questions=d.get('related_questions', ''),
+                answer=d.get('answer', ''),
+                topic=d.get('topic', ''),
+                intent=d.get('intent', ''),
+            )
         except Exception as e:
             logger.debug(f"update_faq embedding backfill skipped: {e}")
 
@@ -421,7 +434,7 @@ def update_faq():
         if conn is not None:
             conn.rollback()
         logger.exception(f"Update FAQ error: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal server error'}), 500
     finally:
         if cur is not None:
             cur.close()
@@ -429,22 +442,21 @@ def update_faq():
             conn.close()
 
 
-@bp.route('/delete_faq/<string:public_uuid>', methods=['GET', 'POST'])
-@csrf.exempt
+@bp.route('/delete_faq/<string:public_uuid>', methods=['POST'])
 def delete_faq(public_uuid):
     if not admin_required():
-        return (jsonify({'error': 'Unauthorized'}), 403) if request.method == 'POST' else redirect('/admin')
+        return jsonify({'error': 'Unauthorized'}), 403
     conn = get_db()
     cur = conn.cursor()
     try:
         cur.execute("DELETE FROM faq WHERE public_uuid = %s", (public_uuid,))
         conn.commit()
         if cur.rowcount == 0:
-            return (jsonify({'error': 'FAQ not found'}), 404) if request.method == 'POST' else redirect('/dashboard')
+            return jsonify({'error': 'FAQ not found'}), 404
         faq_cache.invalidate()
         invalidate_response_tables()
         invalidate_dashboard_cache()
-        return jsonify({'success': True}) if request.method == 'POST' else redirect('/dashboard')
+        return jsonify({'success': True})
     finally:
         cur.close()
         conn.close()
@@ -553,7 +565,6 @@ def delete_unanswered(qid):
 
 
 @bp.route('/answer_question/<int:qid>', methods=['GET', 'POST'])
-@csrf.exempt
 def answer_question(qid):
     if not admin_required():
         return redirect('/admin')
@@ -685,7 +696,6 @@ def reports_count():
 
 
 @bp.route('/delete_feedback/<string:fid>', methods=['POST'])
-@csrf.exempt
 def delete_feedback(fid):
     """fid is now prefixed ('sf_123' / 'bf_45') by the merged /reports
     view above, so this knows which of the two tables to delete from."""
@@ -707,14 +717,13 @@ def delete_feedback(fid):
         return jsonify({'status': 'success'})
     except Exception as e:
         logger.error(f"Delete feedback error: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
     finally:
         cur.close()
         conn.close()
 
 
 @bp.route('/api/admin/add_correction', methods=['POST'])
-@csrf.exempt
 def add_correction():
     """
     The "fix it directly" feature: takes a question + the correct answer
@@ -791,7 +800,6 @@ def corrections_management():
 
 
 @bp.route('/api/admin/corrections/<int:correction_id>', methods=['DELETE'])
-@csrf.exempt
 def delete_correction_route(correction_id):
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
@@ -803,7 +811,6 @@ def delete_correction_route(correction_id):
 
 
 @bp.route('/api/admin/corrections/bulk_delete', methods=['POST'])
-@csrf.exempt
 def delete_corrections_bulk():
     """BUG FIX: corrections_management.html's mass-select "delete
     selected" used to fire one DELETE request per row, sequentially
@@ -900,7 +907,6 @@ def ai_feedback():
 
 
 @bp.route('/mark_reviewed/<int:faq_id>', methods=['POST'])
-@csrf.exempt
 def mark_reviewed(faq_id):
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
@@ -915,7 +921,6 @@ def mark_reviewed(faq_id):
 
 
 @bp.route('/reject_draft/<int:draft_id>', methods=['POST'])
-@csrf.exempt
 def reject_draft(draft_id):
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
@@ -929,7 +934,6 @@ def reject_draft(draft_id):
 
 
 @bp.route('/approve_draft/<int:draft_id>', methods=['POST'])
-@csrf.exempt
 def approve_draft(draft_id):
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
@@ -1040,7 +1044,7 @@ def export_faq():
         return response
     except Exception as e:
         logger.error(f"export_faq error: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal server error'}), 500
     finally:
         cur.close()
         conn.close()
@@ -1069,7 +1073,6 @@ def export_faq_csv():
 
 
 @bp.route('/api/faq/bulk_import', methods=['POST'])
-@csrf.exempt
 def bulk_import_faq():
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
@@ -1139,14 +1142,13 @@ def api_handbook_chunks():
         return jsonify({'chunks': chunks})
     except Exception as e:
         logger.error(f"handbook_chunks list error: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal server error'}), 500
     finally:
         cur.close()
         conn.close()
 
 
 @bp.route('/api/admin/handbook_chunks/<int:chunk_id>/generate_faqs', methods=['POST'])
-@csrf.exempt
 def api_generate_handbook_faqs(chunk_id):
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
@@ -1193,7 +1195,6 @@ def api_generate_handbook_faqs(chunk_id):
 
 
 @bp.route('/api/admin/handbook_faqs', methods=['POST'])
-@csrf.exempt
 def api_insert_reviewed_handbook_faqs():
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
@@ -1278,7 +1279,7 @@ def api_update_handbook_chunk(chunk_id):
     except Exception as e:
         conn.rollback()
         logger.error(f"handbook_chunks update error: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal server error'}), 500
     finally:
         cur.close()
         conn.close()
@@ -1299,7 +1300,7 @@ def api_delete_handbook_chunk(chunk_id):
     except Exception as e:
         conn.rollback()
         logger.error(f"handbook_chunks delete error: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal server error'}), 500
     finally:
         cur.close()
         conn.close()
@@ -1453,13 +1454,12 @@ def api_import_handbook_chunks():
     except Exception as e:
         conn.rollback()
         logger.error(f"Import handbook chunks failed: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal server error'}), 500
     finally:
         cur.close()
         conn.close()
 
 @bp.route('/api/admin/mass_insert_handbook_faqs', methods=['POST'])
-@csrf.exempt
 def api_mass_insert_handbook_faqs():
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
@@ -1504,7 +1504,6 @@ def api_list_topic_aliases():
 
 
 @bp.route("/api/admin/topic_aliases", methods=["POST"])
-@csrf.exempt
 def api_create_topic_alias():
     if not admin_required():
         return jsonify({"error": "Unauthorized"}), 403
@@ -1542,14 +1541,14 @@ def api_create_topic_alias():
         return jsonify({"success": True, "id": new_id})
     except Exception as e:
         conn.rollback()
-        return jsonify({"error": str(e)}), 500
+        logger.error(f"Create topic alias failed: {e}")
+        return jsonify({"error": "Internal server error"}), 500
     finally:
         cur.close()
         conn.close()
 
 
 @bp.route("/api/admin/topic_aliases/<int:alias_id>", methods=["PUT"])
-@csrf.exempt
 def api_update_topic_alias(alias_id):
     if not admin_required():
         return jsonify({"error": "Unauthorized"}), 403
@@ -1592,14 +1591,14 @@ def api_update_topic_alias(alias_id):
         return jsonify({"success": True})
     except Exception as e:
         conn.rollback()
-        return jsonify({"error": str(e)}), 500
+        logger.error(f"Update topic alias failed: {e}")
+        return jsonify({"error": "Internal server error"}), 500
     finally:
         cur.close()
         conn.close()
 
 
 @bp.route("/api/admin/topic_aliases/<int:alias_id>", methods=["DELETE"])
-@csrf.exempt
 def api_delete_topic_alias(alias_id):
     if not admin_required():
         return jsonify({"error": "Unauthorized"}), 403
@@ -1629,7 +1628,6 @@ def api_alias_suggestions():
 
 
 @bp.route("/api/admin/seed_aliases", methods=["POST"])
-@csrf.exempt
 def api_seed_aliases():
     if not admin_required():
         return jsonify({"error": "Unauthorized"}), 403
@@ -1714,7 +1712,6 @@ def api_admin_search_sources():
         conn.close()
 
 @bp.route('/api/admin/delete_faqs', methods=['POST'])
-@csrf.exempt
 def delete_faqs_bulk():
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
@@ -1750,7 +1747,7 @@ def delete_faqs_bulk():
     except Exception as e:
         conn.rollback()
         logger.error(f"Bulk delete FAQ error: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal server error'}), 500
     finally:
         cur.close()
         conn.close()
@@ -1769,7 +1766,8 @@ def health():
         finally:
             conn.close()
     except Exception as e:
-        return {"status": "error", "db": str(e)}, 503
+        logger.error(f"Admin health database probe failed: {e}")
+        return {"status": "error", "db": "unavailable"}, 503
 
 @bp.route('/api/admin/sidebar_counts')
 def api_sidebar_counts():
@@ -1810,7 +1808,6 @@ def self_heal_review():
 
 
 @bp.route('/api/admin/self_heal/run', methods=['POST'])
-@csrf.exempt
 def run_self_heal_now():
     """Manual trigger -- same job the scheduler runs every 6 hours
     (see database/learning_schema.py's wire_into_app), exposed here so an
@@ -1824,11 +1821,10 @@ def run_self_heal_now():
         return jsonify({'success': True, 'drafts_created_or_updated': n})
     except Exception as e:
         logger.error(f"run_self_heal_now error: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal server error'}), 500
 
 
 @bp.route('/api/admin/self_heal/<int:draft_id>/approve', methods=['POST'])
-@csrf.exempt
 def approve_self_heal_draft(draft_id):
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
@@ -1849,7 +1845,6 @@ def approve_self_heal_draft(draft_id):
 
 
 @bp.route('/api/admin/self_heal/<int:draft_id>/dismiss', methods=['POST'])
-@csrf.exempt
 def dismiss_self_heal_draft(draft_id):
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403

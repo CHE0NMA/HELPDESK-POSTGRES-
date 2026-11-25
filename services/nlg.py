@@ -20,6 +20,7 @@ from datetime import datetime
 from typing import Optional
 
 from ai_providers import ai_cache, circuit_breaker
+from ai_providers.cache import stable_digest
 
 from ai_providers.providers import llm_chat_fast
 from services.grounding import answer_is_grounded
@@ -177,7 +178,7 @@ def speak_naturally(canonical_text: str, question: str, detected_lang: str = 'en
     if circuit_breaker.is_open():
         return fallback_text
 
-    cache_key = f"speak_{hash(question)}_{hash(canonical_text)}_{detected_lang}"
+    cache_key = f"speak_{stable_digest(question, canonical_text)}_{detected_lang}"
     cached = ai_cache.get(cache_key)
     if cached and verify_output_language(cached, detected_lang):
         return cached

@@ -12,10 +12,12 @@ from ai_providers import (
     llm_chat,
     provider_for_language,
 )
+from ai_providers.cache import stable_digest
 from database import get_db
 from services import answer_engine as engine
 from services import dates as date_service
 from services import handbook as handbook_service
+from services import hybrid_search
 from services import language as lang_service
 from services import nlg
 from services.conversation import (
@@ -24,7 +26,13 @@ from services.conversation import (
 )
 from services.disambiguation import FAQ_POLICY
 from services.embeddings import get_embedding
-from services.ai_retrieval import llm_expand_faq_query, llm_self_check
+from services.ai_retrieval import (
+    QuestionUnderstanding,
+    llm_expand_faq_query,
+    llm_self_check,
+    question_understanding_prompt,
+    understand_question,
+)
 from services.personnel_titles import personnel_titles
 from utils.text import normalize_input
 
@@ -103,7 +111,7 @@ def _image_for_faq_candidate(
 def _tuition_requirements(question: str) -> List[Tuple[str, ...]]:
     if not _TUITION_QUERY_RE.search(question or ''):
         return []
-    requirements = [
+    requirements: List[Tuple[str, ...]] = [
         aliases for pattern, aliases in _TUITION_PROGRAMS
         if pattern.search(question or '')
     ]
@@ -152,7 +160,9 @@ def _return_generic_tuition_answer(question: str, detected_lang: str, ctx,
     row = _generic_tuition_faq(all_faqs)
     if not row or not row[0]:
         return None
-    answer = _source_answer_in_language(question, row[1], row[0], detected_lang)
+    answer = _validated_faq_source_answer(question, row, detected_lang)
+    if not answer:
+        return None
     topic = row[3] or 'Tuition'
     intent = row[4] if len(row) > 4 else None
     faq_id = row[2] if len(row) > 2 else None
@@ -268,30 +278,54 @@ def _looks_like_non_answer(text: str) -> bool:
     return bool(_NON_ANSWER_RE.search(text or ''))
 
 
+class _QueryEmbeddingUnset:
+    pass
+
+
+_QUERY_EMBEDDING_UNSET = _QueryEmbeddingUnset()
+
+
 def _get_faq_candidates(
     question: str,
     detected_lang: str,
     all_faqs: Sequence[Sequence[Any]],
-    query_embedding: Optional[List[float]] = None,
+    query_embedding: Optional[List[float]] | _QueryEmbeddingUnset = _QUERY_EMBEDDING_UNSET,
+    query_variants: Optional[List[str]] = None,
 ) -> List[Dict]:
+    if not all_faqs:
+        return []
+    if isinstance(query_embedding, _QueryEmbeddingUnset):
+        query_embedding = _get_query_embedding(question)
     search_q = lang_service.normalize_vernacular_spelling(question.lower())
     expanded_q = lang_service.expand_query(search_q)
-    if not all_faqs or detected_lang == "english":
-        return engine.get_top_faq_candidates(
-            search_q,
-            expanded_q,
-            all_faqs,
-            detected_lang,
-            query_embedding=query_embedding,
-        )
-
     alternate_questions = [
         lang_service.expand_query(
             lang_service.normalize_vernacular_spelling(variant.lower())
         )
-        for variant in llm_expand_faq_query(question, detected_lang)
+        for variant in (query_variants or [])
+        if variant and variant.strip()
     ]
-    return engine.get_top_faq_candidates(
+    if detected_lang != "english" and not query_variants:
+        alternate_questions.extend([
+            lang_service.expand_query(
+                lang_service.normalize_vernacular_spelling(variant.lower())
+            )
+            for variant in llm_expand_faq_query(question, detected_lang)
+        ])
+    candidate_ids = hybrid_search.search_faq_candidate_ids(
+        get_db,
+        query_embedding,
+        [question, search_q, expanded_q, *alternate_questions],
+    )
+    if candidate_ids:
+        candidate_rows = [
+            row for row in all_faqs
+            if len(row) > 2 and int(row[2]) in candidate_ids
+        ]
+        if candidate_rows:
+            all_faqs = candidate_rows
+
+    candidates = engine.get_top_faq_candidates(
         search_q,
         expanded_q,
         all_faqs,
@@ -299,6 +333,22 @@ def _get_faq_candidates(
         query_embedding=query_embedding,
         alternate_questions=alternate_questions,
     )
+    logger.debug(
+        "FAQ retrieval query_id=%s language=%s candidate_pool=%d top=%s",
+        stable_digest(question)[:12],
+        detected_lang,
+        len(all_faqs),
+        [
+            {
+                "faq_id": candidate["faq"][2],
+                "fuzzy": round(candidate["fuzzy"], 3),
+                "semantic": round(candidate.get("semantic_score", 0.0), 3),
+                "combined": round(candidate["combined"], 3),
+            }
+            for candidate in candidates[:5]
+        ],
+    )
+    return candidates
 
 
 def split_compound_question(question: str) -> List[str]:
@@ -315,7 +365,12 @@ def split_compound_question(question: str) -> List[str]:
     return cleaned if len(cleaned) > 1 else [q]
 
 
-def _answer_followup_via_search(question: str, ctx, detected_lang: str):
+def _answer_followup_via_search(
+    question: str,
+    ctx,
+    detected_lang: str,
+    understanding: Optional[QuestionUnderstanding] = None,
+):
     from services.conversation import build_context_snapshot
 
     context_snapshot = build_context_snapshot(ctx)
@@ -324,15 +379,20 @@ def _answer_followup_via_search(question: str, ctx, detected_lang: str):
         resolved_q = _resolve_standalone_question(question, context_snapshot)
 
     looks_handbooky = (
-        handbook_service.is_handbook_question(resolved_q)
-        or handbook_service.is_handbook_question(question)
+        handbook_service.is_handbook_question(resolved_q, detected_lang)
+        or handbook_service.is_handbook_question(question, detected_lang)
     )
     if looks_handbooky:
-        hb_ans = handbook_service.answer_handbook_question(resolved_q, detected_lang, ctx=ctx)
+        hb_ans = handbook_service.answer_handbook_question(
+            resolved_q,
+            detected_lang,
+            ctx=ctx,
+            understanding=understanding,
+        )
         if hb_ans:
             return hb_ans, 'Handbook', 'handbook_query'
 
-    faq_result = _lookup_faq_answer(resolved_q, detected_lang)
+    faq_result = _lookup_faq_answer(resolved_q, detected_lang, understanding)
     if faq_result and faq_result[0]:
         answer, topic, intent = faq_result
         return answer, (topic or 'General'), intent
@@ -344,22 +404,11 @@ def answer_followup_with_ai(user_question: str, context_summary: str = "",
                              conversation_history: Optional[List[Dict[str, str]]] = None,
                              detected_lang: str = 'english',
                              last_faq_answer: Optional[str] = None,
-                             last_faq_question: Optional[str] = None) -> Optional[str]:
-    source_fallback = (
-        _source_answer_in_language(
-            user_question,
-            last_faq_question,
-            last_faq_answer,
-            detected_lang,
-            translate=True,
-        )
-        if last_faq_answer else (
-            None if detected_lang == 'english'
-            else lang_service.get_translation_unavailable_response(detected_lang)
-        )
-    )
+                             last_faq_question: Optional[str] = None,
+                             understanding: Optional[QuestionUnderstanding] = None
+                             ) -> Optional[str]:
     if circuit_breaker.is_open():
-        return source_fallback
+        return _faq_refusal(detected_lang)
 
     lang_config = lang_service.LANGUAGE_CONFIG.get(
         detected_lang, lang_service.LANGUAGE_CONFIG['english']
@@ -372,6 +421,7 @@ def answer_followup_with_ai(user_question: str, context_summary: str = "",
             lines.append(f"Student: {ex.get('user', '')}")
             lines.append(f"Assistant: {ex.get('bot', '')}")
         history_text = "\n".join(lines)
+    interpretation = question_understanding_prompt(understanding)
 
     prompt = f"""{nlg.now_context()}
 
@@ -387,6 +437,7 @@ def answer_followup_with_ai(user_question: str, context_summary: str = "",
 {f"Previous FAQ answer: {last_faq_answer[:300]}" if last_faq_answer else ""}
 
 NOW the student asks: "{user_question}"
+{interpretation}
 
 YOUR TASK: Answer this follow-up question naturally.
 - Use the conversation history above for context
@@ -409,59 +460,68 @@ Answer:"""
             if response and response[-1] not in '.!?':
                 response += '.'
             if response and not lang_service.verify_output_language(response, detected_lang):
-                return source_fallback
+                return _faq_refusal(detected_lang)
+            if not llm_self_check(
+                user_question,
+                response,
+                "\n".join(
+                    item for item in (
+                        context_summary,
+                        history_text,
+                        last_faq_answer or "",
+                    ) if item
+                ),
+                understanding,
+            ):
+                return _faq_refusal(detected_lang)
             return response
     except Exception as e:
         logger.error(f"Follow-up AI error: {e}")
-    return source_fallback
+    return _faq_refusal(detected_lang)
 
 
-def _lookup_faq_answer(question: str, detected_lang: str) -> Optional[Tuple[str, str, str]]:
+def _lookup_faq_answer(
+    question: str,
+    detected_lang: str,
+    understanding: Optional[QuestionUnderstanding] = None,
+) -> Optional[Tuple[str, str, str]]:
     all_faqs = _get_all_faqs()
-    search_q = lang_service.normalize_vernacular_spelling(question.lower())
-    candidates = _get_faq_candidates(question, detected_lang, all_faqs)
-    if candidates and candidates[0]['combined'] < 0.75:
-        query_embedding = get_embedding(search_q, cache=ai_cache)
-        if query_embedding:
-            candidates = _get_faq_candidates(
-                question, detected_lang, all_faqs,
-                query_embedding=query_embedding,
-            )
+    candidates = _get_faq_candidates(
+        question,
+        detected_lang,
+        all_faqs,
+        query_variants=understanding.search_queries if understanding else None,
+    )
     if not candidates:
         return None
+
     best = candidates[0]
     if best['combined'] < engine.FUZZY_MIN_SCORE:
-        if best['fuzzy'] >= 0.60:
+        refusal = None if understanding else _faq_refusal(detected_lang)
+        if refusal:
             row = best['faq']
-            return (
-                _source_answer_in_language(
-                    question, row[1], row[0], detected_lang
-                ),
-                row[3],
-                row[4],
-            )
+            return refusal, row[3], row[4]
         return None
     if circuit_breaker.is_open():
-        row = best['faq']
-        return (
-            _source_answer_in_language(question, row[1], row[0], detected_lang),
-            row[3],
-            row[4],
-        )
+        refusal = None if understanding else _faq_refusal(detected_lang)
+        if refusal:
+            row = best['faq']
+            return refusal, row[3], row[4]
+        return None
     ai_ans, matched = engine.smart_extract_answer(
         user_question=question,
         candidates=candidates,
         detected_lang=detected_lang,
         llm_chat_fn=llm_chat,
         ai_cache=ai_cache,
+        understanding=understanding,
     )
     if not ai_ans:
-        row = best['faq']
-        return (
-            _source_answer_in_language(question, row[1], row[0], detected_lang),
-            row[3],
-            row[4],
-        )
+        refusal = None if understanding else _faq_refusal(detected_lang)
+        if refusal:
+            row = best['faq']
+            return refusal, row[3], row[4]
+        return None
     best_row = (matched or best)['faq']
     return (ai_ans, best_row[3], best_row[4])
 
@@ -496,13 +556,58 @@ def _source_answer_in_language(
     return lang_service.get_translation_unavailable_response(detected_lang)
 
 
-def _answer_personnel_faq(question: str, detected_lang: str, ctx):
+def _faq_refusal(detected_lang: str) -> Optional[str]:
+    if detected_lang == 'english':
+        return None
+    return lang_service.get_translation_unavailable_response(detected_lang)
+
+
+def _validated_faq_source_answer(
+    question: str,
+    row: Sequence[Any],
+    detected_lang: str,
+    understanding: Optional[QuestionUnderstanding] = None,
+    translate: bool = False,
+) -> Optional[str]:
+    if len(row) < 2 or not row[0]:
+        return None
+    answer = _source_answer_in_language(
+        question, str(row[1] or ''), str(row[0]), detected_lang,
+        translate=translate,
+    )
+    if (
+        not answer
+        or answer == lang_service.get_translation_unavailable_response(detected_lang)
+        or not lang_service.verify_output_language(answer, detected_lang)
+    ):
+        return None
+
+    source_excerpt = (
+        f"FAQ question: {row[1] or ''}\nFAQ answer: {row[0]}"
+    )
+    if not llm_self_check(question, answer, source_excerpt, understanding):
+        logger.info("FAQ source answer rejected by intent/grounding check")
+        return None
+    return answer
+
+
+def _answer_personnel_faq(
+    question: str,
+    detected_lang: str,
+    ctx,
+    understanding: Optional[QuestionUnderstanding] = None,
+):
     """Prefer a FAQ for an explicitly named staff role over generic handbook hits."""
     roles = personnel_titles(question)
     if not roles:
         return None
 
-    candidates = _get_faq_candidates(question, detected_lang, _get_all_faqs())
+    candidates = _get_faq_candidates(
+        question,
+        detected_lang,
+        _get_all_faqs(),
+        query_variants=understanding.search_queries if understanding else None,
+    )
     candidate = next(
         (item for item in candidates if item.get('personnel_title_match')),
         None,
@@ -523,11 +628,29 @@ def _answer_personnel_faq(question: str, detected_lang: str, ctx):
             detected_lang=detected_lang,
             llm_chat_fn=llm_chat,
             ai_cache=ai_cache,
+            understanding=understanding,
         )
     if not response:
-        response = _source_answer_in_language(
-            question, row[1], answer, detected_lang
+        response = _validated_faq_source_answer(
+            question, row, detected_lang, understanding
         )
+        if not response:
+            refusal = _faq_refusal(detected_lang)
+            if not refusal:
+                return None
+            ctx.update(
+                user_msg=question,
+                bot_response=refusal,
+                detected_lang=detected_lang,
+                clear_schedule_context=True,
+            )
+            return (
+                refusal,
+                row[3] or 'Personnel',
+                row[2] if len(row) > 2 else None,
+                row[4] if len(row) > 4 else None,
+                detected_lang,
+            )
 
     image = row[8] if len(row) > 8 else None
     if image:
@@ -684,16 +807,19 @@ def _get_query_embedding(question: str):
     """Compute (or fetch from cache) ONE embedding for this question,
     shared between FAQ scoring and handbook-chunk scoring so a single
     message costs at most one embeddings API call, not one per lookup
-    site. get_embedding() already caches by normalized text (ai_cache),
+    site. Embed the original wording, especially for vernacular queries.
+    get_embedding() caches by stable digest (ai_cache),
     so calling this more than once with the same question is free after
     the first real call -- but computing it once up front and threading
     it through makes that explicit rather than relying on cache timing.
     Returns None (never raises) if embeddings aren't configured
     (GEMINI_API_KEY unset) -- every caller already treats None as "skip
     semantic scoring, fuzzy/keyword-only like before this feature"."""
-    search_q = lang_service.normalize_vernacular_spelling((question or '').lower())
+    search_q = question or ""
     try:
-        return get_embedding(search_q, cache=ai_cache)
+        return get_embedding(
+            search_q, cache=ai_cache, task_type="RETRIEVAL_QUERY"
+        )
     except Exception:
         return None
 
@@ -702,26 +828,42 @@ def _handbook_best_score(
     question: str,
     query_embedding=None,
     detected_lang: str = "english",
+    understanding: Optional[QuestionUnderstanding] = None,
 ) -> Tuple[float, list]:
     chunks = handbook_service.get_top_handbook_chunks(
         question,
         query_embedding=query_embedding,
         detected_lang=detected_lang,
+        query_variants=understanding.search_queries if understanding else None,
     )
     score = chunks[0]['score'] if chunks else 0.0
     return score, chunks
 
 
-def _faq_candidates_and_score(question: str, detected_lang: str, query_embedding=None) -> Tuple[list, float]:
+def _faq_candidates_and_score(
+    question: str,
+    detected_lang: str,
+    query_embedding=None,
+    understanding: Optional[QuestionUnderstanding] = None,
+) -> Tuple[list, float]:
     all_faqs = _get_all_faqs()
     candidates = _get_faq_candidates(
-        question, detected_lang, all_faqs, query_embedding=query_embedding
+        question,
+        detected_lang,
+        all_faqs,
+        query_embedding=query_embedding,
+        query_variants=understanding.search_queries if understanding else None,
     )
     best_score = candidates[0]['combined'] if candidates else 0.0
     return candidates, best_score
 
 
-def _score_sources_parallel(question: str, detected_lang: str, query_embedding=None) -> dict:
+def _score_sources_parallel(
+    question: str,
+    detected_lang: str,
+    query_embedding=None,
+    understanding: Optional[QuestionUnderstanding] = None,
+) -> dict:
     """PERF: run handbook scoring and FAQ scoring concurrently instead of
     sequentially -- they're independent (separate DB queries + in-process
     scoring, no shared mutable state), so there's no reason to pay their
@@ -736,21 +878,29 @@ def _score_sources_parallel(question: str, detected_lang: str, query_embedding=N
         faq_context = copy_context()
         hb_future = _SCORING_EXECUTOR.submit(
             hb_context.run,
-            _handbook_best_score, question, query_embedding, detected_lang
+            _handbook_best_score, question, query_embedding, detected_lang,
+            understanding,
         )
         faq_future = _SCORING_EXECUTOR.submit(
             faq_context.run,
-            _faq_candidates_and_score, question, detected_lang, query_embedding
+            _faq_candidates_and_score, question, detected_lang, query_embedding,
+            understanding,
         )
         hb_score, hb_chunks = hb_future.result()
         faq_candidates, faq_score = faq_future.result()
     except Exception as e:
         logger.debug(f"_score_sources_parallel: pool failed, falling back to sequential: {e}")
         hb_score, hb_chunks = _handbook_best_score(
-            question, query_embedding=query_embedding, detected_lang=detected_lang
+            question,
+            query_embedding=query_embedding,
+            detected_lang=detected_lang,
+            understanding=understanding,
         )
         faq_candidates, faq_score = _faq_candidates_and_score(
-            question, detected_lang, query_embedding=query_embedding
+            question,
+            detected_lang,
+            query_embedding=query_embedding,
+            understanding=understanding,
         )
     return {
         'hb_score': hb_score, 'hb_chunks': hb_chunks,
@@ -964,36 +1114,42 @@ Answer:"""
         return 'neither'
     if raw.startswith('BOTH'):
         return 'both'
-    return 'date' if date_excerpt else 'both'
+    logger.warning("Source judge returned an invalid verdict; abstaining")
+    return 'neither'
 
 
 def _merge_with_handbook(base_answer: str, question: str, hb_chunks: list,
-                          detected_lang: str) -> str:
-    hb_ans = handbook_service.answer_from_selected_chunk(question, hb_chunks[0], detected_lang)
+                          detected_lang: str,
+                          understanding: Optional[QuestionUnderstanding] = None) -> str:
+    hb_ans = handbook_service.answer_from_selected_chunk(
+        question, hb_chunks[0], detected_lang, understanding=understanding
+    )
     if not hb_ans:
         return base_answer
     source_text = f"{hb_chunks[0].get('section_title','')} {hb_chunks[0].get('content','')}"
-    if not llm_self_check(question, hb_ans, source_text):
+    if not llm_self_check(question, hb_ans, source_text, understanding):
         logger.info(f"_merge_with_handbook: self-check rejected supplementary note for q={question[:80]!r}")
         return base_answer
     return f"{base_answer}\n\n{_note_header('handbook', detected_lang)} {hb_ans}"
 
 
 def _merge_with_faq(base_answer: str, question: str, faq_candidates: list,
-                     detected_lang: str) -> str:
+                     detected_lang: str,
+                     understanding: Optional[QuestionUnderstanding] = None) -> str:
     faq_ans, matched = engine.smart_extract_answer(
         user_question=question,
         candidates=faq_candidates,
         detected_lang=detected_lang,
         llm_chat_fn=llm_chat,
         ai_cache=ai_cache,
+        understanding=understanding,
     )
     if not faq_ans:
         return base_answer
 
     matched_row = (matched or faq_candidates[0]).get('faq') if faq_candidates else None
     source_text = (matched_row[0] if matched_row else '') or ''
-    if not llm_self_check(question, faq_ans, source_text):
+    if not llm_self_check(question, faq_ans, source_text, understanding):
         logger.info(f"_merge_with_faq: self-check rejected supplementary note for q={question[:80]!r}")
         return base_answer
     return f"{base_answer}\n\n{_note_header('faq', detected_lang)} {faq_ans}"
@@ -1006,23 +1162,26 @@ def _merge_with_date(base_answer: str, date_ans: Optional[str], detected_lang: s
 
 
 def _combine_handbook_and_faq(question: str, candidates: list, hb_chunks: list,
-                               detected_lang: str) -> Optional[str]:
+                               detected_lang: str,
+                               understanding: Optional[QuestionUnderstanding] = None
+                               ) -> Optional[str]:
     faq_ans, _ = engine.smart_extract_answer(
         user_question=question,
         candidates=candidates,
         detected_lang=detected_lang,
         llm_chat_fn=llm_chat,
         ai_cache=ai_cache,
+        understanding=understanding,
     )
     hb_ans = None
     if hb_chunks:
         hb_ans = handbook_service.answer_from_selected_chunk(
-            question, hb_chunks[0], detected_lang
+            question, hb_chunks[0], detected_lang, understanding=understanding
         )
 
         if hb_ans:
             source_text = f"{hb_chunks[0].get('section_title','')} {hb_chunks[0].get('content','')}"
-            if not llm_self_check(question, hb_ans, source_text):
+            if not llm_self_check(question, hb_ans, source_text, understanding):
                 logger.info(f"_combine_handbook_and_faq: self-check rejected handbook half for q={question[:80]!r}")
                 hb_ans = None
 
@@ -1133,34 +1292,43 @@ def _find_answer(question: str, return_topic: bool = False,
 
         if exact_answer:
             answer, topic, faq_id, intent = exact_answer
-            answer = _source_answer_in_language(
+            exact_understanding = understand_question(
                 question,
-                exact_source_question,
-                answer,
                 exact_language,
+                context_hint=(
+                    ctx.get_context_summary()
+                    if ctx and ctx.conversation_history else None
+                ),
+            )
+            answer = _validated_faq_source_answer(
+                question,
+                (answer, exact_source_question),
+                exact_language,
+                exact_understanding,
                 translate=True,
             )
-            if exact_image:
-                answer = f"{answer}\n\n[Image: {exact_image}]"
-            ctx.update(
-                topic=topic or 'FAQ',
-                intent=intent,
-                user_msg=question,
-                bot_response=answer,
-                faq_answer=answer,
-                faq_question=question,
-                faq_image=exact_image,
-                detected_lang=exact_language,
-                clear_schedule_context=True,
-            )
-            result = (
-                answer,
-                topic or 'FAQ',
-                faq_id,
-                intent,
-                exact_language,
-            )
-            return result if return_topic else result[0]
+            if answer:
+                if exact_image:
+                    answer = f"{answer}\n\n[Image: {exact_image}]"
+                ctx.update(
+                    topic=topic or 'FAQ',
+                    intent=intent,
+                    user_msg=question,
+                    bot_response=answer,
+                    faq_answer=answer,
+                    faq_question=question,
+                    faq_image=exact_image,
+                    detected_lang=exact_language,
+                    clear_schedule_context=True,
+                )
+                result = (
+                    answer,
+                    topic or 'FAQ',
+                    faq_id,
+                    intent,
+                    exact_language,
+                )
+                return result if return_topic else result[0]
 
     _lang_and_class = lang_service.classify_and_detect_language(
         question, prior_lang=ctx.last_detected_lang
@@ -1195,21 +1363,21 @@ def _find_answer(question: str, return_topic: bool = False,
             from services.answer_engine import _extract_from_answer
             src = (correction.get('answer') or '').strip()
             src_for_extract = src if len(src) <= 1200 else (src[:1200].rsplit(' ', 1)[0] + '…')
+            correction_understanding = understand_question(
+                question,
+                detected_lang,
+                context_hint=ctx.get_context_summary()
+                if ctx and ctx.conversation_history else None,
+            )
             reworded = _extract_from_answer(
                 question, correction['question'], src_for_extract,
                 llm_chat, detected_lang=detected_lang,
+                understanding=correction_understanding,
             )
             if reworded:
                 final_answer = reworded
             else:
-                if detected_lang == 'english':
-                    parts = re.split(r'(?<=[.!?])\s+', src)
-                    short = ' '.join(p.strip() for p in parts[:2] if p.strip())
-                    if len(short) > 400:
-                        short = short[:397].rsplit(' ', 1)[0] + '…'
-                    final_answer = short or src[:400]
-                else:
-                    final_answer = lang_service.get_translation_unavailable_response(detected_lang)
+                final_answer = lang_service.get_fallback_response(detected_lang)
             ctx.update(user_msg=question, bot_response=final_answer, clear_schedule_context=True)
             result = (final_answer, 'Corrected', correction.get('faq_id'), None, detected_lang)
             return result if return_topic else result[0]
@@ -1246,35 +1414,37 @@ def _find_answer(question: str, return_topic: bool = False,
         )
         return result if return_topic else result[0]
 
-    personnel_result = _answer_personnel_faq(question, detected_lang, ctx)
+    understanding = understand_question(
+        question,
+        detected_lang,
+        context_hint=ctx.get_context_summary() if ctx and ctx.conversation_history else None,
+    )
+
+    personnel_result = _answer_personnel_faq(
+        question, detected_lang, ctx, understanding=understanding
+    )
     if personnel_result:
         return personnel_result if return_topic else personnel_result[0]
 
     _looks_date = date_service.is_date_question(question, ctx=ctx)
-    _looks_hb = handbook_service.is_handbook_question(question)
+    _looks_hb = handbook_service.is_handbook_question(question, detected_lang)
     _hb_score_early, _hb_chunks_early = (0.0, [])
     _faq_score_early = 0.0
     _faq_cands_early = []
     _early_scoring_done = False
     if _looks_date or _looks_hb:
         try:
-            scored = _score_sources_parallel(question, detected_lang)
+            _q_embedding = _get_query_embedding(question)
+            scored = _score_sources_parallel(
+                question,
+                detected_lang,
+                query_embedding=_q_embedding,
+                understanding=understanding,
+            )
             _hb_score_early, _hb_chunks_early = scored['hb_score'], scored['hb_chunks']
             _faq_cands_early, _faq_score_early = scored['faq_candidates'], scored['faq_score']
         except Exception:
             pass
-
-        if _hb_score_early < 0.45 and _faq_score_early < 0.78:
-            _q_embedding = _get_query_embedding(question)
-            if _q_embedding:
-                try:
-                    scored = _score_sources_parallel(
-                        question, detected_lang, query_embedding=_q_embedding
-                    )
-                    _hb_score_early, _hb_chunks_early = scored['hb_score'], scored['hb_chunks']
-                    _faq_cands_early, _faq_score_early = scored['faq_candidates'], scored['faq_score']
-                except Exception:
-                    pass
       
         _early_scoring_done = True
 
@@ -1316,28 +1486,58 @@ def _find_answer(question: str, return_topic: bool = False,
                 llm_chat,
                 date_excerpt=date_ans,
             )
+            if source_pick == 'neither':
+                return _give_up(
+                    question,
+                    signals['faq_candidates'],
+                    signals['hb_chunks'],
+                    detected_lang,
+                    ctx,
+                    return_topic,
+                )
             if source_pick == 'faq' and signals['faq_candidates']:
-                row = signals['faq_candidates'][0]['faq']
-                answer = _source_answer_in_language(
-                    question, row[1], row[0], detected_lang
+                candidate = signals['faq_candidates'][0]
+                row = candidate['faq']
+                if understanding and not circuit_breaker.is_open():
+                    answer, _ = engine.smart_extract_answer(
+                        user_question=question,
+                        candidates=[candidate],
+                        detected_lang=detected_lang,
+                        llm_chat_fn=llm_chat,
+                        ai_cache=ai_cache,
+                        understanding=understanding,
+                    )
+                else:
+                    answer = _validated_faq_source_answer(
+                        question, row, detected_lang, understanding
+                    )
+                if answer:
+                    ctx.update(
+                        topic=row[3] or 'FAQ',
+                        intent=row[4] if len(row) > 4 else None,
+                        user_msg=question,
+                        bot_response=answer,
+                        faq_answer=answer,
+                        faq_question=row[1],
+                        clear_schedule_context=True,
+                    )
+                    result = (
+                        answer, row[3] or 'FAQ', row[2],
+                        row[4] if len(row) > 4 else None, detected_lang,
+                    )
+                    return result if return_topic else result[0]
+                return _give_up(
+                    question,
+                    signals['faq_candidates'],
+                    signals['hb_chunks'],
+                    detected_lang,
+                    ctx,
+                    return_topic,
                 )
-                ctx.update(
-                    topic=row[3] or 'FAQ',
-                    intent=row[4] if len(row) > 4 else None,
-                    user_msg=question,
-                    bot_response=answer,
-                    faq_answer=answer,
-                    faq_question=row[1],
-                    clear_schedule_context=True,
-                )
-                result = (
-                    answer, row[3] or 'FAQ', row[2],
-                    row[4] if len(row) > 4 else None, detected_lang,
-                )
-                return result if return_topic else result[0]
             if source_pick == 'handbook' and signals['hb_chunks']:
                 handbook_answer = handbook_service.answer_handbook_question(
-                    question, detected_lang, ctx=ctx
+                    question, detected_lang, ctx=ctx,
+                    understanding=understanding,
                 )
                 if handbook_answer:
                     result = (
@@ -1345,6 +1545,14 @@ def _find_answer(question: str, return_topic: bool = False,
                         detected_lang,
                     )
                     return result if return_topic else result[0]
+                return _give_up(
+                    question,
+                    signals['faq_candidates'],
+                    signals['hb_chunks'],
+                    detected_lang,
+                    ctx,
+                    return_topic,
+                )
 
             final_ans = date_ans
             hb_ok = (
@@ -1357,7 +1565,11 @@ def _find_answer(question: str, return_topic: bool = False,
             )
             if hb_ok:
                 final_ans = _merge_with_handbook(
-                    final_ans, question, signals['hb_chunks'], detected_lang
+                    final_ans,
+                    question,
+                    signals['hb_chunks'],
+                    detected_lang,
+                    understanding=understanding,
                 )
             result = (final_ans, 'Schedule', None, 'date_query', detected_lang)
             return result if return_topic else result[0]
@@ -1376,7 +1588,7 @@ def _find_answer(question: str, return_topic: bool = False,
 
         if is_followup:
             search_ans, search_topic, search_intent = _answer_followup_via_search(
-                question, ctx, detected_lang
+                question, ctx, detected_lang, understanding=understanding
             )
             if search_ans:
                 ctx.update(
@@ -1398,6 +1610,7 @@ def _find_answer(question: str, return_topic: bool = False,
                         prev_src,
                         llm_chat,
                         detected_lang=detected_lang,
+                        understanding=understanding,
                     )
                     if re_ans and not _looks_like_non_answer(re_ans):
                         ctx.update(user_msg=question, bot_response=re_ans, clear_schedule_context=True)
@@ -1413,6 +1626,7 @@ def _find_answer(question: str, return_topic: bool = False,
                 detected_lang=detected_lang,
                 last_faq_answer=ctx.last_faq_answer,
                 last_faq_question=ctx.last_faq_question,
+                understanding=understanding,
             )
 
             if ai_followup and not _looks_like_non_answer(ai_followup):
@@ -1422,7 +1636,7 @@ def _find_answer(question: str, return_topic: bool = False,
                 result = (ai_followup, 'Follow-up', None, None, detected_lang)
                 return result if return_topic else result[0]
 
-    is_hb = handbook_service.is_handbook_question(question)
+    is_hb = handbook_service.is_handbook_question(question, detected_lang)
     parts = split_compound_question(question)
     if len(parts) > 1:
         sub_answers = []
@@ -1432,17 +1646,32 @@ def _find_answer(question: str, return_topic: bool = False,
             if part_class.get('is_gibberish') or not part_class.get('is_school_related', True):
                 continue
 
+            part_understanding = understand_question(
+                part,
+                detected_lang,
+                context_hint=(
+                    ctx.get_context_summary()
+                    if ctx and ctx.conversation_history else None
+                ),
+            )
+            if not part_understanding:
+                continue
+
             part_ans = None
-            if handbook_service.is_handbook_question(part) or is_hb:
+            if handbook_service.is_handbook_question(part, detected_lang) or is_hb:
                 part_ans = handbook_service.answer_handbook_question(
-                    part, detected_lang, min_score_to_answer=0.12, ctx=None,
+                    part,
+                    detected_lang,
+                    min_score_to_answer=0.12,
+                    ctx=None,
+                    understanding=part_understanding,
                 )
                 if part_ans:
                     sub_answers.append(part_ans)
                     last_topic = 'Handbook'
                     last_intent = 'handbook_query'
                     continue
-            r = _lookup_faq_answer(part, detected_lang)
+            r = _lookup_faq_answer(part, detected_lang, part_understanding)
             if r and r[0]:
                 sub_answers.append(r[0])
                 last_topic = r[1] or last_topic
@@ -1470,7 +1699,7 @@ def _find_answer(question: str, return_topic: bool = False,
 
     norm_q = normalize_input(question)
     cache_key = f"{norm_q}_{detected_lang}"
-    if not is_hb:
+    if not is_hb and not understanding:
         cached = faq_cache.get(cache_key)
         if cached:
             return (
@@ -1482,28 +1711,21 @@ def _find_answer(question: str, return_topic: bool = False,
         hb_score, hb_chunks = _hb_score_early, _hb_chunks_early
         candidates, faq_best_score = _faq_cands_early, _faq_score_early
     else:
+        query_embedding = _get_query_embedding(question)
         hb_score, hb_chunks = _handbook_best_score(
-            question, detected_lang=detected_lang
+            question,
+            query_embedding=query_embedding,
+            detected_lang=detected_lang,
+            understanding=understanding,
         )
-        search_q = lang_service.normalize_vernacular_spelling(question.lower())
         candidates = _get_faq_candidates(
-            question, detected_lang, _get_all_faqs(), query_embedding=None
+            question,
+            detected_lang,
+            _get_all_faqs(),
+            query_embedding=query_embedding,
+            query_variants=understanding.search_queries if understanding else None,
         )
         faq_best_score = candidates[0]['combined'] if candidates else 0.0
-       
-        if faq_best_score < 0.78 or hb_score < 0.45:
-            query_embedding = get_embedding(search_q, cache=ai_cache)
-            if query_embedding:
-                candidates = _get_faq_candidates(
-                    question, detected_lang, _get_all_faqs(),
-                    query_embedding=query_embedding,
-                )
-                faq_best_score = candidates[0]['combined'] if candidates else 0.0
-                hb_score, hb_chunks = _handbook_best_score(
-                    question,
-                    query_embedding=query_embedding,
-                    detected_lang=detected_lang,
-                )
 
     try:
         word_count = len(question.split())
@@ -1514,47 +1736,6 @@ def _find_answer(question: str, return_topic: bool = False,
             hb_threshold = 0.28
         else:
             hb_threshold = 0.35
-
-        def _faq_text_relevant(user_q: str, cand: dict) -> bool:
-            try:
-                if cand.get('alternate_match'):
-                    return True
-                row = cand.get('faq') or cand.get('row')
-                faq_q = ''
-                if row is not None:
-                    faq_q = (row[1] if len(row) > 1 else '') or ''
-                faq_q = faq_q or cand.get('best_q_text') or cand.get('question') or ''
-                u = set(w for w in re.findall(r"[a-z0-9']{4,}", user_q.lower())
-                        if w not in ('this', 'that', 'what', 'when', 'where',
-                                     'does', 'have', 'with', 'from', 'about',
-                                     'school', 'college', 'student', 'students'))
-                f = set(re.findall(r"[a-z0-9']{4,}", faq_q.lower()))
-                if not u:
-                    return True
-                overlap = len(u & f)
-
-                if is_hb:
-                    topical = (
-                        'dress', 'demerit', 'offense', 'vision', 'mission',
-                        'core', 'value', 'dorm', 'bullying', 'spaces',
-                        'strand', 'senior', 'appeal', 'fine', 'chaperone',
-                        'hike', 'cook', 'cafeteria', 'jewelry', 'philosophy',
-                        'logo', 'hymn', 'founded', 'history',
-                    )
-                    faq_has_topic = any(t in faq_q.lower() for t in topical)
-                    return overlap >= 2 or (overlap >= 1 and faq_has_topic)
-                return overlap >= 1
-            except Exception:
-                return True
-
-        if candidates:
-            filtered = [c for c in candidates if _faq_text_relevant(question, c)]
-            if filtered:
-                candidates = filtered
-                faq_best_score = candidates[0].get('combined', 0.0)
-            else:
-                candidates = []
-                faq_best_score = 0.0
 
         tuition_requirements = _tuition_requirements(question)
         if tuition_requirements:
@@ -1675,7 +1856,8 @@ def _find_answer(question: str, return_topic: bool = False,
 
         if both_solid and not circuit_breaker.is_open():
             combined = _combine_handbook_and_faq(
-                question, candidates, hb_chunks, detected_lang
+                question, candidates, hb_chunks, detected_lang,
+                understanding=understanding,
             )
             if combined and date_service.is_date_question(question, ctx=ctx):
                 date_ans = date_service.answer_date_question(
@@ -1716,6 +1898,7 @@ def _find_answer(question: str, return_topic: bool = False,
                 question, detected_lang,
                 min_score_to_answer=(None if (is_hb or pure_handbook_topics) else hb_threshold),
                 ctx=ctx,
+                understanding=understanding,
             )
             if hb_ans:
                 if (not is_hb and not pure_handbook_topics
@@ -1723,7 +1906,8 @@ def _find_answer(question: str, return_topic: bool = False,
                         and faq_best_score >= hb_score
                         and candidates and not circuit_breaker.is_open()):
                     hb_ans = _merge_with_faq(
-                        hb_ans, question, candidates, detected_lang
+                        hb_ans, question, candidates, detected_lang,
+                        understanding=understanding,
                     )
                 is_disambiguation = ctx.last_disambiguation is not None
                 if not is_disambiguation:
@@ -1741,7 +1925,9 @@ def _find_answer(question: str, return_topic: bool = False,
                 return _give_up(question, candidates, hb_chunks, detected_lang, ctx, return_topic)
 
         if not candidates:
-            hb_ans = handbook_service.answer_handbook_question(question, detected_lang, ctx=ctx)
+            hb_ans = handbook_service.answer_handbook_question(
+                question, detected_lang, ctx=ctx, understanding=understanding
+            )
             if hb_ans:
                 if ctx.last_disambiguation is None:
                     ctx.update(
@@ -1775,6 +1961,7 @@ def _find_answer(question: str, return_topic: bool = False,
                 detected_lang=detected_lang,
                 llm_chat_fn=llm_chat,
                 ai_cache=ai_cache,
+                understanding=understanding,
             )
             if ai_ans:
                 best_row = (matched_cand or best)['faq']
@@ -1783,7 +1970,10 @@ def _find_answer(question: str, return_topic: bool = False,
                 if (hb_score >= CROSS_CHECK_HANDBOOK_BAR + 0.05
                         and hb_score >= best['combined']
                         and hb_chunks and not circuit_breaker.is_open()):
-                    ai_ans = _merge_with_handbook(ai_ans, question, hb_chunks, detected_lang)
+                    ai_ans = _merge_with_handbook(
+                        ai_ans, question, hb_chunks, detected_lang,
+                        understanding=understanding,
+                    )
                 ctx.update(
                     topic=topic,
                     intent=intent,
@@ -1805,29 +1995,32 @@ def _find_answer(question: str, return_topic: bool = False,
         if best['combined'] >= engine.FUZZY_MIN_SCORE or best['fuzzy'] >= 0.60:
             row = best['faq']
             answer, question_text, fid, topic, intent, _, _, _ = row[:8]
-            answer = _source_answer_in_language(
-                question, question_text, answer, detected_lang
+            answer = _validated_faq_source_answer(
+                question, row, detected_lang, understanding
             )
-            img = _image_for_faq_candidate(best, candidates)
-            answer_text = (answer or '') + (f"\n\n[Image: {img}]" if img else "")
-            ctx.update(
-                topic=topic,
-                intent=intent,
-                faq_answer=answer_text,
-                faq_question=question_text,
-                faq_image=img,
-                user_msg=question,
-                bot_response=answer_text,
-                clear_schedule_context=True,
-            )
-            result_data = (
-                (answer_text, topic, fid, intent, detected_lang)
-                if return_topic else answer_text
-            )
-            faq_cache.set(cache_key, result_data)
-            return result_data
+            if answer:
+                img = _image_for_faq_candidate(best, candidates)
+                answer_text = answer + (f"\n\n[Image: {img}]" if img else "")
+                ctx.update(
+                    topic=topic,
+                    intent=intent,
+                    faq_answer=answer_text,
+                    faq_question=question_text,
+                    faq_image=img,
+                    user_msg=question,
+                    bot_response=answer_text,
+                    clear_schedule_context=True,
+                )
+                result_data = (
+                    (answer_text, topic, fid, intent, detected_lang)
+                    if return_topic else answer_text
+                )
+                faq_cache.set(cache_key, result_data)
+                return result_data
 
-        hb_ans = handbook_service.answer_handbook_question(question, detected_lang, ctx=ctx)
+        hb_ans = handbook_service.answer_handbook_question(
+            question, detected_lang, ctx=ctx, understanding=understanding
+        )
         if hb_ans:
             if ctx.last_disambiguation is None:
                 ctx.update(

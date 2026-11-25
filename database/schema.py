@@ -716,9 +716,14 @@ def ensure_admin_exists():
     conn = get_db()
     cur = conn.cursor()
     try:
-        admin_password = os.environ.get('ADMIN_PASSWORD', 'admin123')
+        admin_password = os.environ.get('ADMIN_PASSWORD')
         cur.execute("SELECT id FROM admin_users WHERE username=%s", ("admin212004",))
         if not cur.fetchone():
+            if not admin_password:
+                logger.error(
+                    "ADMIN_PASSWORD is unset; refusing to create the default admin account"
+                )
+                return
             cur.execute(
                 "INSERT INTO admin_users (username, password) VALUES (%s, %s)",
                 ("admin212004", generate_password_hash(admin_password)),

@@ -485,7 +485,7 @@ textarea.form-control { resize:vertical; min-height:80px; }
           <div class="mb-2"><label class="form-label">Answer</label><textarea name="answer" class="form-control" placeholder="Type the answer…" required rows="4"></textarea></div>
           <div class="row g-2">
             <div class="col-md-6"><label class="form-label">Keywords</label><input name="keywords" class="form-control" placeholder="comma, separated"></div>
-            <div class="col-md-6"><label class="form-label">Related Questions</label><input name="related_questions" class="form-control" value="{{ related_questions or '' }}" placeholder="Alternate phrasings separated by |"></div>
+            <div class="col-md-6"><label class="form-label">Related Questions</label><input name="related_questions" class="form-control" value="{{ related_questions or '' }}" placeholder="Separate reviewed English, Bisaya, or Tagalog phrasings with |"></div>
             <div class="col-md-4"><label class="form-label">Priority Score</label><input type="number" name="priority_score" class="form-control" value="0"></div>
             <div class="col-md-8"><label class="form-label">Attachment URL</label><input name="attachment_url" class="form-control" placeholder="https://…"></div>
           </div>

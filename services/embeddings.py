@@ -29,9 +29,10 @@ HOW IT'S WIRED IN
   backfill script for FAQs that existed before this feature) and cached
   in faq.embedding (JSONB), so matching a question against N FAQs costs
   1 API call total, not N+1.
-- answer_engine.py blends cosine similarity into the existing fuzzy
-  `combined` score rather than replacing it — see SEMANTIC_BLEND below.
+- answer_engine.py uses cosine similarity as an independent candidate
+  signal alongside fuzzy matching.
 """
+import json
 import logging
 from datetime import datetime, timezone
 from threading import Lock
@@ -46,6 +47,7 @@ from ai_providers.providers import (
     mark_gemini_rate_limited,
     mark_gemini_success,
 )
+from ai_providers.cache import stable_digest
 
 logger = logging.getLogger("pac_helpdesk.embeddings")
 
@@ -117,12 +119,18 @@ def get_embedding_coverage(get_db_fn) -> dict:
             "total": total,
             "embedded": embedded,
             "coverage_percent": round(embedded * 100 / total, 1) if total else 0.0,
-            "semantic_ready": is_configured() and embedded > 0,
+            "semantic_ready": (
+                is_configured() and total > 0 and embedded == total
+            ),
         }
     return corpora
 
 
-def get_embedding(text: str, cache=None) -> Optional[List[float]]:
+def get_embedding(
+    text: str,
+    cache=None,
+    task_type: str = "RETRIEVAL_QUERY",
+) -> Optional[List[float]]:
     """Returns an embedding vector for `text`, or None if unconfigured/
     failed — callers must treat None as "skip semantic scoring", never as
     an error to surface to the student.
@@ -138,7 +146,7 @@ def get_embedding(text: str, cache=None) -> Optional[List[float]]:
         _record_embedding_result(False, "not_configured")
         return None
 
-    cache_key = f"embed_{hash(text.strip().lower())}"
+    cache_key = f"embed_{stable_digest(task_type, text.strip())}"
     if cache:
         cached = cache.get(cache_key)
         if cached:
@@ -155,7 +163,10 @@ def get_embedding(text: str, cache=None) -> Optional[List[float]]:
             resp = requests.post(
                 EMBEDDING_URL,
                 params={'key': api_key},
-                json={'content': {'parts': [{'text': text}]}},
+                json={
+                    'content': {'parts': [{'text': text}]},
+                    'taskType': task_type,
+                },
                 timeout=EMBEDDING_TIMEOUT_SECONDS,
             )
             error_text = (resp.text or "").lower()
@@ -205,28 +216,88 @@ def cosine_similarity(a: List[float], b: List[float]) -> float:
     return dot / (norm_a * norm_b)
 
 
-def embedding_text_for_faq(question: str, keywords: str = "") -> str:
-    """What actually gets embedded for a FAQ row. Deliberately question +
-    keywords, NOT the answer — we're matching against what a STUDENT
-    would type, and answers are often phrased very differently (longer,
-    more formal) than how someone would ask the question."""
-    parts = [question or ""]
-    if keywords:
-        parts.append(keywords)
-    return ". ".join(p.strip() for p in parts if p and p.strip())
+def embedding_text_for_faq(
+    question: str,
+    keywords: str = "",
+    related_questions: str = "",
+    answer: str = "",
+    topic: str = "",
+    intent: str = "",
+) -> str:
+    """Build an FAQ document from its questions, labels, and answer context."""
+    parts = (
+        question,
+        related_questions,
+        keywords,
+        topic,
+        intent,
+        (answer or "")[:2000],
+    )
+    return ". ".join(
+        str(part).strip() for part in parts if part and str(part).strip()
+    )
 
 
-def store_embedding_for_faq(get_db_fn, question: str, keywords: str = "",
-                             faq_id: Optional[int] = None,
-                             public_uuid: Optional[str] = None) -> bool:
+def _has_pgvector_column(cur, table: str) -> bool:
+    cur.execute("""
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = %s
+              AND column_name = 'embedding_vector'
+        )
+    """, (table,))
+    row = cur.fetchone()
+    return bool(row and row[0])
+
+
+def _store_embedding_row(cur, table: str, identity_column: str,
+                         identity_value, vector: List[float]) -> None:
+    if (
+        len(vector) == 3072
+        and _has_pgvector_column(cur, table)
+    ):
+        cur.execute(
+            f"UPDATE {table} SET embedding = %s::jsonb, "
+            f"embedding_vector = %s::halfvec(3072) "
+            f"WHERE {identity_column} = %s",
+            (list(vector), json.dumps(vector, separators=(",", ":")), identity_value),
+        )
+        return
+    cur.execute(
+        f"UPDATE {table} SET embedding = %s::jsonb "
+        f"WHERE {identity_column} = %s",
+        (list(vector), identity_value),
+    )
+
+
+def store_embedding_for_faq(
+    get_db_fn,
+    question: str,
+    keywords: str = "",
+    faq_id: Optional[int] = None,
+    public_uuid: Optional[str] = None,
+    related_questions: str = "",
+    answer: str = "",
+    topic: str = "",
+    intent: str = "",
+) -> bool:
     """Best-effort: compute + store an embedding for one FAQ row. Returns
     False (never raises) on any failure — callers should treat this as
     "nice to have", not block saving the FAQ on it succeeding.
     """
     if faq_id is None and public_uuid is None:
         return False
-    text = embedding_text_for_faq(question, keywords)
-    vector = get_embedding(text)
+    text = embedding_text_for_faq(
+        question,
+        keywords,
+        related_questions,
+        answer,
+        topic,
+        intent,
+    )
+    vector = get_embedding(text, task_type="RETRIEVAL_DOCUMENT")
     if vector is None:
         return False
 
@@ -234,11 +305,9 @@ def store_embedding_for_faq(get_db_fn, question: str, keywords: str = "",
     cur = conn.cursor()
     try:
         if faq_id is not None:
-            cur.execute("UPDATE faq SET embedding = %s::jsonb WHERE id = %s",
-                        (list(vector), faq_id))
+            _store_embedding_row(cur, "faq", "id", faq_id, vector)
         else:
-            cur.execute("UPDATE faq SET embedding = %s::jsonb WHERE public_uuid = %s",
-                        (list(vector), public_uuid))
+            _store_embedding_row(cur, "faq", "public_uuid", public_uuid, vector)
         conn.commit()
         return True
     except Exception as e:
@@ -250,15 +319,24 @@ def store_embedding_for_faq(get_db_fn, question: str, keywords: str = "",
         conn.close()
 
 
-def embedding_text_for_chunk(section_title: str, content: str, keywords: str = "") -> str:
+def embedding_text_for_chunk(
+    section_title: str,
+    content: str,
+    keywords: str = "",
+    topic_tags: Any = None,
+    key_facts: Any = None,
+) -> str:
     """What gets embedded for a handbook chunk. Title + keywords + a
     generous slice of content -- long enough to capture the section's
     actual meaning (unlike the FAQ case, a handbook section is often a
     paragraph or more, so a title alone underrepresents it), capped so
     one section doesn't blow the embedding API's input size."""
-    parts = [section_title or ""]
-    if keywords:
-        parts.append(keywords)
+    parts = [section_title or "", keywords or ""]
+    for metadata in (topic_tags, key_facts):
+        if isinstance(metadata, (dict, list, tuple)):
+            metadata = json.dumps(metadata, ensure_ascii=False)
+        if metadata:
+            parts.append(str(metadata)[:1500])
     if content:
         parts.append(content[:2000])
     return ". ".join(p.strip() for p in parts if p and p.strip())
@@ -266,22 +344,25 @@ def embedding_text_for_chunk(section_title: str, content: str, keywords: str = "
 
 def store_embedding_for_chunk(get_db_fn, section_title: str, content: str,
                                keywords: str = "",
+                               topic_tags: Any = None,
+                               key_facts: Any = None,
                                chunk_id: Optional[int] = None) -> bool:
     """Best-effort: compute + store an embedding for one handbook_chunks
     row. Same "nice to have, never blocks the caller" contract as
     store_embedding_for_faq above."""
     if chunk_id is None:
         return False
-    text = embedding_text_for_chunk(section_title, content, keywords)
-    vector = get_embedding(text)
+    text = embedding_text_for_chunk(
+        section_title, content, keywords, topic_tags, key_facts
+    )
+    vector = get_embedding(text, task_type="RETRIEVAL_DOCUMENT")
     if vector is None:
         return False
 
     conn = get_db_fn()
     cur = conn.cursor()
     try:
-        cur.execute("UPDATE handbook_chunks SET embedding = %s::jsonb WHERE id = %s",
-                    (list(vector), chunk_id))
+        _store_embedding_row(cur, "handbook_chunks", "id", chunk_id, vector)
         conn.commit()
         return True
     except Exception as e:
@@ -294,15 +375,11 @@ def store_embedding_for_chunk(get_db_fn, section_title: str, content: str,
 
 
 def backfill_faq_embeddings(get_db_fn: Callable[[], Any], batch_size: int = 200,
-                           limit: Optional[int] = None) -> int:
-    """One-shot (or periodic) pass over every FAQ row that doesn't have an
-    embedding yet and computes+stores one. This is the "let the AI
-    process it instead of hand-tuning per FAQ" path for bulk FAQ imports
-    (e.g. adding 500+ FAQs at once) -- run this once after a bulk import
-    (or wire it into the import itself, see handbook_ingest.mass_insert_faqs)
-    and every one of those FAQs immediately gets semantic-similarity
-    matching with zero manual alias work. Safe to re-run any time; only
-    touches rows where embedding IS NULL. Returns count actually updated.
+                           limit: Optional[int] = None, refresh: bool = False) -> int:
+    """Compute embeddings for missing FAQ rows, or all rows when refresh=True.
+
+    This covers bulk FAQ imports without manual alias work and can recompute
+    existing vectors after changing the embedded FAQ context.
     """
     if not is_configured():
         logger.warning("backfill_faq_embeddings: GEMINI_API_KEY not set, nothing to do")
@@ -310,7 +387,12 @@ def backfill_faq_embeddings(get_db_fn: Callable[[], Any], batch_size: int = 200,
     conn = get_db_fn()
     cur = conn.cursor()
     try:
-        q = "SELECT id, question, keywords FROM faq WHERE embedding IS NULL"
+        q = (
+            "SELECT id, question, keywords, related_questions, answer, topic, intent "
+            "FROM faq"
+        )
+        if not refresh:
+            q += " WHERE embedding IS NULL"
         if limit:
             q += f" LIMIT {int(limit)}"
         cur.execute(q)
@@ -321,16 +403,26 @@ def backfill_faq_embeddings(get_db_fn: Callable[[], Any], batch_size: int = 200,
 
     updated = 0
     for i in range(0, len(rows), batch_size):
-        for faq_id, question, keywords in rows[i:i + batch_size]:
-            if store_embedding_for_faq(get_db_fn, question or "", keywords or "", faq_id=faq_id):
+        for faq_id, question, keywords, related, answer, topic, intent in rows[i:i + batch_size]:
+            if store_embedding_for_faq(
+                get_db_fn,
+                question or "",
+                keywords or "",
+                faq_id=faq_id,
+                related_questions=related or "",
+                answer=answer or "",
+                topic=topic or "",
+                intent=intent or "",
+            ):
                 updated += 1
     logger.info(f"backfill_faq_embeddings: updated {updated}/{len(rows)} FAQ rows")
     return updated
 
 
 def backfill_chunk_embeddings(get_db_fn: Callable[[], Any], batch_size: int = 200,
-                             limit: Optional[int] = None) -> int:
-    """Same idea as backfill_faq_embeddings, for handbook_chunks. Run this
+                             limit: Optional[int] = None, refresh: bool = False) -> int:
+    """Same idea as backfill_faq_embeddings, for handbook_chunks.
+    Set refresh=True to recompute vectors after adding topic tags or key facts. Run this
     once after any handbook re-ingest/import (or wire it into
     handbook_ingest.import_chunks_json / ingest_handbook directly) so
     every section immediately participates in semantic matching -- this
@@ -343,8 +435,10 @@ def backfill_chunk_embeddings(get_db_fn: Callable[[], Any], batch_size: int = 20
     conn = get_db_fn()
     cur = conn.cursor()
     try:
-        q = ("SELECT id, section_title, content, keywords FROM handbook_chunks "
-             "WHERE is_active = 1 AND embedding IS NULL")
+        q = ("SELECT id, section_title, content, keywords, topic_tags, key_facts "
+             "FROM handbook_chunks WHERE is_active = 1")
+        if not refresh:
+            q += " AND embedding IS NULL"
         if limit:
             q += f" LIMIT {int(limit)}"
         cur.execute(q)
@@ -355,9 +449,10 @@ def backfill_chunk_embeddings(get_db_fn: Callable[[], Any], batch_size: int = 20
 
     updated = 0
     for i in range(0, len(rows), batch_size):
-        for chunk_id, title, content, keywords in rows[i:i + batch_size]:
+        for chunk_id, title, content, keywords, topic_tags, key_facts in rows[i:i + batch_size]:
             if store_embedding_for_chunk(get_db_fn, title or "", content or "",
-                                          keywords or "", chunk_id=chunk_id):
+                                          keywords or "", topic_tags=topic_tags,
+                                          key_facts=key_facts, chunk_id=chunk_id):
                 updated += 1
     logger.info(f"backfill_chunk_embeddings: updated {updated}/{len(rows)} handbook chunks")
     return updated
@@ -392,7 +487,10 @@ def backfill_correction_embeddings(get_db_fn: Callable[[], Any], batch_size: int
     updated = 0
     for i in range(0, len(rows), batch_size):
         for correction_id, question in rows[i:i + batch_size]:
-            vector = get_embedding(normalize_vernacular_spelling((question or "").lower()))
+            vector = get_embedding(
+                normalize_vernacular_spelling((question or "").lower()),
+                task_type="RETRIEVAL_DOCUMENT",
+            )
             if vector is None:
                 continue
             conn2 = get_db_fn()

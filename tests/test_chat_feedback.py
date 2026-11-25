@@ -75,6 +75,13 @@ class ChatFeedbackTests(unittest.TestCase):
         self.assertIn("is_verified", connection.cur.query)
         self.assertFalse(connection.cur.params[5])
 
+    def test_long_questions_do_not_collide_in_verified_answer_cache_keys(self):
+        prefix = "A" * 301
+        first = answer_memory.normalize_question(prefix + " who wrote the hymn?")
+        second = answer_memory.normalize_question(prefix + " show the lyrics?")
+
+        self.assertNotEqual(first, second)
+
     def test_feedback_source_is_resolved_from_matching_chat_history(self):
         connection = FakeConnection(
             row=("handbook_query", None, "Dress and appearance; Jewelry")

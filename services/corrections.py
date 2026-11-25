@@ -58,7 +58,7 @@ def normalize_question(q: str) -> str:
     q = (q or "").strip().lower()
     q = re.sub(r"\s+", " ", q)
     q = re.sub(r"[^\w\s]", "", q)
-    return q[:300]
+    return q
 
 
 def _ensure_table(get_db_fn: Callable[[], Any]) -> bool:
@@ -147,7 +147,7 @@ def find_similar_correction(get_db_fn: Callable[[], Any], question: str) -> Opti
     q_embedding = None
     try:
         from services.embeddings import get_embedding, cosine_similarity
-        q_embedding = get_embedding(q_norm)
+        q_embedding = get_embedding(q_norm, task_type="RETRIEVAL_QUERY")
     except Exception:
         cosine_similarity = None  # noqa: F841
 
@@ -278,7 +278,10 @@ def save_correction(get_db_fn: Callable[[], Any], question: str, answer: str,
     embedding = None
     try:
         from services.embeddings import get_embedding
-        embedding = get_embedding(normalize_vernacular_spelling(question.lower()))
+        embedding = get_embedding(
+            normalize_vernacular_spelling(question.lower()),
+            task_type="RETRIEVAL_DOCUMENT",
+        )
     except Exception as e:
         logger.debug(f"save_correction: embedding skipped: {e}")
 

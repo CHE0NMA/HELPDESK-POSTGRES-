@@ -38,9 +38,17 @@ class EmbeddingCoverageTests(unittest.TestCase):
             result = get_embedding_coverage(lambda: FakeConnection(rows))
 
         self.assertEqual(result["faq"]["coverage_percent"], 80.0)
-        self.assertTrue(result["faq"]["semantic_ready"])
+        self.assertFalse(result["faq"]["semantic_ready"])
         self.assertEqual(result["handbook_chunks"]["coverage_percent"], 0.0)
         self.assertFalse(result["handbook_chunks"]["semantic_ready"])
+
+    def test_complete_coverage_is_required_for_semantic_readiness(self):
+        rows = [("faq", 3, 3), ("handbook_chunks", 2, 2)]
+        with patch("services.embeddings.is_configured", return_value=True):
+            result = get_embedding_coverage(lambda: FakeConnection(rows))
+
+        self.assertTrue(result["faq"]["semantic_ready"])
+        self.assertTrue(result["handbook_chunks"]["semantic_ready"])
 
     def test_unconfigured_provider_is_not_reported_semantic_ready(self):
         rows = [("faq", 3, 3), ("handbook_chunks", 0, 0)]

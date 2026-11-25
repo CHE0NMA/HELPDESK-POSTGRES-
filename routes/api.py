@@ -32,7 +32,8 @@ def health_check():
         conn.close()
         health['components']['database'] = 'healthy'
     except Exception as e:
-        health['components']['database'] = f'unhealthy: {e}'
+        logger.error(f"Health-check database probe failed: {e}")
+        health['components']['database'] = 'unhealthy'
         health['status'] = 'degraded'
     health['components']['ai'] = {
         'ready': not circuit_breaker.is_open(),
@@ -61,10 +62,12 @@ def api_retrieval_status():
         get_embedding_coverage,
         get_embedding_status,
     )
+    from services.hybrid_search import get_hybrid_search_status
     from services.ai_retrieval import get_query_expansion_metrics
     try:
         embedding_status = get_embedding_status()
         corpora = get_embedding_coverage(get_db)
+        hybrid_status = get_hybrid_search_status(get_db)
     except Exception:
         logger.exception("Failed to load retrieval readiness status")
         return jsonify({'error': 'Retrieval status unavailable'}), 503
@@ -73,6 +76,7 @@ def api_retrieval_status():
         'embedding_model': EMBEDDING_MODEL,
         'embedding_provider': embedding_status,
         'corpora': corpora,
+        'hybrid_search': hybrid_status,
         'provider_calls': model_metrics.get_provider_stats(),
         'query_expansion': get_query_expansion_metrics(),
         'metrics_scope': 'process-local; resets when the worker restarts',
@@ -112,7 +116,6 @@ def db_pool_stats():
 
 
 @bp.route('/api/model/reset_circuit', methods=['POST'])
-@csrf.exempt
 def reset_circuit():
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
@@ -122,7 +125,6 @@ def reset_circuit():
 
 
 @bp.route('/api/model/clear_cache', methods=['POST'])
-@csrf.exempt
 def clear_ai_cache():
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
@@ -429,7 +431,6 @@ def api_get_alerts():
 
 
 @bp.route('/api/admin/alerts', methods=['DELETE'])
-@csrf.exempt
 def api_clear_alerts():
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
@@ -443,7 +444,6 @@ def api_clear_alerts():
 
 
 @bp.route('/api/admin/send_digest', methods=['POST'])
-@csrf.exempt
 def api_send_digest():
     if not admin_required():
         return jsonify({'error': 'Unauthorized'}), 403
@@ -484,7 +484,7 @@ def api_public_schedules():
         })
     except Exception as e:
         logger.error(f"API public schedules error: {e}")
-        return jsonify({'error': str(e), 'schedules': []}), 500
+        return jsonify({'error': 'Internal server error', 'schedules': []}), 500
     finally:
         cur.close()
         conn.close()
@@ -531,7 +531,7 @@ def api_report():
     except Exception as e:
         conn.rollback()
         logger.error(f"api_report: {e}")
-        return jsonify({'ok': False, 'error': str(e)}), 500
+        return jsonify({'ok': False, 'error': 'Internal server error'}), 500
     finally:
         cur.close()
         conn.close()
@@ -758,7 +758,9 @@ def api_chat_history(chat_uuid):
         return jsonify({'ok': True, 'chat_uuid': chat_uuid, 'messages': messages})
     except Exception as e:
         logger.error(f"api_chat_history error: {e}")
-        return jsonify({'ok': False, 'error': str(e), 'messages': []}), 500
+        return jsonify({
+            'ok': False, 'error': 'Internal server error', 'messages': []
+        }), 500
     finally:
         cur.close()
         conn.close()
@@ -881,29 +883,6 @@ def api_public_reviews():
         conn.close()
 
 
-_SUGGEST_LIMIT = 40         
-_SUGGEST_WINDOW = 60.0       
-_suggest_hits = {}          
-
-
-def _suggest_rate_ok(ip: str) -> bool:
-    import time
-    now = time.time()
-    bucket = _suggest_hits.get(ip) or []
-    bucket = [t for t in bucket if now - t < _SUGGEST_WINDOW]
-    if len(bucket) >= _SUGGEST_LIMIT:
-        _suggest_hits[ip] = bucket
-        return False
-    bucket.append(now)
-    _suggest_hits[ip] = bucket
-    if len(_suggest_hits) > 5000:
-        cutoff = now - _SUGGEST_WINDOW
-        dead = [k for k, v in _suggest_hits.items() if not v or v[-1] < cutoff]
-        for k in dead[:500]:
-            _suggest_hits.pop(k, None)
-    return True
-
-
 @bp.route('/api/suggest')
 def api_suggest():
     """Public typeahead: FAQ questions + handbook section titles.
@@ -920,10 +899,6 @@ def api_suggest():
         "handbook": [{"section_title": "...", "chapter": "...", "page_start": 12}]
       }
     """
-    ip = (request.headers.get('X-Forwarded-For') or request.remote_addr or 'unknown').split(',')[0].strip()
-    if not _suggest_rate_ok(ip):
-        return jsonify({'error': 'rate_limited', 'faqs': [], 'handbook': []}), 429
-
     q = (request.args.get('q') or '').strip()
     if len(q) < 2:
         return jsonify({'faqs': [], 'handbook': []})
@@ -1018,4 +993,5 @@ def health():
         finally:
             conn.close()
     except Exception as e:
-        return {"status": "error", "db": str(e)}, 503
+        logger.error(f"API health database probe failed: {e}")
+        return {"status": "error", "db": "unavailable"}, 503

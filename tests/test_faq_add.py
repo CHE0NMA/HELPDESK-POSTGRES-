@@ -106,7 +106,7 @@ class FaqAddRouteTests(unittest.TestCase):
         with open(stored_file, "rb") as image_file:
             self.assertEqual(image_file.read(), b"updated-image")
 
-    def test_database_error_during_duplicate_check_returns_json_error(self):
+    def test_database_error_during_duplicate_check_hides_details(self):
         with patch("routes.admin.admin_required", return_value=True), \
                 patch(
                     "routes.admin.check_duplicate_faq",
@@ -118,7 +118,7 @@ class FaqAddRouteTests(unittest.TestCase):
             )
 
         self.assertEqual(response.status_code, 500)
-        self.assertEqual(response.get_json()["error"], "database unavailable")
+        self.assertEqual(response.get_json()["error"], "Internal server error")
 
 
 if __name__ == "__main__":

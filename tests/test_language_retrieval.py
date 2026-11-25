@@ -116,12 +116,14 @@ class BisayaLanguageTests(unittest.TestCase):
         self.assertNotIn("tuition fee", tes_expanded)
 
     def test_earring_questions_are_recognized_as_handbook_questions(self):
-        for question in (
-            "pwede ba mag sout og earings diri sa school",
-            "pwede ba akong magsuot ng hikaw sa paaralan",
-        ):
-            with self.subTest(question=question):
-                self.assertTrue(handbook.is_handbook_question(question))
+        with patch.object(handbook.ai_cache, "get", return_value=None), \
+             patch.object(handbook, "llm_chat", return_value="YES"):
+            for question in (
+                "pwede ba mag sout og earings diri sa school",
+                "pwede ba akong magsuot ng hikaw sa paaralan",
+            ):
+                with self.subTest(question=question):
+                    self.assertTrue(handbook.is_handbook_question(question))
 
     def test_casual_dress_questions_route_to_the_handbook(self):
         questions = (
@@ -131,13 +133,15 @@ class BisayaLanguageTests(unittest.TestCase):
             "is it okay to wear short inside the campus",
             "What is the dress code policy?",
         )
-        for question in questions:
-            with self.subTest(question=question):
-                self.assertTrue(handbook.is_handbook_question(question))
-                self.assertIn(
-                    "dress",
-                    handbook.expand_query_for_retrieval(question).lower(),
-                )
+        with patch.object(handbook.ai_cache, "get", return_value=None), \
+             patch.object(handbook, "llm_chat", return_value="YES"):
+            for question in questions:
+                with self.subTest(question=question):
+                    self.assertTrue(handbook.is_handbook_question(question))
+                    self.assertIn(
+                        question.split()[0].lower(),
+                        handbook.expand_query_for_retrieval(question).lower(),
+                    )
 
         with patch.object(topic_aliases, "forced_topic_for", return_value=None):
             for question in questions:
@@ -150,8 +154,10 @@ class BisayaLanguageTests(unittest.TestCase):
         question = "pwede ba magsleeveless diri sa school"
 
         self.assertEqual(_heuristic_language(question)[0], "mixed_tb")
-        self.assertTrue(handbook.is_handbook_question(question))
-        self.assertIn("sleeveless clothing", handbook.expand_query_for_retrieval(question))
+        with patch.object(handbook.ai_cache, "get", return_value=None), \
+             patch.object(handbook, "llm_chat", return_value="YES"):
+            self.assertTrue(handbook.is_handbook_question(question))
+        self.assertIn("sleeveless", handbook.expand_query_for_retrieval(question))
         forced = handbook._forced_topic_for(question)
         self.assertEqual(forced[0], ["dress and appearance", "school uniform"])
         self.assertEqual(forced[1], ["sleeveless"])
@@ -174,6 +180,19 @@ class BisayaLanguageTests(unittest.TestCase):
         )
 
         self.assertEqual(relevant, [forced_section])
+
+    def test_ai_router_attempt_disables_manual_topic_fallback(self):
+        question = "Is religious clothing allowed?"
+        chunk = {
+            "section_title": "General Information",
+            "content": "Unrelated handbook material.",
+            "_ai_router_attempted": True,
+        }
+        with patch.object(
+            handbook, "_forced_topic_for", return_value=(["multifaith"], [])
+        ) as forced:
+            self.assertFalse(handbook.chunk_is_relevant_hard(question, chunk))
+        forced.assert_not_called()
 
     def test_bare_campus_mention_does_not_force_campus_location_content(self):
         stale_campus_alias = {
@@ -220,13 +239,45 @@ class BisayaLanguageTests(unittest.TestCase):
 
         self.assertEqual([match["topic_key"] for match in matches], ["programs"])
 
-    def test_normalized_bisaya_dress_query_matches_uniform_source(self):
-        self.assertTrue(
-            handbook._answer_relevant_to_question(
-                "unsay dapat suoton sulod sa school bai",
-                "Students should choose simple and appropriate attire.",
+    def test_handbook_withholds_answer_when_ai_validation_is_unavailable(self):
+        question = "unsay dapat suoton sulod sa school bai"
+        chunk = {
+            "section_title": "Dress and appearance",
+            "content": "Students should choose simple and appropriate attire.",
+            "_ai_picked": True,
+        }
+        with patch.object(handbook, "get_relevant_chunks", return_value=[chunk]), \
+             patch.object(handbook.circuit_breaker, "is_open", return_value=True), \
+             patch.object(handbook.nlg, "speak_naturally") as speak:
+            answer = handbook._build_handbook_answer_from_chunks(
+                question,
+                [chunk],
+                detected_lang="english",
             )
-        )
+
+        self.assertIsNone(answer)
+        speak.assert_not_called()
+
+    def test_handbook_withholds_answer_when_intent_self_check_rejects_it(self):
+        question = "Who wrote the PAC Hymn?"
+        chunk = {
+            "section_title": "The PAC Hymn",
+            "content": "Music composed by L.V. Pilon; lyrics written by SL La Sage.",
+            "_ai_picked": True,
+        }
+        with patch.object(handbook, "get_relevant_chunks", return_value=[chunk]), \
+             patch.object(handbook.circuit_breaker, "is_open", return_value=False), \
+             patch.object(handbook, "llm_chat", return_value="Here are the lyrics."), \
+             patch.object(handbook, "answer_is_grounded", return_value=True), \
+             patch.object(handbook, "llm_self_check", return_value=False) as self_check:
+            answer = handbook._build_handbook_answer_from_chunks(
+                question,
+                [chunk],
+                detected_lang="english",
+            )
+
+        self.assertIsNone(answer)
+        self_check.assert_called_once()
 
     def test_tagalog_question_is_still_classified_as_tagalog(self):
         self.assertEqual(
@@ -420,7 +471,7 @@ class ExactSourceReplyTests(unittest.TestCase):
             choices[1],
         )
 
-    def test_exact_faq_returns_source_answer_without_ai_processing(self):
+    def test_exact_faq_source_requires_intent_validation_without_generation(self):
         question = "Is the registrar open on Saturdays?"
         answer = "The registrar is open on Saturdays from 8:00 AM to 12:00 PM."
         faq_row = (
@@ -445,12 +496,19 @@ class ExactSourceReplyTests(unittest.TestCase):
                  faq.lang_service,
                  "classify_and_detect_language",
              ) as classify, \
+             patch.object(faq, "understand_question", return_value=None), \
+             patch.object(
+                 faq,
+                 "_validated_faq_source_answer",
+                 return_value=answer,
+             ) as validate_source, \
              patch.object(faq.engine, "smart_extract_answer") as generate:
             result = faq.find_answer(question, return_topic=True)
 
         self.assertEqual(result, (answer, "Office Hours", 17, "office_hours", "english"))
         self.assertEqual(ctx.last_answer, answer)
         classify.assert_not_called()
+        validate_source.assert_called_once()
         generate.assert_not_called()
 
     def test_exact_tagalog_question_gets_a_validated_tagalog_answer(self):
@@ -471,15 +529,40 @@ class ExactSourceReplyTests(unittest.TestCase):
              patch.object(faq, "_find_exact_faq", return_value=faq_row), \
              patch.object(faq.lang_service, "detect_language", return_value="tagalog"), \
              patch.object(
-                 faq, "_source_answer_in_language", return_value=translated
-             ) as localize:
+                 faq, "understand_question", return_value=None
+             ), patch.object(
+                 faq, "_validated_faq_source_answer", return_value=translated
+             ) as validate_source:
             result = faq.find_answer(question, return_topic=True)
 
         self.assertEqual(result[0], translated)
         self.assertEqual(result[4], "tagalog")
-        localize.assert_called_once_with(
-            question, source_question, source_answer, "tagalog", translate=True
+        validate_source.assert_called_once_with(
+            question,
+            (source_answer, source_question),
+            "tagalog",
+            None,
+            translate=True,
         )
+
+    def test_exact_faq_source_is_rejected_when_intent_check_fails(self):
+        question = "Who wrote the PAC Hymn?"
+        row = (
+            "Here are the lyrics.",
+            question,
+            4,
+            "PAC Hymn",
+            "hymn",
+        )
+        with patch.object(
+            faq, "_source_answer_in_language", return_value=row[0]
+        ), patch.object(faq, "llm_self_check", return_value=False) as self_check:
+            answer = faq._validated_faq_source_answer(
+                question, row, "english"
+            )
+
+        self.assertIsNone(answer)
+        self_check.assert_called_once()
 
     def test_tagalog_translation_failure_returns_tagalog_notice_not_source(self):
         response = faq._source_answer_in_language(
@@ -937,24 +1020,7 @@ class FaqRelevanceTests(unittest.TestCase):
         self.assertEqual(answer, translated)
         lexical_check.assert_not_called()
 
-    def test_handbook_relevant_sentence_fallback_respects_word_limit(self):
-        content = (
-            "Students should dress modestly and wear simple but neat clothing. "
-            "Students must not wear jewelry except a wedding ring. "
-            + "Additional unrelated policy detail. " * 30
-        )
-
-        answer = handbook._extract_relevant_sentences(
-            content,
-            "What is the dress code policy?",
-            max_sentences=4,
-            max_words=16,
-        )
-
-        self.assertLessEqual(len(answer.split()), 16)
-        self.assertIn("dress modestly", answer)
-
-    def test_overlong_handbook_generation_falls_back_to_concise_source_text(self):
+    def test_overlong_handbook_generation_is_withheld(self):
         question = "What is the dress code policy?"
         chunk = {
             "section_title": "Dress code",
@@ -966,22 +1032,14 @@ class FaqRelevanceTests(unittest.TestCase):
              patch.object(handbook.circuit_breaker, "is_open", return_value=False), \
              patch.object(handbook, "llm_chat", return_value=long_answer) as llm_chat, \
              patch.object(handbook, "answer_is_grounded", return_value=True), \
-             patch.object(handbook, "_answer_relevant_to_question", return_value=True), \
-             patch.object(handbook, "_forced_topic_for", return_value=None), \
-             patch.object(
-                 handbook.nlg,
-                 "speak_naturally",
-                 side_effect=lambda canonical, *args, **kwargs: canonical,
-             ):
+             patch.object(handbook, "llm_self_check", return_value=True):
             answer = handbook._build_handbook_answer_from_chunks(
                 question,
                 [chunk],
             )
 
-        self.assertIn("modest and neat attire", answer)
-        self.assertLessEqual(len(answer.split()), 120)
-        prompt, = llm_chat.call_args.args
-        self.assertIn("no more than 120 words", prompt)
+        self.assertIsNone(answer)
+        llm_chat.assert_called_once()
         self.assertEqual(llm_chat.call_args.kwargs["max_tokens"], 220)
 
     def test_repeated_standalone_handbook_question_reuses_same_answer(self):

@@ -23,4 +23,5 @@ venv/
 env/
 ENV/
 .neon
+.idea/
 .vercel/

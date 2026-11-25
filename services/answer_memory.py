@@ -21,7 +21,7 @@ def normalize_question(q: str) -> str:
     q = (q or "").strip().lower()
     q = re.sub(r"\s+", " ", q)
     q = re.sub(r"[^\w\s]", "", q)
-    return q[:300]
+    return q
 
 
 def get_cached_answer(get_db_fn, question: str, detected_lang: str = "english") -> Optional[dict]:

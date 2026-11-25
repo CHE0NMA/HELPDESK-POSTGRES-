@@ -76,13 +76,13 @@ class BisayaProviderRoutingTests(unittest.TestCase):
             self.assertIsNone(faq.find_answer("sino ang dean ng computer studies?"))
 
     def test_parallel_faq_scoring_inherits_gemini_provider_pin(self):
-        def handbook_score(question, query_embedding, detected_lang):
+        def handbook_score(question, query_embedding, detected_lang, understanding=None):
             return (
                 1.0 if providers._PROVIDER_OVERRIDE.get() == "gemini" else 0.0,
                 [],
             )
 
-        def faq_score(question, detected_lang, query_embedding=None):
+        def faq_score(question, detected_lang, query_embedding=None, understanding=None):
             score = 1.0 if providers._PROVIDER_OVERRIDE.get() == "gemini" else 0.0
             return [], score
 

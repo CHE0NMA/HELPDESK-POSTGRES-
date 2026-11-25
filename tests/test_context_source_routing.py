@@ -114,8 +114,22 @@ class SourceArbitrationTests(unittest.TestCase):
         self.assertIn("--- FAQ EXCERPTS ---", prompt_seen[0])
         self.assertIn("--- DYNAMIC DATE/SCHEDULE ANSWER ---", prompt_seen[0])
 
+    def test_source_judge_abstains_on_unrecognized_verdict(self):
+        self.assertEqual(
+            faq._ai_pick_best_source(
+                "Is there school on Saturday?",
+                [{"section_title": "School schedule", "content": "School days"}],
+                [],
+                lambda prompt, max_tokens: "I am not sure",
+                date_excerpt="Saturday is closed.",
+            ),
+            "neither",
+        )
+
     def test_handbook_routes_religion_and_shorts_to_specific_evidence(self):
-        self.assertTrue(handbook.is_handbook_question("What is the religion of PAC?"))
+        with patch.object(handbook.ai_cache, "get", return_value=None), \
+             patch.object(handbook, "llm_chat", return_value="YES"):
+            self.assertTrue(handbook.is_handbook_question("What is the religion of PAC?"))
         self.assertEqual(
             handbook._forced_topic_for("What is the religion of PAC?")[0],
             ["multifaith services"],
@@ -130,6 +144,17 @@ class SourceArbitrationTests(unittest.TestCase):
                 "How much is the tuition fee for BSBA?"
             )
         )
+
+    def test_handbook_classifier_uses_ai_and_caches_verdict_by_language(self):
+        question = "Who founded the school?"
+        with patch.object(handbook.ai_cache, "get", side_effect=[None, True]), \
+             patch.object(handbook.ai_cache, "set") as cache_set, \
+             patch.object(handbook, "llm_chat", return_value="YES.") as router:
+            self.assertTrue(handbook.is_handbook_question(question, "english"))
+            self.assertTrue(handbook.is_handbook_question(question, "english"))
+
+        router.assert_called_once()
+        cache_set.assert_called_once()
 
 
 if __name__ == "__main__":

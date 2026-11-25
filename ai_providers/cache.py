@@ -6,11 +6,20 @@ Both get automatic cleanup instead of relying on maxsize eviction alone,
 addressing the "no TTL-based cache invalidation" review item.
 """
 import hashlib
+import json
 import time
 from threading import Lock
 from typing import Any, Dict, Optional
 
 from .metrics import model_metrics
+
+
+def stable_digest(*parts: Any) -> str:
+    """Return a process-independent digest for cache-key components."""
+    payload = json.dumps(
+        parts, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 class AICache:

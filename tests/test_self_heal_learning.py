@@ -29,6 +29,15 @@ class FakeCursor:
         pass
 
 
+class CorrectionNormalizationTests(unittest.TestCase):
+    def test_long_questions_do_not_collide_in_exact_correction_keys(self):
+        prefix = "A" * 301
+        first = corrections.normalize_question(prefix + " who wrote the hymn?")
+        second = corrections.normalize_question(prefix + " show the lyrics?")
+
+        self.assertNotEqual(first, second)
+
+
 class FakeConnection:
     def __init__(self, row=None, rows=None, rowcount=1):
         self.cur = FakeCursor(row=row, rows=rows, rowcount=rowcount)

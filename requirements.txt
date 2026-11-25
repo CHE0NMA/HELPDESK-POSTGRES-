@@ -15,6 +15,7 @@ packaging
 Werkzeug
 cryptography
 Flask-Limiter
+redis
 pdfplumber
 requests
 numpy

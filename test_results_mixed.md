@@ -1,24 +1,36 @@
 # Chatbot Mixed Test Report
-**Date:** 2026-09-05 12:45
+**Original run:** 2026-09-05 12:45
 
-**Session:** mixed_test_20260905_123103
+**Reclassified:** 2026-11-22 using the current fallback and answer-verification rules
 
-**Overall Score:** 53/59 passed
+**Basic checks passed:** 41/59
 
-## Score by Category
+**Explicitly verified:** 11/14
 
-- **Handbook-Identity**: 7/7
-- **Handbook-Vision**: 4/5
-- **Handbook-Conduct**: 9/10
-- **Handbook-Legal**: 3/4
-- **Programs-FAQ**: 9/9
-- **Schedule**: 6/6
-- **Follow-up**: 11/12
-- **Vague**: 4/6
+## Outcome Breakdown
+
+- **Verified**: 11
+- **Unverified**: 30
+- **Fallback**: 13
+- **Incorrect**: 5
+- **Request Error**: 0
+
+Answers without explicit expectations are unverified, not factual verification.
+
+## Outcomes by Category
+
+- **Handbook-Identity**: 6/7 passed; verified 4, unverified 2, fallback 1, incorrect 0, request errors 0
+- **Handbook-Vision**: 2/5 passed; verified 0, unverified 2, fallback 2, incorrect 1, request errors 0
+- **Handbook-Conduct**: 9/10 passed; verified 5, unverified 4, fallback 0, incorrect 1, request errors 0
+- **Handbook-Legal**: 1/4 passed; verified 0, unverified 1, fallback 2, incorrect 1, request errors 0
+- **Programs-FAQ**: 8/9 passed; verified 2, unverified 6, fallback 1, incorrect 0, request errors 0
+- **Schedule**: 4/6 passed; verified 0, unverified 4, fallback 0, incorrect 2, request errors 0
+- **Follow-up**: 7/12 passed; verified 0, unverified 7, fallback 5, incorrect 0, request errors 0
+- **Vague**: 4/6 passed; verified 0, unverified 4, fallback 2, incorrect 0, request errors 0
 
 ---
 
-### ✅ Q1 [Handbook-Identity]: What is the full official name of the school and its campuses?
+### [FAILED - FALLBACK] Q1 [Handbook-Identity] (fallback, basic_only): What is the full official name of the school and its campuses?
 
 **Answer:**
 
@@ -26,7 +38,7 @@
 
 ---
 
-### ✅ Q2 [Handbook-Identity]: What was PAC originally called before it became a college?
+### [VERIFIED] Q2 [Handbook-Identity] (verified, explicit): What was PAC originally called before it became a college?
 
 **Answer:**
 
@@ -34,7 +46,7 @@
 
 ---
 
-### ✅ Q3 [Handbook-Identity]: When was Philippine Advent College founded and who were the founders?
+### [VERIFIED] Q3 [Handbook-Identity] (verified, explicit): When was Philippine Advent College founded and who were the founders?
 
 **Answer:**
 
@@ -42,7 +54,7 @@
 
 ---
 
-### ✅ Q4 [Handbook-Identity]: What does the official PAC logo symbolize?
+### [VERIFIED] Q4 [Handbook-Identity] (verified, explicit): What does the official PAC logo symbolize?
 
 **Answer:**
 
@@ -50,7 +62,7 @@
 
 ---
 
-### ✅ Q5 [Handbook-Identity]: Who composed the music and wrote the lyrics of the PAC Hymn?
+### [VERIFIED] Q5 [Handbook-Identity] (verified, explicit): Who composed the music and wrote the lyrics of the PAC Hymn?
 
 **Answer:**
 
@@ -58,7 +70,7 @@
 
 ---
 
-### ✅ Q6 [Handbook-Identity]: What is the significance of the year 1975 in PAC history?
+### [UNVERIFIED] Q6 [Handbook-Identity] (unverified, basic_only): What is the significance of the year 1975 in PAC history?
 
 **Answer:**
 
@@ -66,7 +78,7 @@
 
 ---
 
-### ✅ Q7 [Handbook-Identity]: What role did the Macias family play in founding PAC?
+### [UNVERIFIED] Q7 [Handbook-Identity] (unverified, basic_only): What role did the Macias family play in founding PAC?
 
 **Answer:**
 
@@ -74,7 +86,7 @@
 
 ---
 
-### ✅ Q8 [Handbook-Vision]: What is the philosophy of education at Philippine Advent College?
+### [UNVERIFIED] Q8 [Handbook-Vision] (unverified, basic_only): What is the philosophy of education at Philippine Advent College?
 
 **Answer:**
 
@@ -82,7 +94,7 @@
 
 ---
 
-### ✅ Q9 [Handbook-Vision]: What is PAC’s vision statement?
+### [FAILED - FALLBACK] Q9 [Handbook-Vision] (fallback, basic_only): What is PAC’s vision statement?
 
 **Answer:**
 
@@ -90,7 +102,7 @@
 
 ---
 
-### ✅ Q10 [Handbook-Vision]: What are the three core values of PAC and what do they mean?
+### [FAILED - INCORRECT] Q10 [Handbook-Vision] (incorrect, explicit): What are the three core values of PAC and what do they mean?
 
 **Answer:**
 
@@ -98,7 +110,7 @@
 
 ---
 
-### ✅ Q11 [Handbook-Vision]: How does PAC describe being Christ-centered?
+### [UNVERIFIED] Q11 [Handbook-Vision] (unverified, basic_only): How does PAC describe being Christ-centered?
 
 **Answer:**
 
@@ -106,7 +118,7 @@
 
 ---
 
-### ❌ Q12 [Handbook-Vision]: Is there a quotation from Ellen G. White’s book Education in the student manual?
+### [FAILED - FALLBACK] Q12 [Handbook-Vision] (fallback, basic_only): Is there a quotation from Ellen G. White’s book Education in the student manual?
 
 **Answer:**
 
@@ -114,7 +126,7 @@
 
 ---
 
-### ✅ Q13 [Handbook-Conduct]: How many merit points does every student start with each semester?
+### [VERIFIED] Q13 [Handbook-Conduct] (verified, explicit): How many merit points does every student start with each semester?
 
 **Answer:**
 
@@ -122,7 +134,7 @@
 
 ---
 
-### ✅ Q14 [Handbook-Conduct]: How many demerits is a first-degree offense?
+### [VERIFIED] Q14 [Handbook-Conduct] (verified, explicit): How many demerits is a first-degree offense?
 
 **Answer:**
 
@@ -130,7 +142,7 @@
 
 ---
 
-### ✅ Q15 [Handbook-Conduct]: How many demerits is a third-degree offense?
+### [VERIFIED] Q15 [Handbook-Conduct] (verified, explicit): How many demerits is a third-degree offense?
 
 **Answer:**
 
@@ -138,7 +150,7 @@
 
 ---
 
-### ✅ Q16 [Handbook-Conduct]: What happens when a student reaches 20 or more demerits?
+### [UNVERIFIED] Q16 [Handbook-Conduct] (unverified, basic_only): What happens when a student reaches 20 or more demerits?
 
 **Answer:**
 
@@ -146,7 +158,7 @@
 
 ---
 
-### ✅ Q17 [Handbook-Conduct]: How many days does a student have to appeal a decision of the Student Disciplinary Committee?
+### [VERIFIED] Q17 [Handbook-Conduct] (verified, explicit): How many days does a student have to appeal a decision of the Student Disciplinary Committee?
 
 **Answer:**
 
@@ -154,7 +166,7 @@
 
 ---
 
-### ✅ Q18 [Handbook-Conduct]: Is jewelry such as rings, bracelets, or necklaces allowed on campus?
+### [UNVERIFIED] Q18 [Handbook-Conduct] (unverified, basic_only): Is jewelry such as rings, bracelets, or necklaces allowed on campus?
 
 **Answer:**
 
@@ -162,7 +174,7 @@
 
 ---
 
-### ✅ Q19 [Handbook-Conduct]: What is the official dress and appearance policy for students?
+### [UNVERIFIED] Q19 [Handbook-Conduct] (unverified, basic_only): What is the official dress and appearance policy for students?
 
 **Answer:**
 
@@ -170,7 +182,7 @@
 
 ---
 
-### ❌ Q20 [Handbook-Conduct]: Are slippers allowed on campus?
+### [FAILED - INCORRECT] Q20 [Handbook-Conduct] (incorrect, basic_only): Are slippers allowed on campus?
 
 **Answer:**
 
@@ -178,7 +190,7 @@
 
 ---
 
-### ✅ Q21 [Handbook-Conduct]: Is public display of affection considered a violation?
+### [VERIFIED] Q21 [Handbook-Conduct] (verified, explicit): Is public display of affection considered a violation?
 
 **Answer:**
 
@@ -186,7 +198,7 @@
 
 ---
 
-### ✅ Q22 [Handbook-Conduct]: What is the policy on missing dormitory worships?
+### [UNVERIFIED] Q22 [Handbook-Conduct] (unverified, basic_only): What is the policy on missing dormitory worships?
 
 **Answer:**
 
@@ -194,7 +206,7 @@
 
 ---
 
-### ❌ Q23 [Handbook-Legal]: Does the student manual mention the Anti-Bullying Act or RA 10627?
+### [FAILED - FALLBACK] Q23 [Handbook-Legal] (fallback, basic_only): Does the student manual mention the Anti-Bullying Act or RA 10627?
 
 **Answer:**
 
@@ -202,7 +214,7 @@
 
 ---
 
-### ✅ Q24 [Handbook-Legal]: What is the Safe Spaces Act and what is its Republic Act number?
+### [FAILED - INCORRECT] Q24 [Handbook-Legal] (incorrect, explicit): What is the Safe Spaces Act and what is its Republic Act number?
 
 **Answer:**
 
@@ -210,7 +222,7 @@
 
 ---
 
-### ✅ Q25 [Handbook-Legal]: What does RA 11313 cover according to the handbook?
+### [UNVERIFIED] Q25 [Handbook-Legal] (unverified, basic_only): What does RA 11313 cover according to the handbook?
 
 **Answer:**
 
@@ -218,7 +230,7 @@
 
 ---
 
-### ✅ Q26 [Handbook-Legal]: Is hazing allowed or prohibited in PAC?
+### [FAILED - FALLBACK] Q26 [Handbook-Legal] (fallback, basic_only): Is hazing allowed or prohibited in PAC?
 
 **Answer:**
 
@@ -226,7 +238,7 @@
 
 ---
 
-### ✅ Q27 [Programs-FAQ]: What degree programs does Philippine Advent College offer?
+### [UNVERIFIED] Q27 [Programs-FAQ] (unverified, basic_only): What degree programs does Philippine Advent College offer?
 
 **Answer:**
 
@@ -234,7 +246,7 @@
 
 ---
 
-### ✅ Q28 [Programs-FAQ]: What senior high school strands are available at PAC?
+### [FAILED - FALLBACK] Q28 [Programs-FAQ] (fallback, basic_only): What senior high school strands are available at PAC?
 
 **Answer:**
 
@@ -242,7 +254,7 @@
 
 ---
 
-### ✅ Q29 [Programs-FAQ]: Does PAC offer Bachelor of Science in Nursing and Midwifery?
+### [UNVERIFIED] Q29 [Programs-FAQ] (unverified, basic_only): Does PAC offer Bachelor of Science in Nursing and Midwifery?
 
 **Answer:**
 
@@ -250,7 +262,7 @@
 
 ---
 
-### ✅ Q30 [Programs-FAQ]: What TESDA NC II programs are offered?
+### [VERIFIED] Q30 [Programs-FAQ] (verified, explicit): What TESDA NC II programs are offered?
 
 **Answer:**
 
@@ -258,7 +270,7 @@
 
 ---
 
-### ✅ Q31 [Programs-FAQ]: What teacher education programs are available?
+### [UNVERIFIED] Q31 [Programs-FAQ] (unverified, basic_only): What teacher education programs are available?
 
 **Answer:**
 
@@ -266,7 +278,7 @@
 
 ---
 
-### ✅ Q32 [Programs-FAQ]: Is Bachelor of Science in Business Administration offered?
+### [UNVERIFIED] Q32 [Programs-FAQ] (unverified, basic_only): Is Bachelor of Science in Business Administration offered?
 
 **Answer:**
 
@@ -274,7 +286,7 @@
 
 ---
 
-### ✅ Q33 [Programs-FAQ]: Is there a family scholarship or discount for siblings?
+### [UNVERIFIED] Q33 [Programs-FAQ] (unverified, basic_only): Is there a family scholarship or discount for siblings?
 
 **Answer:**
 
@@ -282,7 +294,7 @@
 
 ---
 
-### ✅ Q34 [Programs-FAQ]: What are the current dormitory charges?
+### [VERIFIED] Q34 [Programs-FAQ] (verified, explicit): What are the current dormitory charges?
 
 **Answer:**
 
@@ -290,7 +302,7 @@
 
 ---
 
-### ✅ Q35 [Programs-FAQ]: Is a drug test required for incoming first-year students?
+### [UNVERIFIED] Q35 [Programs-FAQ] (unverified, basic_only): Is a drug test required for incoming first-year students?
 
 **Answer:**
 
@@ -298,7 +310,7 @@
 
 ---
 
-### ✅ Q36 [Schedule]: Do we have classes this week?
+### [UNVERIFIED] Q36 [Schedule] (unverified, basic_only): Do we have classes this week?
 
 **Answer:**
 
@@ -306,7 +318,7 @@
 
 ---
 
-### ✅ Q37 [Follow-up]: Does that apply to all levels?
+### [UNVERIFIED] Q37 [Follow-up] (unverified, basic_only): Does that apply to all levels?
 
 **Answer:**
 
@@ -314,7 +326,7 @@
 
 ---
 
-### ✅ Q38 [Follow-up]: College too?
+### [UNVERIFIED] Q38 [Follow-up] (unverified, basic_only): College too?
 
 **Answer:**
 
@@ -322,7 +334,7 @@
 
 ---
 
-### ✅ Q39 [Follow-up]: Elementary also?
+### [UNVERIFIED] Q39 [Follow-up] (unverified, basic_only): Elementary also?
 
 **Answer:**
 
@@ -330,7 +342,7 @@
 
 ---
 
-### ✅ Q40 [Schedule]: Is there class tomorrow?
+### [FAILED - INCORRECT] Q40 [Schedule] (incorrect, explicit): Is there class tomorrow?
 
 **Answer:**
 
@@ -338,7 +350,7 @@
 
 ---
 
-### ❌ Q41 [Follow-up]: For the whole school?
+### [FAILED - FALLBACK] Q41 [Follow-up] (fallback, basic_only): For the whole school?
 
 **Answer:**
 
@@ -346,7 +358,7 @@
 
 ---
 
-### ✅ Q42 [Follow-up]: sa tanan?
+### [FAILED - FALLBACK] Q42 [Follow-up] (fallback, basic_only): sa tanan?
 
 **Answer:**
 
@@ -354,7 +366,7 @@
 
 ---
 
-### ✅ Q43 [Schedule]: Are there any holidays this month?
+### [UNVERIFIED] Q43 [Schedule] (unverified, basic_only): Are there any holidays this month?
 
 **Answer:**
 
@@ -362,7 +374,7 @@
 
 ---
 
-### ✅ Q44 [Follow-up]: Does high school also have no classes?
+### [UNVERIFIED] Q44 [Follow-up] (unverified, basic_only): Does high school also have no classes?
 
 **Answer:**
 
@@ -370,7 +382,7 @@
 
 ---
 
-### ✅ Q45 [Follow-up]: for everyone?
+### [FAILED - FALLBACK] Q45 [Follow-up] (fallback, basic_only): for everyone?
 
 **Answer:**
 
@@ -378,7 +390,7 @@
 
 ---
 
-### ✅ Q46 [Schedule]: Does high school have classes this week?
+### [UNVERIFIED] Q46 [Schedule] (unverified, basic_only): Does high school have classes this week?
 
 **Answer:**
 
@@ -386,7 +398,7 @@
 
 ---
 
-### ✅ Q47 [Follow-up]: What about college?
+### [UNVERIFIED] Q47 [Follow-up] (unverified, basic_only): What about college?
 
 **Answer:**
 
@@ -394,7 +406,7 @@
 
 ---
 
-### ✅ Q48 [Follow-up]: elementary also?
+### [UNVERIFIED] Q48 [Follow-up] (unverified, basic_only): elementary also?
 
 **Answer:**
 
@@ -402,7 +414,7 @@
 
 ---
 
-### ✅ Q49 [Schedule]: Is the office open on Friday?
+### [UNVERIFIED] Q49 [Schedule] (unverified, basic_only): Is the office open on Friday?
 
 **Answer:**
 
@@ -410,7 +422,7 @@
 
 ---
 
-### ✅ Q50 [Follow-up]: All offices or just Student Affairs?
+### [UNVERIFIED] Q50 [Follow-up] (unverified, basic_only): All offices or just Student Affairs?
 
 **Answer:**
 
@@ -418,7 +430,7 @@
 
 ---
 
-### ✅ Q51 [Schedule]: Any suspension announced?
+### [FAILED - INCORRECT] Q51 [Schedule] (incorrect, guardrail_only): Any suspension announced?
 
 **Answer:**
 
@@ -426,7 +438,7 @@
 
 ---
 
-### ✅ Q52 [Follow-up]: Is it for all campuses?
+### [FAILED - FALLBACK] Q52 [Follow-up] (fallback, basic_only): Is it for all campuses?
 
 **Answer:**
 
@@ -434,7 +446,7 @@
 
 ---
 
-### ✅ Q53 [Follow-up]: whole school?
+### [FAILED - FALLBACK] Q53 [Follow-up] (fallback, basic_only): whole school?
 
 **Answer:**
 
@@ -442,7 +454,7 @@
 
 ---
 
-### ❌ Q54 [Vague]: Something about the 2025 edition of the student manual?
+### [FAILED - FALLBACK] Q54 [Vague] (fallback, basic_only): Something about the 2025 edition of the student manual?
 
 **Answer:**
 
@@ -450,7 +462,7 @@
 
 ---
 
-### ❌ Q55 [Vague]: Any updates for school year 2025-2026?
+### [FAILED - FALLBACK] Q55 [Vague] (fallback, basic_only): Any updates for school year 2025-2026?
 
 **Answer:**
 
@@ -458,7 +470,7 @@
 
 ---
 
-### ✅ Q56 [Vague]: What about the Week of Spiritual Emphasis?
+### [UNVERIFIED] Q56 [Vague] (unverified, basic_only): What about the Week of Spiritual Emphasis?
 
 **Answer:**
 
@@ -466,7 +478,7 @@
 
 ---
 
-### ✅ Q57 [Vague]: Is there a deadline for completing incomplete grades?
+### [UNVERIFIED] Q57 [Vague] (unverified, basic_only): Is there a deadline for completing incomplete grades?
 
 **Answer:**
 
@@ -474,7 +486,7 @@
 
 ---
 
-### ✅ Q58 [Vague]: Any policy from MORPHE of 2008?
+### [UNVERIFIED] Q58 [Vague] (unverified, basic_only): Any policy from MORPHE of 2008?
 
 **Answer:**
 
@@ -482,7 +494,7 @@
 
 ---
 
-### ✅ Q59 [Vague]: What is the maximum residency period to finish a degree?
+### [UNVERIFIED] Q59 [Vague] (unverified, basic_only): What is the maximum residency period to finish a degree?
 
 **Answer:**
 

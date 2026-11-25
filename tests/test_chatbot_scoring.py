@@ -1,6 +1,6 @@
 import unittest
 
-from test_chatbot import classify_answer_outcome
+from test_chatbot import classify_answer_outcome, is_failed_outcome
 
 
 class ChatbotOutcomeTests(unittest.TestCase):
@@ -11,13 +11,12 @@ class ChatbotOutcomeTests(unittest.TestCase):
         )
 
     def test_polite_give_up_is_a_fallback(self):
-        self.assertEqual(
-            classify_answer_outcome(
-                "I couldn't find a solid answer. I've saved your question "
-                "so our staff can add it soon."
-            ),
-            "fallback",
+        outcome = classify_answer_outcome(
+            "I couldn't find a solid answer. I've saved your question "
+            "so our staff can add it soon."
         )
+        self.assertEqual(outcome, "fallback")
+        self.assertTrue(is_failed_outcome(outcome))
 
     def test_missing_expected_fact_is_incorrect(self):
         self.assertEqual(

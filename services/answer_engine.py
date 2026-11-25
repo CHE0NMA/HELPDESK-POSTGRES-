@@ -11,18 +11,24 @@ Changes from v1:
   services.disambiguation policy (FAQ_POLICY) — disambiguation now only
   fires when there are genuinely two-or-more plausible, similarly-confident
   candidates, not on any close-ish gap between two mediocre matches.
-- get_top_faq_candidates() now optionally blends in semantic similarity
-  (services.embeddings) on top of the existing fuzzy string scoring — see
-  SEMANTIC_BLEND below. Purely additive: pass no query_embedding and this
-  behaves exactly as before.
+- get_top_faq_candidates() uses semantic similarity as an independent
+  ranking signal alongside fuzzy string scoring. A strong semantic match
+  can therefore rank highly even when the question shares no words with
+  the FAQ.
 """
 import logging
 import re
 from typing import Any, List, Dict, Optional, Sequence, Tuple
 from fuzzywuzzy import fuzz
 
+from ai_providers.cache import stable_digest
 from services import nlg
-from services.ai_retrieval import llm_pick_faq, llm_self_check
+from services.ai_retrieval import (
+    QuestionUnderstanding,
+    llm_pick_faq,
+    llm_self_check,
+    question_understanding_prompt,
+)
 from services.config import bot_identity_line
 from services.disambiguation import FAQ_POLICY, select_contenders, should_disambiguate
 from services.embeddings import cosine_similarity
@@ -34,9 +40,6 @@ logger = logging.getLogger("pac_helpdesk.answer_engine")
 
 
 FUZZY_MIN_SCORE = 0.60
-
-SEMANTIC_BLEND = 0.35
-
 
 def normalize_text(text: str) -> str:
     if not text:
@@ -81,8 +84,8 @@ def get_top_faq_candidates(user_question: str, expanded_question: str,
     which now includes the `embedding` column) is compared via cosine
     similarity and blended into `combined`. Rows with no cached embedding
     yet (not yet backfilled, or GEMINI_API_KEY unset when they were
-    saved) just don't get the semantic boost — they still get scored
-    fuzzy-only, same as before this feature existed.
+    saved) are ranked using their lexical score. Semantic similarity is
+    an independent candidate signal, not a penalty applied to fuzzy score.
     """
     candidates = []
     user_norm = normalize_text(user_question)
@@ -96,6 +99,17 @@ def get_top_faq_candidates(user_question: str, expanded_question: str,
     search_norms = [q for q in (user_norm, expanded_norm) if q]
     query_norms = list(dict.fromkeys((*search_norms, *alternate_norms)))
     query_roles = personnel_titles(user_question)
+    exact_rows = [
+        faq for faq in all_faqs
+        if len(faq) > 1 and faq[0]
+        and normalize_text(str(faq[1] or "")) == user_norm
+    ]
+    exact_answers = {
+        normalize_text(str(faq[0] or ""))
+        for faq in exact_rows
+        if faq[0]
+    }
+    unambiguous_exact_match = bool(exact_rows) and len(exact_answers) == 1
 
     for faq in all_faqs:
         if len(faq) >= 9:
@@ -197,14 +211,13 @@ def get_top_faq_candidates(user_question: str, expanded_question: str,
 
         semantic_score = 0.0
         if query_embedding and faq_embedding:
-            semantic_score = max(0.0, cosine_similarity(query_embedding, faq_embedding))
-            combined = min(1.0, combined * (1 - SEMANTIC_BLEND) + semantic_score * SEMANTIC_BLEND)
-            if trusted_alias_match or ai_alternate_match:
-                combined = max(
-                    combined,
-                    alias_ratio if trusted_alias_match else 0.0,
-                    alternate_ratio if ai_alternate_match else 0.0,
-                )
+            semantic_score = min(
+                1.0, max(0.0, cosine_similarity(query_embedding, faq_embedding))
+            )
+            combined = max(combined, semantic_score)
+        exact_match = unambiguous_exact_match and bool(faq[0]) and q_norm == user_norm
+        if exact_match:
+            combined = 1.0
 
         candidates.append({
             'faq': faq, 'q_text': question, 'q_norm': q_norm,
@@ -212,6 +225,7 @@ def get_top_faq_candidates(user_question: str, expanded_question: str,
             'full_ratio': full_ratio, 'expanded_ratio': expanded_ratio,
             'alternate_match': trusted_alias_match or ai_alternate_match,
             'personnel_title_match': personnel_match,
+            'exact_match': exact_match,
             'related_question_score': alias_ratio,
             'keyword_coverage': keyword_coverage,
             'topic_intent_coverage': label_coverage,
@@ -220,7 +234,10 @@ def get_top_faq_candidates(user_question: str, expanded_question: str,
             'best_q_text': question,
         })
 
-    candidates.sort(key=lambda x: x['combined'], reverse=True)
+    candidates.sort(
+        key=lambda x: (x['combined'], x['exact_match']),
+        reverse=True,
+    )
     return candidates[:max_candidates]
 
 
@@ -291,7 +308,8 @@ def _answer_relevant_to_question(question: str, answer: str, min_overlap: int = 
 
 
 def _extract_from_answer(user_question: str, best_text: str, answer: str,
-                          llm_chat_fn, detected_lang: str = 'english') -> Optional[str]:
+                          llm_chat_fn, detected_lang: str = 'english',
+                          understanding: Optional[QuestionUnderstanding] = None) -> Optional[str]:
     """Shared extract + grounding + relevance check.
 
     BUG FIX: this prompt previously had no language instruction at all —
@@ -311,11 +329,14 @@ def _extract_from_answer(user_question: str, best_text: str, answer: str,
     )
     few_shot = nlg.few_shot_example(detected_lang) if detected_lang != 'english' else ""
     casual_note = nlg.casual_tone_note(user_question)
+    interpretation = question_understanding_prompt(understanding)
     prompt = f"""{nlg.now_context()}
 
     {bot_identity_line()}
 
     A student asked: "{user_question}"
+
+    {interpretation}
 
     Here is the most relevant FAQ entry:
     Question: {best_text}
@@ -325,8 +346,6 @@ def _extract_from_answer(user_question: str, best_text: str, answer: str,
     - Answer using ONLY the information in the FAQ/source text above. Do not invent names, dates, amounts, or requirements that aren't stated.
     - Answer ONLY what the student asked. Do NOT paste or restate the entire source text.
         - Interpret conversational Tagalog/Bisaya by the student's intent, not word-for-word; reply naturally in the requested language and keep official school terms or names clear.
-        - For when/what-year/started/founded questions: give the year/date in 1–2 short sentences. Skip long history unless they asked for the full story.
-    - For who/founder questions: name the people in 1–2 short sentences.
     - For yes/no (okay? allowed? can I?): your FIRST WORD must be Yes or No, then a short reason.
     - If the student named a SPECIFIC item and the source only covers a DIFFERENT, similar
       item without actually naming the one asked about, don't answer as if it was covered —
@@ -378,13 +397,14 @@ def _extract_from_answer(user_question: str, best_text: str, answer: str,
 
         if (
             detected_lang == 'english'
+            and not understanding
             and not _answer_relevant_to_question(user_question, response, min_overlap=1)
         ):
             logger.info(f"answer-relevance REJECTED for q={user_question[:80]!r}")
             return None
 
 
-        if not llm_self_check(user_question, response, answer):
+        if not llm_self_check(user_question, response, answer, understanding):
             logger.info(f"answer self-check REJECTED for q={user_question[:80]!r}")
             return None
 
@@ -394,12 +414,17 @@ def _extract_from_answer(user_question: str, best_text: str, answer: str,
         return None
 
 def smart_extract_answer(user_question: str, candidates: List[Dict], detected_lang: str = 'english',
-                          llm_chat_fn=None, ai_cache=None
+                          llm_chat_fn=None, ai_cache=None,
+                          understanding: Optional[QuestionUnderstanding] = None,
                           ) -> Tuple[Optional[str], Optional[Dict]]:
     if not candidates or llm_chat_fn is None:
         return None, None
 
-    cache_key = f"extract_{hash(user_question)}_{detected_lang}"
+    understanding_key = (
+        stable_digest(understanding.meaning, understanding.answer_focus)
+        if understanding else "0"
+    )
+    cache_key = f"extract_{stable_digest(user_question)}_{detected_lang}_{understanding_key}"
     if ai_cache:
         cached = ai_cache.get(cache_key)
         if cached:
@@ -415,7 +440,8 @@ def smart_extract_answer(user_question: str, candidates: List[Dict], detected_la
         return None, None
 
     response = _extract_from_answer(user_question, best_text, answer, llm_chat_fn,
-                                     detected_lang=detected_lang)
+                                     detected_lang=detected_lang,
+                                     understanding=understanding)
     if not response:
         return None, None
     if ai_cache:

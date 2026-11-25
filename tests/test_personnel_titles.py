@@ -170,7 +170,7 @@ class PersonnelTitleTests(unittest.TestCase):
             faq.lang_service.get_translation_unavailable_response("bisaya"),
         )
         self.assertEqual(result[2], 7)
-        self.assertEqual(context.last_faq_question, dean_faq[1])
+        self.assertIsNone(context.last_faq_question)
 
 
 if __name__ == "__main__":
