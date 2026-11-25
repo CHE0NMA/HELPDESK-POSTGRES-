@@ -318,6 +318,7 @@ def verify_output_language(text: str, expected_lang: str) -> bool:
 
     mixed_components = {
         'mixed_te': {'tagalog', 'mixed_te'},
+        'bisaya': {'bisaya', 'mixed_be'},
         'mixed_be': {'bisaya', 'mixed_be'},
         'mixed_tb': {'tagalog', 'bisaya', 'mixed_tb'},
     }

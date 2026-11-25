@@ -87,6 +87,38 @@ class GenerateFaqMetadataTests(unittest.TestCase):
             "Are shorts allowed?|What is the rule?",
         )
 
+    def test_section_generation_retries_invalid_json_and_preserves_bisaya_aliases(self):
+        generated = {
+            "faqs": [{
+                "question": "How do I request a transcript?",
+                "related_questions": ["Unsaon pagkuha sa transcript?"],
+                "answer": "Submit a request to the Registrar for a transcript.",
+                "keywords": ["transcript", "registrar"],
+            }]
+        }
+        with patch.object(handbook_ingest, "HAS_AI", True), patch.object(
+            handbook_ingest,
+            "call_for_ingest",
+            side_effect=["not json", json.dumps(generated)],
+        ) as call, patch.object(handbook_ingest.time, "sleep"):
+            faqs = handbook_ingest.section_to_faqs({
+                "section_title": "Transcript requests",
+                "content": "Submit a request to the Registrar for a transcript. " * 3,
+            })
+
+        self.assertEqual(call.call_count, 2)
+        self.assertIn("Bisaya/Cebuano", call.call_args.args[0])
+        self.assertEqual(faqs[0]["related_questions"], "Unsaon pagkuha sa transcript?")
+        self.assertEqual(faqs[0]["keywords"], "transcript, registrar")
+
+    def test_section_generation_reports_missing_ai_configuration(self):
+        with patch.object(handbook_ingest, "HAS_AI", False):
+            with self.assertRaisesRegex(RuntimeError, "not configured"):
+                handbook_ingest.section_to_faqs({
+                    "section_title": "Transcript requests",
+                    "content": "Useful handbook content. " * 5,
+                })
+
     def test_pasted_json_preserves_metadata_and_related_question_lists(self):
         faqs = handbook_ingest.parse_pasted_faqs(json.dumps({
             "faqs": [{
@@ -168,6 +200,43 @@ class FaqDraftRoutesTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["faqs"], drafts)
         conn.commit.assert_not_called()
+
+    def test_handbook_preview_reports_unavailable_ai_as_retryable(self):
+        conn = Mock()
+        conn.cursor.return_value.fetchone.return_value = (
+            "Student Conduct", "Dress and Appearance", 20, 21, "Handbook content"
+        )
+        with patch("routes.admin.admin_required", return_value=True), patch(
+            "routes.admin.get_db", return_value=conn
+        ), patch(
+            "services.handbook_ingest.section_to_faqs",
+            side_effect=RuntimeError("AI providers did not return a response."),
+        ):
+            response = self.client.post(
+                "/api/admin/handbook_chunks/7/generate_faqs"
+            )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertTrue(response.get_json()["retryable"])
+
+    def test_handbook_preview_returns_empty_result_without_http_error(self):
+        conn = Mock()
+        conn.cursor.return_value.fetchone.return_value = (
+            "Student Conduct", "Dress and Appearance", 20, 21, "Useful content " * 10
+        )
+        with patch("routes.admin.admin_required", return_value=True), patch(
+            "routes.admin.get_db", return_value=conn
+        ), patch(
+            "services.handbook_ingest.section_to_faqs", return_value=[]
+        ):
+            response = self.client.post(
+                "/api/admin/handbook_chunks/7/generate_faqs"
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.get_json()["success"])
+        self.assertFalse(response.get_json()["faqs"])
+        self.assertTrue(response.get_json()["retryable"])
 
     def test_reviewed_handbook_insert_does_not_retire_existing_faqs(self):
         reviewed = [{

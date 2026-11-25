@@ -1267,11 +1267,13 @@ def _find_answer(question: str, return_topic: bool = False,
         )
         exact_answer = None
         exact_image = None
+        exact_is_correction = False
         exact_source_question = question
         try:
             from services.corrections import get_exact_correction
             exact_correction = get_exact_correction(get_db, question)
             if exact_correction:
+                exact_is_correction = True
                 exact_answer = (
                     exact_correction['answer'],
                     'Corrected',
@@ -1292,21 +1294,30 @@ def _find_answer(question: str, return_topic: bool = False,
 
         if exact_answer:
             answer, topic, faq_id, intent = exact_answer
-            exact_understanding = understand_question(
-                question,
-                exact_language,
-                context_hint=(
-                    ctx.get_context_summary()
-                    if ctx and ctx.conversation_history else None
-                ),
-            )
-            answer = _validated_faq_source_answer(
-                question,
-                (answer, exact_source_question),
-                exact_language,
-                exact_understanding,
-                translate=True,
-            )
+            if exact_is_correction:
+                answer = _source_answer_in_language(
+                    question,
+                    exact_source_question,
+                    str(answer or ''),
+                    exact_language,
+                    translate=True,
+                )
+            else:
+                exact_understanding = understand_question(
+                    question,
+                    exact_language,
+                    context_hint=(
+                        ctx.get_context_summary()
+                        if ctx and ctx.conversation_history else None
+                    ),
+                )
+                answer = _validated_faq_source_answer(
+                    question,
+                    (answer, exact_source_question),
+                    exact_language,
+                    exact_understanding,
+                    translate=True,
+                )
             if answer:
                 if exact_image:
                     answer = f"{answer}\n\n[Image: {exact_image}]"

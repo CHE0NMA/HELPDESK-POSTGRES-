@@ -1,41 +1,7 @@
-import json
-from collections import defaultdict
-from pathlib import Path
 import unittest
 
 from services.answer_engine import get_top_faq_candidates
 from services.retrieval_evaluation import evaluate_retrieval_cases
-
-
-BACKUP_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "backups"
-    / "faq_backup_20260424_112552.json"
-)
-
-
-def _backup_faq_rows():
-    with BACKUP_PATH.open(encoding="utf-8") as file:
-        rows = json.load(file)["faqs"]
-    grouped = defaultdict(list)
-    for row in rows:
-        grouped[row["question"]].append(row["id"])
-    faq_rows = [
-        (
-            row.get("answer"),
-            row.get("question"),
-            row.get("id"),
-            row.get("topic"),
-            row.get("intent"),
-            row.get("keywords"),
-            row.get("related_questions"),
-            row.get("priority_score"),
-            row.get("image_path"),
-            row.get("embedding"),
-        )
-        for row in rows
-    ]
-    return faq_rows, grouped
 
 
 class RetrievalEvaluationTests(unittest.TestCase):
@@ -61,16 +27,48 @@ class RetrievalEvaluationTests(unittest.TestCase):
         self.assertAlmostEqual(report["mrr"], (1 + 0.5 + 0) / 3)
         self.assertEqual(report["by_language"]["bisaya"]["recall_at_3"], 1.0)
 
-    def test_canonical_backup_questions_retrieve_their_faqs(self):
-        rows, grouped = _backup_faq_rows()
+    def test_known_faq_questions_retrieve_their_faqs(self):
+        rows = [
+            (
+                "Submit the request to the registrar.",
+                "How do I request a transcript?",
+                34, "Registrar", "transcript", "transcript",
+                "Unsaon pagkuha sa transcript?", 10, None, None,
+            ),
+            (
+                "The registrar's office is open on weekdays.",
+                "What are the registrar's office hours?",
+                35, "Registrar", "office_hours", "registrar hours", None, 10, None, None,
+            ),
+            (
+                "Tuition fees depend on the program and year level.",
+                "How much is the tuition fee?",
+                36, "Fees", "tuition", "tuition fee", None, 10, None, None,
+            ),
+            (
+                "The academic calendar is available from the registrar.",
+                "Where can I find the academic calendar?",
+                37, "Registrar", "calendar", "academic calendar", None, 10, None, None,
+            ),
+            (
+                "Use the password reset link on the student portal sign-in page.",
+                "How do I reset my student portal password?",
+                38, "Student Portal", "password_reset", "portal password", None, 10, None, None,
+            ),
+        ]
         cases = [
             {
-                "question": question,
-                "expected_faq_ids": faq_ids,
+                "question": row[1],
+                "expected_faq_ids": [row[2]],
                 "language": "english",
             }
-            for question, faq_ids in grouped.items()
+            for row in rows
         ]
+        cases.append({
+            "question": "Unsaon pagkuha sa transcript?",
+            "expected_faq_ids": [34],
+            "language": "bisaya",
+        })
 
         report = evaluate_retrieval_cases(
             cases,
@@ -85,7 +83,7 @@ class RetrievalEvaluationTests(unittest.TestCase):
             ],
         )
 
-        self.assertEqual(report["case_count"], len(grouped))
+        self.assertEqual(report["case_count"], len(cases))
         self.assertEqual(report["recall_at_3"], 1.0)
         self.assertGreater(report["recall_at_1"], 0.9)
 

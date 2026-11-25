@@ -1180,13 +1180,36 @@ def api_generate_handbook_faqs(chunk_id):
     try:
         from services.handbook_ingest import section_to_faqs
         faqs = section_to_faqs(section)
+    except RuntimeError as e:
+        logger.warning("Handbook FAQ generation is unavailable: %s", e)
+        return jsonify({
+            'error': 'FAQ generation is temporarily unavailable. Check the AI provider configuration and try again.',
+            'retryable': True,
+        }), 503
+    except ValueError as e:
+        logger.warning("Handbook FAQ generation returned invalid data: %s", e)
+        return jsonify({
+            'error': 'The AI returned an unusable FAQ response. Please try generating the drafts again.',
+            'retryable': True,
+        }), 502
     except Exception as e:
         logger.exception("Handbook FAQ generation failed: %s", e)
-        return jsonify({'error': 'Could not generate FAQs for this section.'}), 502
-    if not faqs:
         return jsonify({
-            'error': 'No FAQ drafts were generated. This section may be too short or contain little usable information.',
-        }), 422
+            'error': 'Could not generate FAQs for this section. Please try again.',
+            'retryable': True,
+        }), 502
+    if not faqs:
+        content_is_substantial = len(section['content'].strip()) >= 80
+        return jsonify({
+            'success': True,
+            'faqs': [],
+            'message': (
+                'This section is too short to generate FAQ drafts. Edit it or choose a more substantial section.'
+                if not content_is_substantial else
+                'No FAQ drafts were generated. This section may contain little usable information.'
+            ),
+            'retryable': content_is_substantial,
+        })
     return jsonify({
         'success': True,
         'section': section['section_title'],

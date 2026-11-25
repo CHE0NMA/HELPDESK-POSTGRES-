@@ -133,8 +133,13 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
 .search-bar { display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; margin-bottom:1rem; }
 .search-bar .form-control { max-width:280px; }
 .search-bar .form-select { max-width:200px; }
-.edit-panel { display:none; }
-.edit-panel.open { display:block; }
+.handbook-modal .modal-content { background:var(--bg2); border:1px solid var(--border2); border-radius:18px; color:var(--text); box-shadow:0 24px 70px rgba(0,0,0,.45); }
+.handbook-modal .modal-header,.handbook-modal .modal-footer { border-color:var(--border); }
+.handbook-modal .modal-title { font-family:'Sora',sans-serif; font-weight:700; }
+.handbook-modal .modal-subtitle { color:var(--text-dim); font-size:.8rem; margin-top:.25rem; }
+.handbook-modal .modal-body { max-height:calc(100vh - 190px); overflow-y:auto; }
+.handbook-modal .form-control { background:var(--input-bg); color:var(--text); }
+[data-bs-theme="dark"] .handbook-modal .btn-close { filter:invert(1) grayscale(100%) brightness(200%); }
 .spinner { display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,.2); border-top-color:var(--accent); border-radius:50%; animation:spin .6s linear infinite; vertical-align:middle; margin-right:6px; }
 @keyframes spin { to { transform:rotate(360deg); } }
 .toast-el { position:fixed; bottom:20px; right:20px; z-index:9999; background:var(--toast-bg); border:1px solid var(--border2); padding:.7rem 1.25rem; border-radius:12px; font-size:.84rem; display:flex; align-items:center; gap:.5rem; box-shadow:0 8px 28px rgba(0,0,0,.4); color:var(--text); animation:toastIn .25s ease; }
@@ -596,32 +601,6 @@ Section text:
     </div>
     </div><!-- /tab-massinsert -->
 
-    <!-- Edit Panel -->
-    <div class="card edit-panel" id="editPanel">
-      <div class="card-header">
-        <span><i class="bi bi-pencil-square" style="color:var(--warning)"></i> Edit Section</span>
-        <button class="btn-outline" style="font-size:.78rem;padding:.35rem .85rem" onclick="closeEditPanel()"><i class="bi bi-x-circle"></i> Close</button>
-      </div>
-      <div class="card-body">
-        <input type="hidden" id="edit_id">
-        <div class="row g-3">
-          <div class="col-md-8"><label class="form-label">Section Title</label><input type="text" class="form-control" id="edit_section_title"></div>
-          <div class="col-md-4"><label class="form-label">Chapter</label><input type="text" class="form-control" id="edit_chapter"></div>
-        </div>
-        <div class="row g-3 mt-1">
-          <div class="col-12"><label class="form-label">Content</label><textarea class="form-control" id="edit_content" rows="8"></textarea></div>
-        </div>
-        <div class="row g-3 mt-1">
-          <div class="col-12"><label class="form-label">Keywords</label><input type="text" class="form-control" id="edit_keywords"></div>
-        </div>
-        <div style="margin-top:1.1rem;display:flex;gap:.75rem;flex-wrap:wrap">
-          <button class="btn-primary" onclick="saveEdit()" id="saveEditBtn"><i class="bi bi-save2-fill"></i> Save</button>
-          <button class="btn-outline" onclick="closeEditPanel()">Cancel</button>
-          <span id="editStatus" style="font-size:.78rem;color:var(--text-dim)"></span>
-        </div>
-      </div>
-    </div>
-
     <!-- Sections Table -->
     <div class="card">
       <div class="card-header">
@@ -647,6 +626,35 @@ Section text:
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade handbook-modal" id="editSectionModal" tabindex="-1" aria-labelledby="editSectionTitle" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title" id="editSectionTitle"><i class="bi bi-pencil-square me-2" style="color:var(--warning)"></i>Edit handbook section</h5>
+          <div class="modal-subtitle" id="editSectionContext"></div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="info-box"><i class="bi bi-info-circle-fill"></i><span>Changes apply to this handbook section only. The chapter, title, and page context remain visible while you edit.</span></div>
+        <input type="hidden" id="edit_id">
+        <div class="row g-3">
+          <div class="col-md-8"><label class="form-label" for="edit_section_title">Section title</label><input type="text" class="form-control" id="edit_section_title"></div>
+          <div class="col-md-4"><label class="form-label" for="edit_chapter">Chapter</label><input type="text" class="form-control" id="edit_chapter"></div>
+          <div class="col-12"><label class="form-label" for="edit_content">Section content</label><textarea class="form-control" id="edit_content" rows="14"></textarea></div>
+          <div class="col-12"><label class="form-label" for="edit_keywords">Keywords</label><input type="text" class="form-control" id="edit_keywords"></div>
+        </div>
+        <div id="editStatus" class="small mt-3" role="status" aria-live="polite"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-outline" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn-primary" onclick="saveEdit()" id="saveEditBtn"><i class="bi bi-save2-fill"></i> Save changes</button>
       </div>
     </div>
   </div>
@@ -1072,10 +1080,27 @@ function renderChunks() {
     </tr>`;
   }).join('');
 }
+function showHandbookFaqGenerationStatus(status, message, id, retryable) {
+  status.replaceChildren();
+  status.className = 'alert alert-warning mt-3 d-flex align-items-center justify-content-between gap-3 flex-wrap';
+  const text = document.createElement('span');
+  text.textContent = message;
+  status.appendChild(text);
+  if (retryable) {
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'btn btn-sm btn-outline-primary';
+    retry.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Try again';
+    retry.addEventListener('click', () => generateFaqsForSection(id));
+    status.appendChild(retry);
+  }
+}
 async function generateFaqsForSection(id) {
   const section = allChunks.find(chunk => chunk.id === id);
   if (!section) return;
   const status = document.getElementById('handbookFaqReviewStatus');
+  status.replaceChildren();
+  status.className = 'small mt-3';
   document.getElementById('handbookFaqSectionName').textContent =
     `${section.section_title || 'Untitled section'} · ${section.chapter || 'No chapter'}`;
   document.getElementById('handbookFaqDraftList').innerHTML =
@@ -1089,13 +1114,37 @@ async function generateFaqsForSection(id) {
       method: 'POST',
       headers: { 'X-CSRFToken': getCsrf() },
     });
-    const data = await response.json();
-    if (!response.ok || !data.success) throw new Error(data.error || 'FAQ generation failed.');
-    renderGeneratedHandbookFaqs(data.faqs || []);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success) {
+      document.getElementById('handbookFaqDraftList').innerHTML = '';
+      showHandbookFaqGenerationStatus(
+        status,
+        data.error || `FAQ generation failed (HTTP ${response.status}).`,
+        id,
+        Boolean(data.retryable),
+      );
+      return;
+    }
+    const faqs = data.faqs || [];
+    if (!faqs.length) {
+      document.getElementById('handbookFaqDraftList').innerHTML = '';
+      showHandbookFaqGenerationStatus(
+        status,
+        data.message || 'No FAQ drafts were generated for this section.',
+        id,
+        Boolean(data.retryable),
+      );
+      return;
+    }
+    renderGeneratedHandbookFaqs(faqs);
   } catch (error) {
     document.getElementById('handbookFaqDraftList').innerHTML = '';
-    status.textContent = error.message || 'Could not generate FAQs.';
-    status.className = 'small mt-3 text-danger';
+    showHandbookFaqGenerationStatus(
+      status,
+      error.message || 'Could not generate FAQs. Check your connection and try again.',
+      id,
+      true,
+    );
   }
 }
 function renderGeneratedHandbookFaqs(faqs) {
@@ -1191,13 +1240,21 @@ function openEdit(id) {
   document.getElementById('edit_chapter').value = c.chapter || '';
   document.getElementById('edit_keywords').value = c.keywords || '';
   document.getElementById('edit_content').value = c.content || c.preview || '';
-  document.getElementById('editStatus').textContent = c.content ? '' : 'Preview only — full text may be missing.';
-  document.getElementById('editPanel').classList.add('open');
-  window.scrollTo({ top: document.getElementById('editPanel').getBoundingClientRect().top + window.scrollY - 80, behavior: 'smooth' });
+  const pageLabel = c.page_start === c.page_end
+    ? `Page ${c.page_start ?? '—'}`
+    : `Pages ${c.page_start ?? '?'}–${c.page_end ?? '?'}`;
+  document.getElementById('editSectionContext').textContent =
+    `${c.chapter || 'No chapter'} · ${c.section_title || 'Untitled section'} · ${pageLabel}`;
+  document.getElementById('editStatus').textContent =
+    c.content ? '' : 'Preview only — full section text may be missing.';
+  bootstrap.Modal.getOrCreateInstance(
+    document.getElementById('editSectionModal')
+  ).show();
 }
 function closeEditPanel() {
-  document.getElementById('editPanel').classList.remove('open');
-  document.getElementById('editStatus').textContent = '';
+  bootstrap.Modal.getInstance(
+    document.getElementById('editSectionModal')
+  )?.hide();
 }
 async function saveEdit() {
   const id = document.getElementById('edit_id').value;

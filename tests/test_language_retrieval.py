@@ -301,6 +301,12 @@ class BisayaLanguageTests(unittest.TestCase):
             "tagalog",
         )
 
+    def test_bisaya_output_with_english_institution_terms_passes_language_check(self):
+        response = "Palihug visit the Registrar's Office."
+
+        self.assertEqual(_heuristic_language(response)[0], "mixed_be")
+        self.assertTrue(language.verify_output_language(response, "bisaya"))
+
     def test_bisaya_search_phrases_expand_to_matching_concepts(self):
         tuition = expand_query(normalize_vernacular_spelling(
             "pila ang tuition sa nursing"

@@ -422,6 +422,8 @@ RULES (must follow exactly):
 4. Prefer short, clear answers. Quote key numbers, demerit values, RA numbers, or exact phrases when they matter.
 5. If the section is mostly noise, table-of-contents, or pure headings with almost no substance, return an empty list.
 6. Output ONLY valid JSON — no markdown, no commentary.
+7. Keep each main question and answer in the section's language. For every FAQ, include at least one natural Bisaya/Cebuano alternate question in related_questions when the source contains enough information to phrase it safely.
+8. Alternate questions must not add rules or facts; use them only as equivalent ways a student might ask the same question.
 
 Output format:
 {{
@@ -532,7 +534,7 @@ def refine_all(chunks: List[Dict]) -> List[Dict]:
 def section_to_faqs(ch: Dict) -> List[Dict]:
     """Convert one handbook section into FAQ-style pairs via LLM."""
     if not HAS_AI or not call_for_ingest:
-        return []
+        raise RuntimeError("AI FAQ generation is not configured.")
     title = ch.get('section_title') or 'Section'
     content = (ch.get('content') or '').strip()
     if len(content) < 80:
@@ -543,10 +545,24 @@ def section_to_faqs(ch: Dict) -> List[Dict]:
         page_end=ch.get('page_end') or '?',
         content=content[:6000],
     )
-    raw = call_for_ingest(prompt, max_tokens=1200)
-    parsed = _parse_llm_json(raw)
-    if not parsed or not isinstance(parsed, dict):
-        return []
+    parsed = None
+    raw = ''
+    for attempt in range(2):
+        raw = call_for_ingest(prompt, max_tokens=1800)
+        parsed = _parse_llm_json(raw)
+        if isinstance(parsed, dict) and isinstance(parsed.get('faqs'), list):
+            break
+        logger.warning(
+            "FAQ generation returned invalid JSON for [%s] (attempt %d/2)",
+            title[:55],
+            attempt + 1,
+        )
+        if attempt == 0:
+            time.sleep(PER_CALL_PAUSE)
+    if not isinstance(parsed, dict) or not isinstance(parsed.get('faqs'), list):
+        if not raw:
+            raise RuntimeError("AI providers did not return a response.")
+        raise ValueError("AI did not return valid FAQ JSON after retry.")
     faqs = parsed.get('faqs') or []
     out = []
     for f in faqs:
@@ -562,6 +578,9 @@ def section_to_faqs(ch: Dict) -> List[Dict]:
         if not isinstance(related, list):
             related = []
         related = [str(item).strip()[:500] for item in related if str(item).strip()]
+        keywords = f.get('keywords') or ''
+        if isinstance(keywords, list):
+            keywords = ', '.join(str(item).strip() for item in keywords if str(item).strip())
         try:
             priority = int(f.get('priority') or 5)
         except (TypeError, ValueError):
@@ -569,11 +588,11 @@ def section_to_faqs(ch: Dict) -> List[Dict]:
         out.append({
             'question': q[:500],
             'answer': a[:4000],
-            'keywords': (f.get('keywords') or '')[:500],
+            'keywords': str(keywords)[:500],
             'related_questions': '|'.join(related[:8]),
-            'topic': (f.get('topic') or title or 'Handbook')[:100],
-            'intent': (f.get('intent') or '')[:100],
-            'language': (f.get('language') or 'en')[:20],
+            'topic': str(f.get('topic') or title or 'Handbook')[:100],
+            'intent': str(f.get('intent') or '')[:100],
+            'language': str(f.get('language') or 'en')[:20],
             'category': 'Handbook',
             'priority': max(1, min(10, priority)),
             'source': 'handbook',
